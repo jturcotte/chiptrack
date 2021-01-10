@@ -152,19 +152,10 @@ pub fn main() {
                     settings_ring[f(0)].extend(SetSetting::trigger(freq));
                 }),
             );
+
         let sound_stuff = Rc::new(RefCell::new(SoundStuff {
                 apu: apu,
-                sequencer: Sequencer {
-                    current_frame: 0,
-                    current_step: 0,
-                    step_instruments_freq: [[0; 16]; sequencer::NUM_STEPS as usize],
-                    step_changed_callback: Box::new(move |s| {
-                        let window = window_weak.unwrap();
-                        window.set_current_sequencer_bar(s as i32 / 16);
-                        window.set_current_sequencer_step(s as i32 % 16);
-                    }),
-                    visual_step_model: sequencer_step_model,
-                },
+                sequencer: Sequencer::new(window_weak, sequencer_step_model),
                 settings_ring: vec![vec![]; 512],
                 settings_ring_index: 0,
                 selected_instrument: 0,
@@ -214,6 +205,16 @@ pub fn main() {
         // FIXME: Looks like this should be delegated in a soundstuff method
         let instrument = sound.selected_instrument;
         sound.sequencer.record_trigger(instrument, freq);
+    });
+    let cloned_context = context.clone();
+    window.on_play_pressed(move |toggled| {
+        let mut sound = cloned_context.sound.borrow_mut();
+        sound.sequencer.set_playing(toggled);
+    });
+    let cloned_context = context.clone();
+    window.on_record_pressed(move |toggled| {
+        let mut sound = cloned_context.sound.borrow_mut();
+        sound.sequencer.set_recording(toggled);
     });
 
     window.run();

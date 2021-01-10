@@ -62,6 +62,8 @@ MainWindow := Window {
     property<int> current_sequencer_step;
     signal note_pressed(int);
     signal selected_instrument_changed(int);
+    signal play_pressed(bool);
+    signal record_pressed(bool);
 
     VerticalLayout {
         HorizontalLayout {
@@ -126,6 +128,24 @@ MainWindow := Window {
                     }
             }
             Rectangle {} // Spacer
+            VerticalLayout {
+                play_button := Button {
+                    property<bool> toggled: true;
+                    text: toggled ? "Play" : "Stop";
+                    clicked => {
+                        toggled = !toggled;
+                        root.play_pressed(toggled);
+                    }
+                }
+                record_button := Button {
+                    property<bool> toggled: true;
+                    text: toggled ? "Record" : "Free";
+                    clicked => {
+                        toggled = !toggled;
+                        root.record_pressed(toggled);
+                    }
+                }
+            }
         }
         HorizontalLayout {
             spacing: -1px;
