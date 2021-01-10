@@ -10,6 +10,7 @@ pub const NUM_STEPS: u32 = 64;
 pub struct Sequencer {
     current_frame: u32,
     current_step: u32,
+    locked_bar: Option<u32>,
     playing: bool,
     recording: bool,
     step_instruments_freq: [[u32; 16]; NUM_STEPS as usize],
@@ -22,6 +23,7 @@ impl Sequencer {
         Sequencer {
             current_frame: 0,
             current_step: 0,
+            locked_bar: None,
             playing: true,
             recording: true,
             step_instruments_freq: [[0; 16]; NUM_STEPS as usize],
@@ -34,6 +36,14 @@ impl Sequencer {
         }
     }
 
+    pub fn set_locked_bar(&mut self, bar_num: Option<u32>) -> Option<u32> {
+        if self.locked_bar == bar_num {
+            self.locked_bar = None;
+        } else {
+            self.locked_bar = bar_num;
+        }
+        self.locked_bar
+    }
     pub fn set_playing(&mut self, val: bool) -> () {
         self.playing = val;
     }
@@ -47,16 +57,19 @@ impl Sequencer {
 
         self.current_frame += 1;
         if self.current_frame % 6 == 0 {
-            let next_step = (self.current_step + 1) % NUM_STEPS;
-            self.current_step = next_step;
-            (self.step_changed_callback)(self.current_step);
+            let mut next_step = (self.current_step + 1) % NUM_STEPS;
 
-            if self.current_step % 16 == 0 {
+            if next_step % 16 == 0 {
+                if let Some(locked_bar) = self.locked_bar {
+                    next_step = locked_bar * 16;
+                }
                 for i in 0..16 {
                     let empty = self.step_instruments_freq[next_step as usize + i].iter().sum::<u32>() == 0;
                     self.visual_step_model.set_row_data(i, StepData{empty: empty,});
                 }
             }
+            self.current_step = next_step;
+            (self.step_changed_callback)(self.current_step);
 
             for (i, freq) in self.step_instruments_freq[next_step as usize].iter().enumerate() {
                 if *freq != 0 {

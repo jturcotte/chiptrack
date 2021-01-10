@@ -46,13 +46,34 @@ InstrumentButton := Rectangle {
         clicked => { root.clicked(); }
     }
 }
+
+BarStep := Rectangle {
+    signal clicked();
+    property<bool> highlighted;
+    property<bool> locked;
+    border_color: black;
+    border_width: 1px;
+    color: highlighted ? grey : white;
+    Text {
+        text: locked ? "Locked" : "";
+        width: 100%;
+        height: 100%;
+        horizontal_alignment: align_center;
+        vertical_alignment: align_center;
+    }
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.clicked(); }
+    }
+}
+
 SequencerStep := Rectangle {
     property<bool> highlighted;
     property<bool> empty;
     border_color: empty ? #a0a0a0 : black;
     border_width: 1px;
     color: highlighted ? grey : white;
-
 }
 
 MainWindow := Window {
@@ -60,10 +81,12 @@ MainWindow := Window {
     property<[StepData]> sequencer_steps;
     property<int> current_sequencer_bar;
     property<int> current_sequencer_step;
+    property<int> locked_sequencer_bar: -1;
     signal note_pressed(int);
     signal selected_instrument_changed(int);
-    signal play_pressed(bool);
-    signal record_pressed(bool);
+    signal bar_clicked(int);
+    signal play_clicked(bool);
+    signal record_clicked(bool);
 
     VerticalLayout {
         HorizontalLayout {
@@ -116,8 +139,10 @@ MainWindow := Window {
             Rectangle {} // Spacer
             VerticalLayout {
                 for __[idx] in sequencer_bars:
-                    SequencerStep {
+                    BarStep {
                         highlighted: current_sequencer_bar == idx;
+                        locked: locked_sequencer_bar == idx;
+                        clicked => { root.bar_clicked(idx); }
                     }
             }
             VerticalLayout {
@@ -134,7 +159,7 @@ MainWindow := Window {
                     text: toggled ? "Play" : "Stop";
                     clicked => {
                         toggled = !toggled;
-                        root.play_pressed(toggled);
+                        root.play_clicked(toggled);
                     }
                 }
                 record_button := Button {
@@ -142,7 +167,7 @@ MainWindow := Window {
                     text: toggled ? "Record" : "Free";
                     clicked => {
                         toggled = !toggled;
-                        root.record_pressed(toggled);
+                        root.record_clicked(toggled);
                     }
                 }
             }

@@ -207,12 +207,22 @@ pub fn main() {
         sound.sequencer.record_trigger(instrument, freq);
     });
     let cloned_context = context.clone();
-    window.on_play_pressed(move |toggled| {
+    let window_weak = window.as_weak();
+    window.on_bar_clicked(move |bar_num| {
+        let mut sound = cloned_context.sound.borrow_mut();
+        let new_lock = match sound.sequencer.set_locked_bar(Some(bar_num as u32)) {
+            Some(n) => n as i32,
+            None => -1,
+        };
+        window_weak.unwrap().set_locked_sequencer_bar(new_lock);
+    });
+    let cloned_context = context.clone();
+    window.on_play_clicked(move |toggled| {
         let mut sound = cloned_context.sound.borrow_mut();
         sound.sequencer.set_playing(toggled);
     });
     let cloned_context = context.clone();
-    window.on_record_pressed(move |toggled| {
+    window.on_record_clicked(move |toggled| {
         let mut sound = cloned_context.sound.borrow_mut();
         sound.sequencer.set_recording(toggled);
     });
