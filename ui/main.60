@@ -69,11 +69,17 @@ BarStep := Rectangle {
 }
 
 SequencerStep := Rectangle {
+    signal clicked();
     property<bool> highlighted;
     property<bool> empty;
     border_color: empty ? #a0a0a0 : black;
     border_width: 1px;
     color: highlighted ? grey : white;
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.clicked(); }
+    }
 }
 
 MainWindow := Window {
@@ -82,9 +88,11 @@ MainWindow := Window {
     property<int> current_sequencer_bar;
     property<int> current_sequencer_step;
     property<int> locked_sequencer_bar: -1;
+    property<bool> playing;
     signal note_pressed(int);
     signal selected_instrument_changed(int);
     signal bar_clicked(int);
+    signal step_clicked(int);
     signal play_clicked(bool);
     signal record_clicked(bool);
 
@@ -150,16 +158,15 @@ MainWindow := Window {
                     SequencerStep {
                         highlighted: current_sequencer_step == idx;
                         empty: step.empty;
+                        clicked => { root.step_clicked(idx); }
                     }
             }
             Rectangle {} // Spacer
             VerticalLayout {
                 play_button := Button {
-                    property<bool> toggled: true;
-                    text: toggled ? "Play" : "Stop";
+                    text: root.playing ? "Play" : "Stop";
                     clicked => {
-                        toggled = !toggled;
-                        root.play_clicked(toggled);
+                        root.play_clicked(!root.playing);
                     }
                 }
                 record_button := Button {

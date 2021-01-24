@@ -44,6 +44,10 @@ impl Sequencer {
         }
         self.locked_bar
     }
+    pub fn set_current_step(&mut self, step_num: u32) -> () {
+        self.current_step = step_num;
+        (self.step_changed_callback)(self.current_step);
+    }
     pub fn set_playing(&mut self, val: bool) -> () {
         self.playing = val;
     }

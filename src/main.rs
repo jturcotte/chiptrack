@@ -192,6 +192,7 @@ pub fn main() {
         let mut sound = cloned_context.sound.borrow_mut();
         sound.selected_instrument = instrument as usize;
     });
+
     let cloned_context = context.clone();
     window.on_note_pressed(move |note| {
         // let key_freq = vk * 440 / 10 + 440;
@@ -206,6 +207,7 @@ pub fn main() {
         let instrument = sound.selected_instrument;
         sound.sequencer.record_trigger(instrument, freq);
     });
+
     let cloned_context = context.clone();
     let window_weak = window.as_weak();
     window.on_bar_clicked(move |bar_num| {
@@ -216,11 +218,21 @@ pub fn main() {
         };
         window_weak.unwrap().set_locked_sequencer_bar(new_lock);
     });
+
     let cloned_context = context.clone();
+    window.on_step_clicked(move |step_num| {
+        let mut sound = cloned_context.sound.borrow_mut();
+        sound.sequencer.set_current_step(step_num as u32);
+    });
+
+    let cloned_context = context.clone();
+    let window_weak = window.as_weak();
     window.on_play_clicked(move |toggled| {
         let mut sound = cloned_context.sound.borrow_mut();
         sound.sequencer.set_playing(toggled);
+        window_weak.unwrap().set_playing(toggled);
     });
+
     let cloned_context = context.clone();
     window.on_record_clicked(move |toggled| {
         let mut sound = cloned_context.sound.borrow_mut();
