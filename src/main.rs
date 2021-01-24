@@ -8,10 +8,12 @@ use wasm_bindgen::prelude::*;
 
 mod sequencer;
 mod sound;
+mod synth;
 
 use crate::sequencer::Sequencer;
 use crate::sound::SoundStuff;
-use crate::sound::SetSetting;
+use crate::synth::SetSetting;
+use crate::synth::Synth;
 use gameboy::apu::Apu;
 use gameboy::memory::Memory;
 use once_cell::unsync::Lazy;
@@ -153,13 +155,16 @@ pub fn main() {
                 }),
             );
 
-        let sound_stuff = Rc::new(RefCell::new(SoundStuff {
+        let synth = Synth {
                 apu: apu,
-                sequencer: Sequencer::new(window_weak, sequencer_step_model),
                 settings_ring: vec![vec![]; 512],
                 settings_ring_index: 0,
-                selected_instrument: 0,
                 instruments: instruments,
+            };
+        let sound_stuff = Rc::new(RefCell::new(SoundStuff {
+                sequencer: Sequencer::new(window_weak, sequencer_step_model),
+                synth: synth,
+                selected_instrument: 0,
             }));
 
         let apu_timer: Timer = Default::default();
@@ -169,12 +174,12 @@ pub fn main() {
             std::time::Duration::from_millis(15),
             Box::new(move || {
                // FIXME: Calculate based on the sample rate
-               while cloned_sound.borrow().apu.buffer.lock().unwrap().len() < 1378 {
+               while cloned_sound.borrow().synth.apu.buffer.lock().unwrap().len() < 1378 {
                     let mut sound = cloned_sound.borrow_mut();
                     sound.advance_frame();
                     // FIXME: Calculate from the timer rate
                     // Advance one frame (1/64th of CLOCK_FREQUENCY)
-                    sound.apu.next(65536);
+                    sound.synth.apu.next(65536);
                }
             })
         );

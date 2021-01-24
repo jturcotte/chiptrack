@@ -1,5 +1,6 @@
 use crate::sixtyfps_generated_MainWindow::StepData;
 use crate::sixtyfps_generated_MainWindow::MainWindow;
+use crate::synth::Synth;
 use sixtyfps::Model;
 use sixtyfps::VecModel;
 use sixtyfps::Weak;
@@ -54,7 +55,7 @@ impl Sequencer {
     pub fn set_recording(&mut self, val: bool) -> () {
         self.recording = val;
     }
-    pub fn advance_frame<F>(&mut self, mut instrument_fn: F) where F: FnMut(usize, u32) -> () {
+    pub fn advance_frame(&mut self, synth: &mut Synth) -> () {
         if !self.playing {
             return;
         }
@@ -78,7 +79,7 @@ impl Sequencer {
             for (i, freq) in self.step_instruments_freq[next_step as usize].iter().enumerate() {
                 if *freq != 0 {
                     println!("Instrument {:?} freq {:?}", i, freq);
-                    instrument_fn(i, *freq);
+                    synth.trigger_instrument(i, *freq);
                 }
             }
         }
