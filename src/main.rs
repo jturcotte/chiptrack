@@ -30,6 +30,8 @@ pub fn main() {
     #[cfg(all(debug_assertions, target_arch = "wasm32"))]
     console_error_panic_hook::set_once();
 
+    // The model set in the UI are only for development.
+    // Rewrite the models and use that version.
     let sequencer_bar_model = Rc::new(sixtyfps::VecModel::default());
     for _ in 0..(sequencer::NUM_STEPS/16) {
         sequencer_bar_model.push(BarData{});
@@ -37,6 +39,26 @@ pub fn main() {
     let sequencer_step_model = Rc::new(sixtyfps::VecModel::default());
     for _ in 0..16 {
         sequencer_step_model.push(StepData{empty: true,});
+    }
+    let synth_note_model = Rc::new(sixtyfps::VecModel::default());
+    let notes: Vec<NoteData> = (60..73_i32).map(|i| {
+        let semitone = (i - 60) % 12;
+        let octav = (i - 60) / 12;
+        let major_scale = [0, 2, 4, 5, 7, 9, 11];
+        let r = major_scale.binary_search(&semitone);
+        let (scale_pos, is_black) = match r {
+            Ok(p) => (p, false),
+            Err(p) => (p - 1, true),
+        };
+        let pos = scale_pos as i32 + octav * 7;
+        NoteData{note_number: i, scale_pos: pos, is_black: is_black, active: false}
+    }).collect();
+    for n in notes.iter().filter(|n| !n.is_black) {
+        synth_note_model.push(n.clone());
+    }
+    // Push the black notes at the end of the model so that they appear on top of the white ones.
+    for n in notes.iter().filter(|n| n.is_black) {
+        synth_note_model.push(n.clone());
     }
 
 
@@ -49,6 +71,7 @@ pub fn main() {
     let window = MainWindow::new();
     window.set_sequencer_bars(sixtyfps::ModelHandle::new(sequencer_bar_model.clone()));
     window.set_sequencer_steps(sixtyfps::ModelHandle::new(sequencer_step_model.clone()));
+    window.set_synth_notes(sixtyfps::ModelHandle::new(synth_note_model.clone()));
 
     let window_weak = window.as_weak();
     let context = Rc::new(Lazy::new(|| {
@@ -160,6 +183,7 @@ pub fn main() {
                 settings_ring: vec![vec![]; 512],
                 settings_ring_index: 0,
                 instruments: instruments,
+                visual_note_model: synth_note_model,
             };
         let sound_stuff = Rc::new(RefCell::new(SoundStuff {
                 sequencer: Sequencer::new(window_weak, sequencer_step_model),

@@ -5,12 +5,19 @@ struct BarData := {
 struct StepData := {
     empty: bool,
 }
+struct NoteData := {
+    note_number: int,
+    scale_pos: int,
+    is_black: bool,
+    active: bool,
+}
 
 PianoKey :=  Rectangle {
+    property<bool> highlighted;
     property<bool> is_black: false;
     callback clicked();
     background: {
-        if (is_black) {
+        if (is_black != highlighted) {
             black;
         } else {
             white;
@@ -90,6 +97,22 @@ MainWindow := Window {
         {empty: false}, {empty: true}, {empty: true}, {empty: true},
         {empty: false}, {empty: true}, {empty: true}, {empty: true},
         {empty: false}, {empty: true}, {empty: true}, {empty: true}];
+    property<[NoteData]> synth_notes: [
+        {note_number: 60, scale_pos: 0, is_black: false, active: false},
+        {note_number: 62, scale_pos: 1, is_black: false, active: false},
+        {note_number: 64, scale_pos: 2, is_black: false, active: false},
+        {note_number: 65, scale_pos: 3, is_black: false, active: false},
+        {note_number: 67, scale_pos: 4, is_black: false, active: false},
+        {note_number: 69, scale_pos: 5, is_black: false, active: false},
+        {note_number: 71, scale_pos: 6, is_black: false, active: false},
+        {note_number: 72, scale_pos: 7, is_black: false, active: false},
+        {note_number: 61, scale_pos: 0, is_black: true, active: false},
+        {note_number: 63, scale_pos: 1, is_black: true, active: false},
+        {note_number: 66, scale_pos: 3, is_black: true, active: false},
+        {note_number: 68, scale_pos: 4, is_black: true, active: false},
+        {note_number: 70, scale_pos: 5, is_black: true, active: false},
+    ];
+    property<int> current_note;
     property<int> current_sequencer_bar;
     property<int> current_sequencer_step;
     property<int> locked_sequencer_bar: -1;
@@ -101,58 +124,56 @@ MainWindow := Window {
     callback play_clicked(bool);
     callback record_clicked(bool);
 
-    // preview
     VerticalBox {
         HorizontalBox {
             height: 50%;
             Rectangle {} // Spacer
             VerticalBox {
-            GridBox {
-                Row {
-                    InstrumentButton {
-                        instrument_number: 0;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
+                GridBox {
+                    Row {
+                        InstrumentButton {
+                            instrument_number: 0;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 1;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 2;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
                     }
-                    InstrumentButton {
-                        instrument_number: 1;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    Row {
+                        InstrumentButton {
+                            instrument_number: 3;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 4;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 5;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
                     }
-                    InstrumentButton {
-                        instrument_number: 2;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                }
-                Row {
-                    InstrumentButton {
-                        instrument_number: 3;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                    InstrumentButton {
-                        instrument_number: 4;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                    InstrumentButton {
-                        instrument_number: 5;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                }
-                Row {
-                    InstrumentButton {
-                        instrument_number: 6;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                    InstrumentButton {
-                        instrument_number: 7;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                    InstrumentButton {
-                        instrument_number: 8;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    Row {
+                        InstrumentButton {
+                            instrument_number: 6;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 7;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 8;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
                     }
                 }
             }
-                    Rectangle {height: 50%;} // Spacer
-}
             Rectangle {} // Spacer
             VerticalBox {
                 min_width: 100px;
@@ -191,73 +212,22 @@ MainWindow := Window {
                 }
             }
         }
-        HorizontalBox {
-            spacing: -1px;
-            min_height: 200px;
-            PianoKey {
-                clicked => { root.note_pressed(60); }
-            }
-            PianoKey {
+        Rectangle {
+            min_height: 100px;
+            for note[idx] in synth_notes:
                 PianoKey {
-                    x: width * -50%;
-                    width: 60%;
-                    height: 60%;
-                    is_black: true;
-                    clicked => { root.note_pressed(61); }
-                }
+                    is_black: note.is_black;
+                    x: note.is_black
+                        ? (note.scale_pos + 1) * round(parent.width / 8px) * 1px - width / 2
+                        : note.scale_pos * round(parent.width / 8px) * 1px;
+                    width: is_black
+                        ? parent.width / 8 * 0.8
+                        : round(parent.width / 8px) * 1px + 1px;
 
-                clicked => { root.note_pressed(62); }
-            }
-            PianoKey {
-                PianoKey {
-                    x: width * -50%;
-                    width: 60%;
-                    height: 60%;
-                    is_black: true;
-                    clicked => { root.note_pressed(63); }
+                    height: is_black ? 60% : 100%;
+                    highlighted: note.active;
+                    clicked => { root.note_pressed(note.note_number); }
                 }
-
-                clicked => { root.note_pressed(64); }
-            }
-            PianoKey {
-                clicked => { root.note_pressed(65); }
-            }
-            PianoKey {
-                PianoKey {
-                    x: width * -50%;
-                    width: 60%;
-                    height: 60%;
-                    is_black: true;
-                    clicked => { root.note_pressed(66); }
-                }
-
-                clicked => { root.note_pressed(67); }
-            }
-            PianoKey {
-                PianoKey {
-                    x: width * -50%;
-                    width: 60%;
-                    height: 60%;
-                    is_black: true;
-                    clicked => { root.note_pressed(68); }
-                }
-
-                clicked => { root.note_pressed(69); }
-            }
-            PianoKey {
-                PianoKey {
-                    x: width * -50%;
-                    width: 60%;
-                    height: 60%;
-                    is_black: true;
-                    clicked => { root.note_pressed(70); }
-                }
-
-                clicked => { root.note_pressed(71); }
-            }
-            PianoKey {
-                clicked => { root.note_pressed(72); }
-            }
         }
     }
 }
