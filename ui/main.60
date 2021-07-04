@@ -1,4 +1,4 @@
-import { Button, CheckBox, SpinBox, Slider, GroupBox, LineEdit, StandardListView, ComboBox } from "sixtyfps_widgets.60";
+import { Button, CheckBox, SpinBox, Slider, GroupBox, LineEdit, StandardListView, ComboBox, VerticalBox, HorizontalBox, GridBox } from "sixtyfps_widgets.60";
 
 struct BarData := {
 }
@@ -95,13 +95,17 @@ MainWindow := Window {
     callback step_clicked(int);
     callback play_clicked(bool);
     callback record_clicked(bool);
+
+    width: 800px;
+    height: 600px;
+
     // preview
-    VerticalLayout {
-        HorizontalLayout {
+    VerticalBox {
+        HorizontalBox {
             height: 50%;
             Rectangle {} // Spacer
-            VerticalLayout {
-            GridLayout {
+            VerticalBox {
+            GridBox {
                 Row {
                     InstrumentButton {
                         instrument_number: 0;
@@ -148,7 +152,7 @@ MainWindow := Window {
                     Rectangle {height: 50%;} // Spacer
 }
             Rectangle {} // Spacer
-            VerticalLayout {
+            VerticalBox {
                 for __[idx] in sequencer_bars:
                     BarStep {
                         highlighted: current_sequencer_bar == idx;
@@ -156,7 +160,7 @@ MainWindow := Window {
                         clicked => { root.bar_clicked(idx); }
                     }
             }
-            VerticalLayout {
+            VerticalBox {
                 for step[idx] in sequencer_steps:
                     SequencerStep {
                         highlighted: current_sequencer_step == idx;
@@ -165,7 +169,7 @@ MainWindow := Window {
                     }
             }
             Rectangle {} // Spacer
-            VerticalLayout {
+            VerticalBox {
                 play_button := Button {
                     text: root.playing ? "Play" : "Stop";
                     clicked => {
@@ -182,7 +186,7 @@ MainWindow := Window {
                 }
             }
         }
-        HorizontalLayout {
+        HorizontalBox {
             spacing: -1px;
             PianoKey {
                 clicked => { root.note_pressed(60); }
