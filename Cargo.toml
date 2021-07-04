@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 once_cell = "1.5"
 cpal = { version = "0.13.1" }
-sixtyfps = { version = "0.0.4" }
+sixtyfps = { version = "0.0.6" }
 
 [dependencies.gameboy]
 path = "../gameboy"
@@ -17,4 +17,4 @@ path = "../gameboy"
 default-features = false
 
 [build-dependencies]
-sixtyfps-build = "0.0.4"
+sixtyfps-build = "0.0.6"
