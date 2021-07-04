@@ -29,8 +29,9 @@ PianoKey :=  Rectangle {
 InstrumentButton := Rectangle {
     callback clicked();
     property<int> instrument_number: 0;
-    width: 50px;
-    height: 50px;
+    min_width: 50px;
+    min_height: 50px;
+    background: white;
     border_color: black;
     border_width: 1px;
     Text {
@@ -51,9 +52,9 @@ BarStep := Rectangle {
     callback clicked();
     property<bool> highlighted;
     property<bool> locked;
-    border_color: black;
+    background: white;
     border_width: 1px;
-    background: highlighted ? grey : white;
+    border_color: highlighted ? black : #b0b0b0;
     Text {
         text: locked ? "Locked" : "";
         width: 100%;
@@ -72,9 +73,9 @@ SequencerStep := Rectangle {
     callback clicked();
     property<bool> highlighted;
     property<bool> empty;
-    border_color: empty ? #a0a0a0 : black;
+    background: empty ? white : #c0c0c0;
     border_width: 1px;
-    background: highlighted ? grey : white;
+    border_color: highlighted ? black : #b0b0b0;
     TouchArea {
         width: 100%;
         height: 100%;
@@ -83,8 +84,12 @@ SequencerStep := Rectangle {
 }
 
 MainWindow := Window {
-    property<[BarData]> sequencer_bars;
-    property<[StepData]> sequencer_steps;
+    property<[BarData]> sequencer_bars: [{}, {}, {}, {}];
+    property<[StepData]> sequencer_steps: [
+        {empty: false}, {empty: true}, {empty: true}, {empty: true},
+        {empty: false}, {empty: true}, {empty: true}, {empty: true},
+        {empty: false}, {empty: true}, {empty: true}, {empty: true},
+        {empty: false}, {empty: true}, {empty: true}, {empty: true}];
     property<int> current_sequencer_bar;
     property<int> current_sequencer_step;
     property<int> locked_sequencer_bar: -1;
@@ -95,9 +100,6 @@ MainWindow := Window {
     callback step_clicked(int);
     callback play_clicked(bool);
     callback record_clicked(bool);
-
-    width: 800px;
-    height: 600px;
 
     // preview
     VerticalBox {
@@ -153,6 +155,8 @@ MainWindow := Window {
 }
             Rectangle {} // Spacer
             VerticalBox {
+                min_width: 100px;
+
                 for __[idx] in sequencer_bars:
                     BarStep {
                         highlighted: current_sequencer_bar == idx;
@@ -161,6 +165,7 @@ MainWindow := Window {
                     }
             }
             VerticalBox {
+                min_width: 100px;
                 for step[idx] in sequencer_steps:
                     SequencerStep {
                         highlighted: current_sequencer_step == idx;
@@ -188,6 +193,7 @@ MainWindow := Window {
         }
         HorizontalBox {
             spacing: -1px;
+            min_height: 200px;
             PianoKey {
                 clicked => { root.note_pressed(60); }
             }
