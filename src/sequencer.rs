@@ -7,6 +7,12 @@ use std::rc::Rc;
 
 pub const NUM_STEPS: u32 = 64;
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum NoteEvent {
+    Press,
+    Release,
+}
+
 pub struct Sequencer {
     current_frame: u32,
     current_step: u32,
@@ -15,6 +21,7 @@ pub struct Sequencer {
     recording: bool,
     step_instruments_note: [[u32; 16]; NUM_STEPS as usize],
     step_changed_callback: Box<dyn Fn(u32) -> ()>,
+    previous_frame_note_events: Vec<(u32, NoteEvent, u32)>,
     visual_step_model: Rc<VecModel<StepData>>,
 }
 
@@ -32,6 +39,7 @@ impl Sequencer {
                 window.set_current_sequencer_bar(s as i32 / 16);
                 window.set_current_sequencer_step(s as i32 % 16);
             }),
+            previous_frame_note_events: Vec::new(),
             visual_step_model: sequencer_step_model,
         }
     }
@@ -54,8 +62,8 @@ impl Sequencer {
     pub fn set_recording(&mut self, val: bool) -> () {
         self.recording = val;
     }
-    pub fn advance_frame(&mut self) -> Vec<(u32, u32)> {
-        let mut note_events: Vec<(u32, u32)> = Vec::new();
+    pub fn advance_frame(&mut self) -> Vec<(u32, NoteEvent, u32)> {
+        let mut note_events: Vec<(u32, NoteEvent, u32)> = Vec::new();
 
         if !self.playing {
             return note_events;
@@ -77,14 +85,20 @@ impl Sequencer {
             self.current_step = next_step;
             (self.step_changed_callback)(self.current_step);
 
+            // Each note lasts only one frame, so just release everything pressed on the previous frame.
+            for (instrument, typ, note) in &self.previous_frame_note_events {
+                if *typ == NoteEvent::Press {
+                    note_events.push((*instrument, NoteEvent::Release, *note));
+                }
+            }
+            // FIXME: This assumes that the current instrument didn't change.
             for (i, note) in self.step_instruments_note[next_step as usize].iter().enumerate() {
                 if *note != 0 {
                     println!("Instrument {:?} note {:?}", i, note);
-                    note_events.push((i as u32, *note))
-                    // (instrument_note_pressed_callback)(i as u32, *note)
-                    // synth.trigger_instrument(i, *note);
+                    note_events.push((i as u32, NoteEvent::Press, *note));
                 }
             }
+            self.previous_frame_note_events = note_events.clone();
         }
         return note_events;
     }

@@ -1,9 +1,11 @@
+use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
 use crate::sixtyfps_generated_MainWindow::NoteData;
 use crate::sixtyfps_generated_MainWindow::StepData;
 use crate::sixtyfps_generated_MainWindow::MainWindow;
 use crate::synth::SetSetting;
 use crate::synth::Synth;
+use sixtyfps::Model;
 use sixtyfps::VecModel;
 use sixtyfps::Weak;
 use std::rc::Rc;
@@ -94,8 +96,15 @@ impl SoundStuff {
 
     pub fn advance_frame(&mut self) -> () {
         let note_events = self.sequencer.advance_frame();
-        for (instrument, note) in note_events {
+        for (instrument, typ, note) in note_events {
             self.synth.trigger_instrument(instrument, Self::note_to_freq(note));
+            for row in 0..self.visual_note_model.row_count() {
+                let mut row_data = self.visual_note_model.row_data(row);
+                if row_data.note_number as u32 == note {
+                    row_data.active = typ == NoteEvent::Press;
+                    self.visual_note_model.set_row_data(row, row_data);
+                }
+            }
         }
         self.synth.advance_frame();
     }
