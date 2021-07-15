@@ -10,10 +10,7 @@ mod sequencer;
 mod sound;
 mod synth;
 
-use crate::sequencer::Sequencer;
 use crate::sound::SoundStuff;
-use crate::synth::SetSetting;
-use crate::synth::Synth;
 use gameboy::apu::Apu;
 use gameboy::memory::Memory;
 use once_cell::unsync::Lazy;
@@ -117,79 +114,7 @@ pub fn main() {
             }
         }
 
-        let instruments: Vec<Box<dyn Fn(&mut Vec<Vec<SetSetting>>, usize, u32) -> ()>> =
-            vec!(
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    settings_ring[f(0)].push(SetSetting::duty(0x2));
-                    settings_ring[f(0)].push(SetSetting::envelope(0xf, 0x0, 0x0));
-                    settings_ring[f(0)].push(SetSetting::sweep(0x0, 0x0, 0x0));
-                    settings_ring[f(0)].extend(SetSetting::trigger_with_length(freq, 64));
-                }),
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    // 2:bipp e:a:d:1 f:0:d:2 g
-                    settings_ring[f(0)].push(SetSetting::duty(0x0));
-                    settings_ring[f(0)].push(SetSetting::envelope(0xa, 0x0, 0x1));
-                    settings_ring[f(0)].push(SetSetting::sweep(0x0, 0x1, 0x2));
-                    settings_ring[f(0)].extend(SetSetting::trigger(freq));
-                    // e:0:D:0 g e
-                    settings_ring[f(2)].push(SetSetting::envelope(0x0, 0x0, 0x0));
-                    settings_ring[f(2)].extend(SetSetting::trigger(freq));
-                }),
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    // r:1 e:f:d:0 f:0:d:0 g
-                    settings_ring[f(0)].push(SetSetting::duty(0x1));
-                    settings_ring[f(0)].push(SetSetting::envelope(0xf, 0x0, 0x0));
-                    settings_ring[f(0)].push(SetSetting::sweep(0x0, 0x1, 0x0));
-                    settings_ring[f(0)].extend(SetSetting::trigger(freq));
-                    // r:3
-                    settings_ring[f(2)].push(SetSetting::duty(0x1));
-                    // r:0
-                    settings_ring[f(4)].push(SetSetting::duty(0x0));
-                    // r:3
-                    settings_ring[f(6)].push(SetSetting::duty(0x3));
-                    // r:1
-                    settings_ring[f(8)].push(SetSetting::duty(0x1));
-                    // r:3
-                    settings_ring[f(10)].push(SetSetting::duty(0x3));
-                    // r:1
-                    settings_ring[f(12)].push(SetSetting::duty(0x1));
-                    // r:3
-                    settings_ring[f(14)].push(SetSetting::duty(0x3));
-                    // r:0
-                    settings_ring[f(16)].push(SetSetting::duty(0x0));
-                    // e:0:d:0 g
-                    settings_ring[f(18)].push(SetSetting::envelope(0x0, 0x0, 0x0));
-                    settings_ring[f(18)].extend(SetSetting::trigger(freq));
-                }),
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    // 1:superdrum e:d:d:2 f:2:d:2 g e
-                    settings_ring[f(0)].push(SetSetting::duty(0x0));
-                    settings_ring[f(0)].push(SetSetting::envelope(0xd, 0x0, 0x2));
-                    settings_ring[f(0)].push(SetSetting::sweep(0x2, 0x1, 0x2));
-                    settings_ring[f(0)].extend(SetSetting::trigger(freq));
-                }),
-            );
-
-        let synth = Synth {
-                apu: apu,
-                settings_ring: vec![vec![]; 512],
-                settings_ring_index: 0,
-                instruments: instruments,
-                visual_note_model: synth_note_model,
-            };
-        let sound_stuff = Rc::new(RefCell::new(SoundStuff {
-                sequencer: Sequencer::new(window_weak, sequencer_step_model),
-                synth: synth,
-                selected_instrument: 0,
-            }));
+        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, window_weak, sequencer_step_model)));
 
         let apu_timer: Timer = Default::default();
         let cloned_sound = sound_stuff.clone();
@@ -219,7 +144,7 @@ pub fn main() {
     let cloned_context = context.clone();
     window.on_selected_instrument_changed(move |instrument| {
         let mut sound = cloned_context.sound.borrow_mut();
-        sound.selected_instrument = instrument as usize;
+        sound.select_instrument(instrument as usize);
     });
 
     let cloned_context = context.clone();
@@ -232,9 +157,6 @@ pub fn main() {
         let freq: u32 = 2048 - (131072.0/key_freq).round() as u32;
 
         sound.trigger_selected_instrument(freq);
-        // FIXME: Looks like this should be delegated in a soundstuff method
-        let instrument = sound.selected_instrument;
-        sound.sequencer.record_trigger(instrument, freq);
     });
 
     let cloned_context = context.clone();
