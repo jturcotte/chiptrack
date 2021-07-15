@@ -124,6 +124,26 @@ MainWindow := Window {
     callback play_clicked(bool);
     callback record_clicked(bool);
 
+    FocusScope {
+        key-pressed(event) => {
+            debug(event);
+            if (event.text == "a") { note_pressed(60); }
+            else if (event.text == "r") { note_pressed(62); }
+            else if (event.text == "s") { note_pressed(64); }
+            else if (event.text == "t") { note_pressed(65); }
+            else if (event.text == "d") { note_pressed(67); }
+            else if (event.text == "h") { note_pressed(69); }
+            else if (event.text == "n") { note_pressed(71); }
+            else if (event.text == "e") { note_pressed(72); }
+            else if (event.text == "w") { note_pressed(61); }
+            else if (event.text == "f") { note_pressed(63); }
+            else if (event.text == "g") { note_pressed(66); }
+            else if (event.text == "j") { note_pressed(68); }
+            else if (event.text == "l") { note_pressed(70); }
+            accept
+        }
+    }
+
     VerticalBox {
         HorizontalBox {
             height: 50%;
