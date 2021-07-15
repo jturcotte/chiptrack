@@ -97,7 +97,7 @@ MainWindow := Window {
         {empty: false}, {empty: true}, {empty: true}, {empty: true},
         {empty: false}, {empty: true}, {empty: true}, {empty: true},
         {empty: false}, {empty: true}, {empty: true}, {empty: true}];
-    property<[NoteData]> synth_notes: [
+    property<[NoteData]> notes: [
         {note_number: 60, scale_pos: 0, is_black: false, active: false},
         {note_number: 62, scale_pos: 1, is_black: false, active: false},
         {note_number: 64, scale_pos: 2, is_black: false, active: false},
@@ -214,7 +214,7 @@ MainWindow := Window {
         }
         Rectangle {
             min_height: 100px;
-            for note[idx] in synth_notes:
+            for note[idx] in notes:
                 PianoKey {
                     is_black: note.is_black;
                     x: note.is_black

@@ -37,7 +37,7 @@ pub fn main() {
     for _ in 0..16 {
         sequencer_step_model.push(StepData{empty: true,});
     }
-    let synth_note_model = Rc::new(sixtyfps::VecModel::default());
+    let note_model = Rc::new(sixtyfps::VecModel::default());
     let notes: Vec<NoteData> = (60..73_i32).map(|i| {
         let semitone = (i - 60) % 12;
         let octav = (i - 60) / 12;
@@ -51,11 +51,11 @@ pub fn main() {
         NoteData{note_number: i, scale_pos: pos, is_black: is_black, active: false}
     }).collect();
     for n in notes.iter().filter(|n| !n.is_black) {
-        synth_note_model.push(n.clone());
+        note_model.push(n.clone());
     }
     // Push the black notes at the end of the model so that they appear on top of the white ones.
     for n in notes.iter().filter(|n| n.is_black) {
-        synth_note_model.push(n.clone());
+        note_model.push(n.clone());
     }
 
 
@@ -68,7 +68,7 @@ pub fn main() {
     let window = MainWindow::new();
     window.set_sequencer_bars(sixtyfps::ModelHandle::new(sequencer_bar_model.clone()));
     window.set_sequencer_steps(sixtyfps::ModelHandle::new(sequencer_step_model.clone()));
-    window.set_synth_notes(sixtyfps::ModelHandle::new(synth_note_model.clone()));
+    window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
 
     let window_weak = window.as_weak();
     let context = Rc::new(Lazy::new(|| {
@@ -114,7 +114,7 @@ pub fn main() {
             }
         }
 
-        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, window_weak, sequencer_step_model)));
+        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, window_weak, sequencer_step_model, note_model)));
 
         let apu_timer: Timer = Default::default();
         let cloned_sound = sound_stuff.clone();
@@ -144,19 +144,13 @@ pub fn main() {
     let cloned_context = context.clone();
     window.on_selected_instrument_changed(move |instrument| {
         let mut sound = cloned_context.sound.borrow_mut();
-        sound.select_instrument(instrument as usize);
+        sound.select_instrument(instrument as u32);
     });
 
     let cloned_context = context.clone();
     window.on_note_pressed(move |note| {
-        // let key_freq = vk * 440 / 10 + 440;
         let mut sound = cloned_context.sound.borrow_mut();
-        let a = 440.0; //frequency of A (coomon value is 440Hz)
-        let key_freq = (a / 32.0) * 2.0_f64.powf((note as f64 - 9.0) / 12.0);
-        println!("NOTE {:?} {:?}", note, key_freq);
-        let freq: u32 = 2048 - (131072.0/key_freq).round() as u32;
-
-        sound.trigger_selected_instrument(freq);
+        sound.trigger_selected_instrument(note as u32);
     });
 
     let cloned_context = context.clone();

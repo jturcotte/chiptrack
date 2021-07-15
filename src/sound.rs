@@ -1,4 +1,5 @@
 use crate::sequencer::Sequencer;
+use crate::sixtyfps_generated_MainWindow::NoteData;
 use crate::sixtyfps_generated_MainWindow::StepData;
 use crate::sixtyfps_generated_MainWindow::MainWindow;
 use crate::synth::SetSetting;
@@ -10,11 +11,12 @@ use std::rc::Rc;
 pub struct SoundStuff {
     pub sequencer: Sequencer,
     pub synth: Synth,
-    selected_instrument: usize,
+    selected_instrument: u32,
+    visual_note_model: Rc<VecModel<NoteData>>,
 }
 
 impl SoundStuff {
-    pub fn new(apu: gameboy::apu::Apu, window_weak: Weak<MainWindow>, sequencer_step_model: Rc<VecModel<StepData>>) -> SoundStuff {
+    pub fn new(apu: gameboy::apu::Apu, window_weak: Weak<MainWindow>, sequencer_step_model: Rc<VecModel<StepData>>, note_model: Rc<VecModel<NoteData>>) -> SoundStuff {
         let instruments: Vec<Box<dyn Fn(&mut Vec<Vec<SetSetting>>, usize, u32) -> ()>> =
             vec!(
                 Box::new(move |settings_ring, i, freq| {
@@ -86,21 +88,32 @@ impl SoundStuff {
                 sequencer: Sequencer::new(window_weak, sequencer_step_model),
                 synth: synth,
                 selected_instrument: 0,
+                visual_note_model: note_model,
             }
     }
 
     pub fn advance_frame(&mut self) -> () {
-        self.sequencer.advance_frame(&mut self.synth);
+        let note_events = self.sequencer.advance_frame();
+        for (instrument, note) in note_events {
+            self.synth.trigger_instrument(instrument, Self::note_to_freq(note));
+        }
         self.synth.advance_frame();
     }
 
-    pub fn select_instrument(&mut self, instrument: usize) -> () {
+    pub fn select_instrument(&mut self, instrument: u32) -> () {
         self.selected_instrument = instrument;
     }
 
-    pub fn trigger_selected_instrument(&mut self, freq: u32) -> () {
-        self.synth.trigger_instrument(self.selected_instrument, freq);
-        self.sequencer.record_trigger(self.selected_instrument, freq);
+    pub fn trigger_selected_instrument(&mut self, note: u32) -> () {
+        self.synth.trigger_instrument(self.selected_instrument, Self::note_to_freq(note));
+        self.sequencer.record_trigger(self.selected_instrument, note);
+    }
+
+    fn note_to_freq(note: u32) -> f64 {
+        let a = 440.0; //frequency of A (coomon value is 440Hz)
+        let key_freq = (a / 32.0) * 2.0_f64.powf((note as f64 - 9.0) / 12.0);
+        println!("NOTE {:?} {:?}", note, key_freq);
+        key_freq
     }
 }
 

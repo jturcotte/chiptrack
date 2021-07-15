@@ -25,9 +25,10 @@ impl Synth {
         self.apu.set( 0xff25, 0xff );
     }
 
-    pub fn trigger_instrument(&mut self, instrument: usize, freq: u32) -> () {
-        let f = &self.instruments[instrument];
-        f(&mut self.settings_ring, self.settings_ring_index, freq);
+    pub fn trigger_instrument(&mut self, instrument: u32, freq: f64) -> () {
+        let gb_freq = 2048 - (131072.0/freq).round() as u32;
+        let f = &self.instruments[instrument as usize];
+        f(&mut self.settings_ring, self.settings_ring_index, gb_freq);
     }
 }
 
