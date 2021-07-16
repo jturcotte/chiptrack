@@ -113,9 +113,29 @@ impl SoundStuff {
         self.selected_instrument = instrument;
     }
 
-    pub fn trigger_selected_instrument(&mut self, note: u32) -> () {
+    pub fn press_note(&mut self, note: u32) -> () {
         self.synth.trigger_instrument(self.selected_instrument, Self::note_to_freq(note));
         self.sequencer.record_trigger(self.selected_instrument, note);
+
+        for row in 0..self.visual_note_model.row_count() {
+            let mut row_data = self.visual_note_model.row_data(row);
+            if row_data.note_number as u32 == note {
+                row_data.active = true;
+                self.visual_note_model.set_row_data(row, row_data);
+            }
+        }
+    }
+
+    pub fn release_notes(&mut self) -> () {
+        // We have only one timer for direct interactions, and we don't handle
+        // keys being held or even multiple keys at time yet, so just visually release all notes.
+        for row in 0..self.visual_note_model.row_count() {
+            let mut row_data = self.visual_note_model.row_data(row);
+            if row_data.active {
+                row_data.active = false;
+                self.visual_note_model.set_row_data(row, row_data);
+            }
+        }
     }
 
     fn note_to_freq(note: u32) -> f64 {

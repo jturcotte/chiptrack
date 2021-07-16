@@ -126,7 +126,7 @@ MainWindow := Window {
 
     FocusScope {
         key-pressed(event) => {
-            debug(event);
+            // FIXME: QWERTY
             if (event.text == "a") { note_pressed(60); }
             else if (event.text == "r") { note_pressed(62); }
             else if (event.text == "s") { note_pressed(64); }

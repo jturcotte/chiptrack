@@ -61,6 +61,7 @@ pub fn main() {
 
     struct Context {
         sound: Rc<RefCell<SoundStuff>>,
+        key_release_timer: Timer,
         _stream: cpal::Stream,
         _apu_timer: Timer,
     }
@@ -136,6 +137,7 @@ pub fn main() {
         stream.play().unwrap();
         Context {
             sound: sound_stuff,
+            key_release_timer: Default::default(),
             _stream: stream,
             _apu_timer: apu_timer,
         }
@@ -150,7 +152,14 @@ pub fn main() {
     let cloned_context = context.clone();
     window.on_note_pressed(move |note| {
         let mut sound = cloned_context.sound.borrow_mut();
-        sound.trigger_selected_instrument(note as u32);
+        sound.press_note(note as u32);
+
+        let cloned_sound = cloned_context.sound.clone();
+        cloned_context.key_release_timer.start(
+            TimerMode::SingleShot,
+            std::time::Duration::from_millis(15 * 6),
+            Box::new(move || cloned_sound.borrow_mut().release_notes())
+        );
     });
 
     let cloned_context = context.clone();
