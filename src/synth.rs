@@ -3,13 +3,25 @@ use gameboy::memory::Memory;
 use std::ops::BitOr;
 
 pub struct Synth {
-    pub apu: Apu,
-    pub settings_ring: Vec<Vec<SetSetting>>,
-    pub settings_ring_index: usize,
-    pub instruments: Vec<Box<dyn Fn(&mut Vec<Vec<SetSetting>>, usize, u32) -> ()>>,
+    apu: Apu,
+    settings_ring: Vec<Vec<SetSetting>>,
+    settings_ring_index: usize,
+    instruments: Vec<Box<dyn Fn(&mut Vec<Vec<SetSetting>>, usize, u32) -> ()>>,
 }
 
 impl Synth {
+    pub fn new(mut apu: Apu, instruments: Vec<Box<dyn Fn(&mut Vec<Vec<SetSetting>>, usize, u32) -> ()>>) -> Synth {
+        // Already power it on.
+        apu.set( 0xff26, 0x80 );
+
+        Synth {
+            apu: apu,
+            settings_ring: vec![vec![]; 512],
+            settings_ring_index: 0,
+            instruments: instruments,
+        }
+    }
+
     // The Gameboy APU has 512 frames per second where various registers are read,
     // but all registers are eventually read at least once every 8 of those frames.
     // So clock our frame generation at 64hz, thus this function is expected
@@ -38,6 +50,11 @@ impl Synth {
         let f = &self.instruments[instrument as usize];
         f(&mut self.settings_ring, self.settings_ring_index, gb_freq);
     }
+
+    pub fn ready_buffer_samples(&self) -> usize {
+        self.apu.buffer.lock().unwrap().len()
+    }
+
 }
 
 #[derive(Debug, Clone)]

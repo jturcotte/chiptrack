@@ -13,7 +13,6 @@ mod synth;
 
 use crate::sound::SoundStuff;
 use gameboy::apu::Apu;
-use gameboy::memory::Memory;
 use once_cell::unsync::Lazy;
 use sixtyfps::{Timer, TimerMode};
 use std::cell::RefCell;
@@ -82,9 +81,7 @@ pub fn main() {
 
         let audio_buffer_samples = 512;
         assert!(config.sample_rate().0 / 64 > audio_buffer_samples, "We only pre-fill one APU frame.");
-        let mut apu = Apu::power_up(config.sample_rate().0);
-        // Already power it on.
-        apu.set( 0xff26, 0x80 );
+        let apu = Apu::power_up(config.sample_rate().0);
         let apu_data = apu.buffer.clone();
 
         let err_fn = |err| elog!("an error occurred on the output audio stream: {}", err);
@@ -132,7 +129,7 @@ pub fn main() {
                // Make sure to always have at least one audio frame in the synth buffer
                // in case cpal calls back to fill the audio output buffer.
                let pre_filled_audio_frames = 44100 / 64;
-               while cloned_sound.borrow().synth.apu.buffer.lock().unwrap().len() < pre_filled_audio_frames {
+               while cloned_sound.borrow().synth.ready_buffer_samples() < pre_filled_audio_frames {
                     cloned_sound.borrow_mut().advance_frame();
                }
             })

@@ -80,15 +80,9 @@ impl SoundStuff {
                 }),
             );
 
-        let synth = Synth {
-                apu: apu,
-                settings_ring: vec![vec![]; 512],
-                settings_ring_index: 0,
-                instruments: instruments,
-            };
         SoundStuff {
                 sequencer: Sequencer::new(window_weak, sequencer_step_model),
-                synth: synth,
+                synth: Synth::new(apu, instruments),
                 selected_instrument: 0,
                 visual_note_model: note_model,
             }
