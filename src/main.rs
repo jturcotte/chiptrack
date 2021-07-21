@@ -6,6 +6,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+mod log;
 mod sequencer;
 mod sound;
 mod synth;
@@ -75,34 +76,39 @@ pub fn main() {
     let context = Rc::new(Lazy::new(|| {
         let host = cpal::default_host();
         let device = host.default_output_device().unwrap();
-        println!("Open the audio player: {}", device.name().unwrap());
+        log!("Open the audio player: {}", device.name().unwrap());
         let config = device.default_output_config().unwrap();
-        println!("Audio format {:?}", config);
+        log!("Audio format {:?}", config);
 
+        let audio_buffer_samples = 512;
+        assert!(config.sample_rate().0 / 64 > audio_buffer_samples, "We only pre-fill one APU frame.");
         let mut apu = Apu::power_up(config.sample_rate().0);
         // Already power it on.
         apu.set( 0xff26, 0x80 );
         let apu_data = apu.buffer.clone();
 
-        let err_fn = |err| eprintln!("an error occurred on the output audio stream: {}", err);
+        let err_fn = |err| elog!("an error occurred on the output audio stream: {}", err);
         let sample_format = config.sample_format();
-        let config = config.into();
+        let mut config: cpal::StreamConfig = config.into();
+        config.buffer_size = cpal::BufferSize::Fixed(audio_buffer_samples);
 
         let stream = match sample_format {
             SampleFormat::F32 =>
             device.build_output_stream(&config,
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    // FIXME: Try a 0ms times instead of a repeated one that checks the buffer.
                     let mut apu_data2 = apu_data.lock().unwrap();
                     let len = std::cmp::min(data.len() / 2, apu_data2.len());
-                        for (i, (data_l, data_r)) in apu_data2.drain(..len).enumerate() {
-                            data[i * 2] = data_l;
-                            data[i * 2 + 1] = data_r;
-                        }
-                        drop (apu_data2);
-                        for i in len..(data.len() / 2) {
-                            data[i * 2] = 0.0;
-                            data[i * 2 + 1] = 0.0;
-                        }
+                    for (i, (data_l, data_r)) in apu_data2.drain(..len).enumerate() {
+                        data[i * 2] = data_l;
+                        data[i * 2 + 1] = data_r;
+                    }
+
+                    for i in len..(data.len() / 2) {
+                        // Buffer underrun!! At least fill with zeros to reduce the glitching.
+                        data[i * 2] = 0.0;
+                        data[i * 2 + 1] = 0.0;
+                    }
                 }, err_fn),
             // FIXME
             SampleFormat::I16 => device.build_output_stream(&config, write_silence::<i16>, err_fn),
@@ -121,15 +127,13 @@ pub fn main() {
         let cloned_sound = sound_stuff.clone();
         apu_timer.start(
             TimerMode::Repeated,
-            std::time::Duration::from_millis(15),
+            std::time::Duration::from_millis(5),
             Box::new(move || {
-               // FIXME: Calculate based on the sample rate
-               while cloned_sound.borrow().synth.apu.buffer.lock().unwrap().len() < 1378 {
-                    let mut sound = cloned_sound.borrow_mut();
-                    sound.advance_frame();
-                    // FIXME: Calculate from the timer rate
-                    // Advance one frame (1/64th of CLOCK_FREQUENCY)
-                    sound.synth.apu.next(65536);
+               // Make sure to always have at least one audio frame in the synth buffer
+               // in case cpal calls back to fill the audio output buffer.
+               let pre_filled_audio_frames = 44100 / 64;
+               while cloned_sound.borrow().synth.apu.buffer.lock().unwrap().len() < pre_filled_audio_frames {
+                    cloned_sound.borrow_mut().advance_frame();
                }
             })
         );
@@ -182,6 +186,7 @@ pub fn main() {
     let cloned_context = context.clone();
     let window_weak = window.as_weak();
     window.on_play_clicked(move |toggled| {
+        // FIXME: Stop the timer
         let mut sound = cloned_context.sound.borrow_mut();
         sound.sequencer.set_playing(toggled);
         window_weak.unwrap().set_playing(toggled);

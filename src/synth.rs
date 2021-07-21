@@ -10,6 +10,10 @@ pub struct Synth {
 }
 
 impl Synth {
+    // The Gameboy APU has 512 frames per second where various registers are read,
+    // but all registers are eventually read at least once every 8 of those frames.
+    // So clock our frame generation at 64hz, thus this function is expected
+    // to be called 64x per second.
     pub fn advance_frame(&mut self) -> () {
         let i = self.settings_ring_index;
         for set in self.settings_ring[i].iter() {
@@ -23,6 +27,10 @@ impl Synth {
 
         self.apu.set( 0xff24, 0xff );
         self.apu.set( 0xff25, 0xff );
+
+        // Generate one frame of mixed output.
+        // For 44100hz audio, this will put 44100/64 audio samples in self.apu.buffer.
+        self.apu.next(gameboy::cpu::CLOCK_FREQUENCY / 64);
     }
 
     pub fn trigger_instrument(&mut self, instrument: u32, freq: f64) -> () {
