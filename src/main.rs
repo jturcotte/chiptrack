@@ -38,9 +38,10 @@ pub fn main() {
         sequencer_step_model.push(StepData{empty: true,});
     }
     let note_model = Rc::new(sixtyfps::VecModel::default());
-    let notes: Vec<NoteData> = (60..73_i32).map(|i| {
-        let semitone = (i - 60) % 12;
-        let octav = (i - 60) / 12;
+    let start: i32 = 60;
+    let notes: Vec<NoteData> = (start..(start+13)).map(|i| {
+        let semitone = (i - start) % 12;
+        let octav = (i - start) / 12;
         let major_scale = [0, 2, 4, 5, 7, 9, 11];
         let r = major_scale.binary_search(&semitone);
         let (scale_pos, is_black) = match r {
