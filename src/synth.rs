@@ -69,6 +69,14 @@ impl Setting {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Channel {
+    Square1 = 0xff10,
+    // Square2 = 0xff15,
+    Wave = 0xff1a,
+    // Noise = 0xff1f,
+}
+
 #[derive(Clone)]
 pub struct SetSetting {
     setting: Setting,
@@ -81,36 +89,36 @@ impl SetSetting {
         SetSetting{setting: setting, value: shifted}
     }
 
-    pub fn trigger_with_length(freq: u32, length: u8) -> Vec<SetSetting> {
+    pub fn trigger_with_length(freq: u32, length: u8, channel: Channel) -> Vec<SetSetting> {
         vec!(
             // Length load
-            SetSetting::new(Setting::new(0xff11, 0x3f), 64 - length),
+            SetSetting::new(Setting::new(channel as u16 + 1, 0x3f), 64 - length),
             // Frequency LSB
-            SetSetting::new(Setting::new(0xff13, 0xff), (freq & 0xff) as u8),
+            SetSetting::new(Setting::new(channel as u16 + 3, 0xff), (freq & 0xff) as u8),
             // Trigger
-            SetSetting::new(Setting::new(0xff14, 0x80), 1)
+            SetSetting::new(Setting::new(channel as u16 + 4, 0x80), 1)
                 // Length enable
-                | SetSetting::new(Setting::new(0xff14, 0x40), 1)
+                | SetSetting::new(Setting::new(channel as u16 + 4, 0x40), 1)
                 // Frequency MSB
-                | SetSetting::new(Setting::new(0xff14, 0x07), (freq >> 8) as u8)
+                | SetSetting::new(Setting::new(channel as u16 + 4, 0x07), (freq >> 8) as u8)
         )
     }
 
-    pub fn trigger(freq: u32) -> Vec<SetSetting> {
+    pub fn trigger(freq: u32, channel: Channel) -> Vec<SetSetting> {
         vec!(
             // Frequency LSB
-            SetSetting::new(Setting::new(0xff13, 0xff), (freq & 0xff) as u8),
+            SetSetting::new(Setting::new(channel as u16 + 3, 0xff), (freq & 0xff) as u8),
             // Trigger
-            SetSetting::new(Setting::new(0xff14, 0x80), 1)
+            SetSetting::new(Setting::new(channel as u16 + 4, 0x80), 1)
                 // Length enable
-                | SetSetting::new(Setting::new(0xff14, 0x40), 0)
+                | SetSetting::new(Setting::new(channel as u16 + 4, 0x40), 0)
                 // Frequency MSB
-                | SetSetting::new(Setting::new(0xff14, 0x07), (freq >> 8) as u8)
+                | SetSetting::new(Setting::new(channel as u16 + 4, 0x07), (freq >> 8) as u8)
         )
     }
 
-    pub fn envelope(starting_volume: u8, add_mode: u8, period: u8) -> SetSetting {
-        let addr = 0xff12;
+    pub fn envelope(starting_volume: u8, add_mode: u8, period: u8, channel: Channel) -> SetSetting {
+        let addr = channel as u16 + 2;
         SetSetting::new(Setting::new(addr, 0xf0), starting_volume)
         | SetSetting::new(Setting::new(addr, 0x08), add_mode)
         | SetSetting::new(Setting::new(addr, 0x07), period)
@@ -123,8 +131,28 @@ impl SetSetting {
         | SetSetting::new(Setting::new(addr, 0x07), shift)
     }
 
-    pub fn duty(duty: u8) -> SetSetting {
-        SetSetting::new(Setting::new(0xff11, 0xC0), duty)
+    pub fn duty(duty: u8, channel: Channel) -> SetSetting {
+        SetSetting::new(Setting::new(channel as u16 + 1, 0xC0), duty)
+    }
+
+
+    pub fn wave_power(on: u8) -> SetSetting {
+        SetSetting::new(Setting::new(0xff1a, 0x80), on)
+    }
+
+    pub fn wave_volume_code(volume_code: u8) -> SetSetting {
+        SetSetting::new(Setting::new(0xff1c, 0x60), volume_code)
+    }
+
+    // Each hexadecimal character in the hex string is one 4 bits sample.
+    pub fn wave_table(hex_string: &str) -> Vec<SetSetting> {
+        (0..hex_string.len())
+            .step_by(2)
+            .map(|i| {
+                let byte = u8::from_str_radix(&hex_string[i..i + 2], 16).unwrap();
+                SetSetting::new(Setting::new((0xff30 + i / 2) as u16, 0xff), byte)
+            })
+            .collect()
     }
 }
 impl BitOr for SetSetting {

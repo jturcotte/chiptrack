@@ -97,20 +97,21 @@ MainWindow := Window {
         {empty: false}, {empty: true}, {empty: true}, {empty: true},
         {empty: false}, {empty: true}, {empty: true}, {empty: true},
         {empty: false}, {empty: true}, {empty: true}, {empty: true}];
+    property<int> first_note: 60;
     property<[NoteData]> notes: [
-        {note_number: 60, scale_pos: 0, is_black: false, active: false},
-        {note_number: 62, scale_pos: 1, is_black: false, active: false},
-        {note_number: 64, scale_pos: 2, is_black: false, active: false},
-        {note_number: 65, scale_pos: 3, is_black: false, active: false},
-        {note_number: 67, scale_pos: 4, is_black: false, active: false},
-        {note_number: 69, scale_pos: 5, is_black: false, active: false},
-        {note_number: 71, scale_pos: 6, is_black: false, active: false},
-        {note_number: 72, scale_pos: 7, is_black: false, active: false},
-        {note_number: 61, scale_pos: 0, is_black: true, active: false},
-        {note_number: 63, scale_pos: 1, is_black: true, active: false},
-        {note_number: 66, scale_pos: 3, is_black: true, active: false},
-        {note_number: 68, scale_pos: 4, is_black: true, active: false},
-        {note_number: 70, scale_pos: 5, is_black: true, active: false},
+        {note_number: first_note, scale_pos: 0, is_black: false, active: false},
+        {note_number: first_note + 2, scale_pos: 1, is_black: false, active: false},
+        {note_number: first_note + 4, scale_pos: 2, is_black: false, active: false},
+        {note_number: first_note + 5, scale_pos: 3, is_black: false, active: false},
+        {note_number: first_note + 7, scale_pos: 4, is_black: false, active: false},
+        {note_number: first_note + 9, scale_pos: 5, is_black: false, active: false},
+        {note_number: first_note + 11, scale_pos: 6, is_black: false, active: false},
+        {note_number: first_note + 12, scale_pos: 7, is_black: false, active: false},
+        {note_number: first_note + 1, scale_pos: 0, is_black: true, active: false},
+        {note_number: first_note + 3, scale_pos: 1, is_black: true, active: false},
+        {note_number: first_note + 6, scale_pos: 3, is_black: true, active: false},
+        {note_number: first_note + 8, scale_pos: 4, is_black: true, active: false},
+        {note_number: first_note + 10, scale_pos: 5, is_black: true, active: false},
     ];
     property<int> current_note;
     property<int> current_sequencer_bar;
@@ -127,19 +128,19 @@ MainWindow := Window {
     FocusScope {
         key-pressed(event) => {
             // FIXME: QWERTY
-            if (event.text == "a") { note_pressed(60); }
-            else if (event.text == "r") { note_pressed(62); }
-            else if (event.text == "s") { note_pressed(64); }
-            else if (event.text == "t") { note_pressed(65); }
-            else if (event.text == "d") { note_pressed(67); }
-            else if (event.text == "h") { note_pressed(69); }
-            else if (event.text == "n") { note_pressed(71); }
-            else if (event.text == "e") { note_pressed(72); }
-            else if (event.text == "w") { note_pressed(61); }
-            else if (event.text == "f") { note_pressed(63); }
-            else if (event.text == "g") { note_pressed(66); }
-            else if (event.text == "j") { note_pressed(68); }
-            else if (event.text == "l") { note_pressed(70); }
+            if (event.text == "a") { note_pressed(first_note); }
+            else if (event.text == "r") { note_pressed(first_note + 2); }
+            else if (event.text == "s") { note_pressed(first_note + 4); }
+            else if (event.text == "t") { note_pressed(first_note + 5); }
+            else if (event.text == "d") { note_pressed(first_note + 7); }
+            else if (event.text == "h") { note_pressed(first_note + 9); }
+            else if (event.text == "n") { note_pressed(first_note + 11); }
+            else if (event.text == "e") { note_pressed(first_note + 12); }
+            else if (event.text == "w") { note_pressed(first_note + 1); }
+            else if (event.text == "f") { note_pressed(first_note + 3); }
+            else if (event.text == "g") { note_pressed(first_note + 6); }
+            else if (event.text == "j") { note_pressed(first_note + 8); }
+            else if (event.text == "l") { note_pressed(first_note + 10); }
             accept
         }
     }
