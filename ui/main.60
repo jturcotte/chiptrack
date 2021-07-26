@@ -117,7 +117,7 @@ MainWindow := Window {
     property<int> current_sequencer_bar;
     property<int> current_sequencer_step;
     property<int> locked_sequencer_bar: -1;
-    property<bool> playing;
+    property<bool> playing: true;
     callback note_pressed(int);
     callback selected_instrument_changed(int);
     callback bar_clicked(int);
@@ -218,14 +218,14 @@ MainWindow := Window {
             Rectangle {} // Spacer
             VerticalBox {
                 play_button := Button {
-                    text: root.playing ? "Play" : "Stop";
+                    text: root.playing ? "Stop" : "Play";
                     clicked => {
                         root.play_clicked(!root.playing);
                     }
                 }
                 record_button := Button {
                     property<bool> toggled: true;
-                    text: toggled ? "Record" : "Free";
+                    text: toggled ? "Recording" : "Not\nrecording";
                     clicked => {
                         toggled = !toggled;
                         root.record_clicked(toggled);
