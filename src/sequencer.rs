@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 pub const NUM_STEPS: u32 = 64;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NoteEvent {
     Press,
     Release,

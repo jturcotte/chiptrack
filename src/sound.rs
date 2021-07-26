@@ -126,7 +126,9 @@ impl SoundStuff {
     pub fn advance_frame(&mut self) -> () {
         let note_events = self.sequencer.advance_frame();
         for (instrument, typ, note) in note_events {
-            self.synth.trigger_instrument(instrument, Self::note_to_freq(note));
+            if typ == NoteEvent::Press {
+                self.synth.trigger_instrument(instrument, Self::note_to_freq(note));
+            }
             for row in 0..self.visual_note_model.row_count() {
                 let mut row_data = self.visual_note_model.row_data(row);
                 if row_data.note_number as u32 == note {
