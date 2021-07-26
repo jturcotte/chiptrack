@@ -74,7 +74,7 @@ pub enum Channel {
     Square1 = 0xff10,
     // Square2 = 0xff15,
     Wave = 0xff1a,
-    // Noise = 0xff1f,
+    Noise = 0xff1f,
 }
 
 #[derive(Clone)]
@@ -135,7 +135,6 @@ impl SetSetting {
         SetSetting::new(Setting::new(channel as u16 + 1, 0xC0), duty)
     }
 
-
     pub fn wave_power(on: u8) -> SetSetting {
         SetSetting::new(Setting::new(0xff1a, 0x80), on)
     }
@@ -153,6 +152,17 @@ impl SetSetting {
                 SetSetting::new(Setting::new((0xff30 + i / 2) as u16, 0xff), byte)
             })
             .collect()
+    }
+
+    pub fn noise_params(clock_shift: u8, width: u8, divisor_code: u8) -> SetSetting {
+        let addr = 0xff22;
+        SetSetting::new(Setting::new(addr, 0xf0), clock_shift)
+        | SetSetting::new(Setting::new(addr, 0x08), width)
+        | SetSetting::new(Setting::new(addr, 0x07), divisor_code)
+    }
+
+    pub fn noise_trigger() -> SetSetting {
+        SetSetting::new(Setting::new(0xff23, 0x80), 1)
     }
 }
 impl BitOr for SetSetting {

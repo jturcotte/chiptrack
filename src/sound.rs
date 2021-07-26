@@ -102,8 +102,16 @@ impl SoundStuff {
                     settings_ring[f(0)].extend(SetSetting::wave_table("2266aaeefffffeeaa6668acffeeca633"));
                     settings_ring[f(0)].push(SetSetting::wave_power(1));
                     settings_ring[f(0)].push(SetSetting::wave_volume_code(1));
-                    settings_ring[f(0)].extend(SetSetting::trigger(freq, Wave));
                     settings_ring[f(0)].extend(SetSetting::trigger_with_length(freq, 64, Wave));
+                }),
+                Box::new(move |settings_ring, i, freq| {
+                    let len = settings_ring.len();
+                    let f = |frame: usize| { (i + frame) % len };
+                    settings_ring[f(0)].push(SetSetting::envelope(0xf, 0x0, 0x1, Noise));
+                    // Use the frequency as input for now just so that different
+                    // keys produce different sound.
+                    settings_ring[f(0)].push(SetSetting::noise_params(freq as u8 >> 4, 0x0, freq as u8 & 0x7));
+                    settings_ring[f(0)].push(SetSetting::noise_trigger());
                 }),
             );
 
