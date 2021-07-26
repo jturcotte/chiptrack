@@ -30,7 +30,7 @@ impl Sequencer {
         Sequencer {
             current_frame: 0,
             current_step: 0,
-            locked_bar: None,
+            locked_bar: Some(0),
             playing: true,
             recording: true,
             step_instruments_note: [[0; 16]; NUM_STEPS as usize],

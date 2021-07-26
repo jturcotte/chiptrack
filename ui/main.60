@@ -116,7 +116,7 @@ MainWindow := Window {
     property<int> current_note;
     property<int> current_sequencer_bar;
     property<int> current_sequencer_step;
-    property<int> locked_sequencer_bar: -1;
+    property<int> locked_sequencer_bar: 0;
     property<bool> playing: true;
     callback note_pressed(int);
     callback selected_instrument_changed(int);
