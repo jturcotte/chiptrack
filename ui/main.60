@@ -80,9 +80,10 @@ SequencerStep := Rectangle {
     callback clicked();
     property<bool> highlighted;
     property<bool> empty;
+    property<bool> beat;
     background: empty ? white : #c0c0c0;
-    border_width: 1px;
-    border_color: highlighted ? black : #b0b0b0;
+    border_width: beat ? 2px : 1px;
+    border_color: highlighted ? black : #a0a0a0;
     TouchArea {
         width: 100%;
         height: 100%;
@@ -212,6 +213,7 @@ MainWindow := Window {
                     SequencerStep {
                         highlighted: current_sequencer_step == idx;
                         empty: step.empty;
+                        beat: mod(idx, 4) == 0;
                         clicked => { root.step_clicked(idx); }
                     }
             }
