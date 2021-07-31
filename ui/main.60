@@ -101,7 +101,9 @@ MainWindow := Window {
 
     preferred_width: 640px;
     preferred_height: 400px;
-    FocusScope {
+
+    forward-focus: KeyHandler;
+    KeyHandler := FocusScope {
         key-pressed(event) => {
             // FIXME: QWERTY
             if (event.text == "a") { note_pressed(first_note); }
@@ -119,99 +121,99 @@ MainWindow := Window {
             else if (event.text == "l") { note_pressed(first_note + 10); }
             accept
         }
-    }
 
-    VerticalBox {
-        HorizontalBox {
-            height: 50%;
+        VerticalBox {
             HorizontalBox {
-                min_width: 100px;
-                for step[idx] in sequencer_steps:
-                    SequencerStep {
-                        highlighted: current_sequencer_step == idx;
-                        empty: step.empty;
-                        beat: mod(idx, 4) == 0;
-                        clicked => { root.step_clicked(idx); }
+                height: 50%;
+                HorizontalBox {
+                    min_width: 100px;
+                    for step[idx] in sequencer_steps:
+                        SequencerStep {
+                            highlighted: current_sequencer_step == idx;
+                            empty: step.empty;
+                            beat: mod(idx, 4) == 0;
+                            clicked => { root.step_clicked(idx); }
+                        }
+                }
+                VerticalBox {
+                    play_button := Button {
+                        text: root.playing ? "Stop" : "Play";
+                        clicked => {
+                            root.play_clicked(!root.playing);
+                        }
                     }
-            }
-            VerticalBox {
-                play_button := Button {
-                    text: root.playing ? "Stop" : "Play";
-                    clicked => {
-                        root.play_clicked(!root.playing);
+                    record_button := Button {
+                        property<bool> toggled: true;
+                        text: toggled ? "Recording" : "Not\nrecording";
+                        clicked => {
+                            toggled = !toggled;
+                            root.record_clicked(toggled);
+                        }
                     }
                 }
-                record_button := Button {
-                    property<bool> toggled: true;
-                    text: toggled ? "Recording" : "Not\nrecording";
-                    clicked => {
-                        toggled = !toggled;
-                        root.record_clicked(toggled);
-                    }
-                }
             }
-        }
-        HorizontalBox {
-            Rectangle {
-                width: 70%;
-                // min_height: 100px;
-                // min_width: 50%;
-                for note[idx] in notes:
-                    PianoKey {
-                        is_black: note.is_black;
-                        x: note.is_black
-                            ? (note.scale_pos + 1) * floor(parent.width / 8px) * 1px - width / 2
-                            : note.scale_pos * floor(parent.width / 8px) * 1px;
-                        width: is_black
-                            ? parent.width / 8 * 0.8
-                            : floor(parent.width / 8px) * 1px + 1px;
+            HorizontalBox {
+                Rectangle {
+                    width: 70%;
+                    // min_height: 100px;
+                    // min_width: 50%;
+                    for note[idx] in notes:
+                        PianoKey {
+                            is_black: note.is_black;
+                            x: note.is_black
+                                ? (note.scale_pos + 1) * floor(parent.width / 8px) * 1px - width / 2
+                                : note.scale_pos * floor(parent.width / 8px) * 1px;
+                            width: is_black
+                                ? parent.width / 8 * 0.8
+                                : floor(parent.width / 8px) * 1px + 1px;
 
-                        height: is_black ? 60% : 100%;
-                        highlighted: note.active;
-                        clicked => { root.note_pressed(note.note_number); }
-                    }
-            }
-            GridBox {
-                Row {
-                    InstrumentButton {
-                        instrument_number: 0;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                    InstrumentButton {
-                        instrument_number: 1;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                    InstrumentButton {
-                        instrument_number: 2;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
+                            height: is_black ? 60% : 100%;
+                            highlighted: note.active;
+                            clicked => { root.note_pressed(note.note_number); }
+                        }
                 }
-                Row {
-                    InstrumentButton {
-                        instrument_number: 3;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
+                GridBox {
+                    Row {
+                        InstrumentButton {
+                            instrument_number: 0;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 1;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 2;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
                     }
-                    InstrumentButton {
-                        instrument_number: 4;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    Row {
+                        InstrumentButton {
+                            instrument_number: 3;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 4;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 5;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
                     }
-                    InstrumentButton {
-                        instrument_number: 5;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                }
-                Row {
-                    InstrumentButton {
-                        instrument_number: 6;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                    InstrumentButton {
-                        instrument_number: 7;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
-                    }
-                    InstrumentButton {
-                        instrument_number: 8;
-                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    Row {
+                        InstrumentButton {
+                            instrument_number: 6;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 7;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
+                        InstrumentButton {
+                            instrument_number: 8;
+                            clicked => { root.selected_instrument_changed(instrument_number); }
+                        }
                     }
                 }
             }
