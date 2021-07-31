@@ -31,7 +31,7 @@ pub fn main() {
     // Rewrite the models and use that version.
     let sequencer_step_model = Rc::new(sixtyfps::VecModel::default());
     for _ in 0..16 {
-        sequencer_step_model.push(StepData{empty: true,});
+        sequencer_step_model.push(StepData{empty: true, active: false});
     }
     let note_model = Rc::new(sixtyfps::VecModel::default());
     let start: i32 = 60;
@@ -67,7 +67,6 @@ pub fn main() {
     window.set_sequencer_steps(sixtyfps::ModelHandle::new(sequencer_step_model.clone()));
     window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
 
-    let window_weak = window.as_weak();
     let context = Rc::new(Lazy::new(|| {
         let host = cpal::default_host();
         let device = host.default_output_device().unwrap();
@@ -114,7 +113,7 @@ pub fn main() {
             }
         }
 
-        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, window_weak, sequencer_step_model, note_model)));
+        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, sequencer_step_model, note_model)));
 
         let apu_timer: Timer = Default::default();
         let cloned_sound = sound_stuff.clone();

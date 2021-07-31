@@ -2,13 +2,11 @@ use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
 use crate::sixtyfps_generated_MainWindow::NoteData;
 use crate::sixtyfps_generated_MainWindow::StepData;
-use crate::sixtyfps_generated_MainWindow::MainWindow;
 use crate::synth::SetSetting;
 use crate::synth::Channel::*;
 use crate::synth::Synth;
 use sixtyfps::Model;
 use sixtyfps::VecModel;
-use sixtyfps::Weak;
 use std::rc::Rc;
 
 pub struct SoundStuff {
@@ -19,7 +17,7 @@ pub struct SoundStuff {
 }
 
 impl SoundStuff {
-    pub fn new(apu: gameboy::apu::Apu, window_weak: Weak<MainWindow>, sequencer_step_model: Rc<VecModel<StepData>>, note_model: Rc<VecModel<NoteData>>) -> SoundStuff {
+    pub fn new(apu: gameboy::apu::Apu, sequencer_step_model: Rc<VecModel<StepData>>, note_model: Rc<VecModel<NoteData>>) -> SoundStuff {
         let instruments: Vec<Box<dyn Fn(&mut Vec<Vec<SetSetting>>, usize, u32) -> ()>> =
             vec!(
                 Box::new(move |settings_ring, i, freq| {
@@ -116,7 +114,7 @@ impl SoundStuff {
             );
 
         SoundStuff {
-                sequencer: Sequencer::new(window_weak, sequencer_step_model),
+                sequencer: Sequencer::new(sequencer_step_model),
                 synth: Synth::new(apu, instruments),
                 selected_instrument: 0,
                 visual_note_model: note_model,

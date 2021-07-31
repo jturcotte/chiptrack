@@ -2,6 +2,7 @@ import { Button, CheckBox, SpinBox, Slider, GroupBox, LineEdit, StandardListView
 
 struct StepData := {
     empty: bool,
+    active: bool,
 }
 struct NoteData := {
     note_number: int,
@@ -90,8 +91,6 @@ MainWindow := Window {
         {note_number: first_note + 8, scale_pos: 4, is_black: true, active: false},
         {note_number: first_note + 10, scale_pos: 5, is_black: true, active: false},
     ];
-    property<int> current_note;
-    property<int> current_sequencer_step;
     property<bool> playing: true;
     callback note_pressed(int);
     callback selected_instrument_changed(int);
@@ -129,7 +128,7 @@ MainWindow := Window {
                     min_width: 100px;
                     for step[idx] in sequencer_steps:
                         SequencerStep {
-                            highlighted: current_sequencer_step == idx;
+                            highlighted: step.active;
                             empty: step.empty;
                             beat: mod(idx, 4) == 0;
                             clicked => { root.step_clicked(idx); }
@@ -155,8 +154,6 @@ MainWindow := Window {
             HorizontalBox {
                 Rectangle {
                     width: 70%;
-                    // min_height: 100px;
-                    // min_width: 50%;
                     for note[idx] in notes:
                         PianoKey {
                             is_black: note.is_black;

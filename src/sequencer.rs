@@ -1,8 +1,6 @@
 use crate::sixtyfps_generated_MainWindow::StepData;
-use crate::sixtyfps_generated_MainWindow::MainWindow;
 use sixtyfps::Model;
 use sixtyfps::VecModel;
-use sixtyfps::Weak;
 use std::rc::Rc;
 
 pub const NUM_STEPS: u32 = 16;
@@ -19,31 +17,33 @@ pub struct Sequencer {
     playing: bool,
     recording: bool,
     step_instruments_note: [[u32; 16]; NUM_STEPS as usize],
-    step_changed_callback: Box<dyn Fn(u32) -> ()>,
     previous_frame_note_events: Vec<(u32, NoteEvent, u32)>,
     visual_step_model: Rc<VecModel<StepData>>,
 }
 
 impl Sequencer {
-    pub fn new(window_weak: Weak<MainWindow>, sequencer_step_model: Rc<VecModel<StepData>>) -> Sequencer {
+    pub fn new(sequencer_step_model: Rc<VecModel<StepData>>) -> Sequencer {
         Sequencer {
             current_frame: 0,
             current_step: 0,
             playing: true,
             recording: true,
             step_instruments_note: [[0; 16]; NUM_STEPS as usize],
-            step_changed_callback: Box::new(move |s| {
-                let window = window_weak.unwrap();
-                window.set_current_sequencer_step(s as i32 % 16);
-            }),
             previous_frame_note_events: Vec::new(),
             visual_step_model: sequencer_step_model,
         }
     }
 
     pub fn set_current_step(&mut self, step_num: u32) -> () {
+        let mut row_data = self.visual_step_model.row_data(self.current_step as usize);
+        row_data.active = false;
+        self.visual_step_model.set_row_data(self.current_step as usize, row_data);
+
         self.current_step = step_num;
-        (self.step_changed_callback)(self.current_step);
+
+        let mut row_data = self.visual_step_model.row_data(self.current_step as usize);
+        row_data.active = true;
+        self.visual_step_model.set_row_data(self.current_step as usize, row_data);
     }
     pub fn set_playing(&mut self, val: bool) -> () {
         self.playing = val;
@@ -61,15 +61,7 @@ impl Sequencer {
         self.current_frame += 1;
         if self.current_frame % 6 == 0 {
             let next_step = (self.current_step + 1) % NUM_STEPS;
-
-            if next_step % 16 == 0 {
-                for i in 0..16 {
-                    let empty = self.step_instruments_note[next_step as usize + i].iter().sum::<u32>() == 0;
-                    self.visual_step_model.set_row_data(i, StepData{empty: empty,});
-                }
-            }
-            self.current_step = next_step;
-            (self.step_changed_callback)(self.current_step);
+            self.set_current_step(next_step);
 
             // Each note lasts only one frame, so just release everything pressed on the previous frame.
             for (instrument, typ, note) in &self.previous_frame_note_events {
@@ -95,6 +87,8 @@ impl Sequencer {
         }
 
         self.step_instruments_note[self.current_step as usize][instrument as usize] = note;
-        self.visual_step_model.set_row_data((self.current_step % 16) as usize, StepData{empty: false,});
+        let mut row_data = self.visual_step_model.row_data(self.current_step as usize);
+        row_data.empty = false;
+        self.visual_step_model.set_row_data(self.current_step as usize, row_data);
     }
 }
