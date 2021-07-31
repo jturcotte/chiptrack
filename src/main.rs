@@ -29,10 +29,6 @@ pub fn main() {
 
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.
-    let sequencer_bar_model = Rc::new(sixtyfps::VecModel::default());
-    for _ in 0..(sequencer::NUM_STEPS/16) {
-        sequencer_bar_model.push(BarData{});
-    }
     let sequencer_step_model = Rc::new(sixtyfps::VecModel::default());
     for _ in 0..16 {
         sequencer_step_model.push(StepData{empty: true,});
@@ -68,7 +64,6 @@ pub fn main() {
     }
 
     let window = MainWindow::new();
-    window.set_sequencer_bars(sixtyfps::ModelHandle::new(sequencer_bar_model.clone()));
     window.set_sequencer_steps(sixtyfps::ModelHandle::new(sequencer_step_model.clone()));
     window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
 
@@ -162,17 +157,6 @@ pub fn main() {
             std::time::Duration::from_millis(15 * 6),
             Box::new(move || cloned_sound.borrow_mut().release_notes())
         );
-    });
-
-    let cloned_context = context.clone();
-    let window_weak = window.as_weak();
-    window.on_bar_clicked(move |bar_num| {
-        let mut sound = cloned_context.sound.borrow_mut();
-        let new_lock = match sound.sequencer.set_locked_bar(Some(bar_num as u32)) {
-            Some(n) => n as i32,
-            None => -1,
-        };
-        window_weak.unwrap().set_locked_sequencer_bar(new_lock);
     });
 
     let cloned_context = context.clone();

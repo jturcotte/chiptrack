@@ -1,7 +1,5 @@
 import { Button, CheckBox, SpinBox, Slider, GroupBox, LineEdit, StandardListView, ComboBox, VerticalBox, HorizontalBox, GridBox } from "sixtyfps_widgets.60";
 
-struct BarData := {
-}
 struct StepData := {
     empty: bool,
 }
@@ -55,27 +53,6 @@ InstrumentButton := Rectangle {
     }
 }
 
-BarStep := Rectangle {
-    callback clicked();
-    property<bool> highlighted;
-    property<bool> locked;
-    background: white;
-    border_width: 1px;
-    border_color: highlighted ? black : #b0b0b0;
-    Text {
-        text: locked ? "Locked" : "";
-        width: 100%;
-        height: 100%;
-        horizontal_alignment: center;
-        vertical_alignment: center;
-    }
-    TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.clicked(); }
-    }
-}
-
 SequencerStep := Rectangle {
     callback clicked();
     property<bool> highlighted;
@@ -92,7 +69,6 @@ SequencerStep := Rectangle {
 }
 
 MainWindow := Window {
-    property<[BarData]> sequencer_bars: [{}, {}, {}, {}];
     property<[StepData]> sequencer_steps: [
         {empty: false}, {empty: true}, {empty: true}, {empty: true},
         {empty: false}, {empty: true}, {empty: true}, {empty: true},
@@ -115,13 +91,10 @@ MainWindow := Window {
         {note_number: first_note + 10, scale_pos: 5, is_black: true, active: false},
     ];
     property<int> current_note;
-    property<int> current_sequencer_bar;
     property<int> current_sequencer_step;
-    property<int> locked_sequencer_bar: 0;
     property<bool> playing: true;
     callback note_pressed(int);
     callback selected_instrument_changed(int);
-    callback bar_clicked(int);
     callback step_clicked(int);
     callback play_clicked(bool);
     callback record_clicked(bool);
@@ -197,16 +170,6 @@ MainWindow := Window {
                 }
             }
             Rectangle {} // Spacer
-            VerticalBox {
-                min_width: 100px;
-
-                for __[idx] in sequencer_bars:
-                    BarStep {
-                        highlighted: current_sequencer_bar == idx;
-                        locked: locked_sequencer_bar == idx;
-                        clicked => { root.bar_clicked(idx); }
-                    }
-            }
             VerticalBox {
                 min_width: 100px;
                 for step[idx] in sequencer_steps:

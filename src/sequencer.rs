@@ -5,7 +5,7 @@ use sixtyfps::VecModel;
 use sixtyfps::Weak;
 use std::rc::Rc;
 
-pub const NUM_STEPS: u32 = 64;
+pub const NUM_STEPS: u32 = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NoteEvent {
@@ -16,7 +16,6 @@ pub enum NoteEvent {
 pub struct Sequencer {
     current_frame: u32,
     current_step: u32,
-    locked_bar: Option<u32>,
     playing: bool,
     recording: bool,
     step_instruments_note: [[u32; 16]; NUM_STEPS as usize],
@@ -30,13 +29,11 @@ impl Sequencer {
         Sequencer {
             current_frame: 0,
             current_step: 0,
-            locked_bar: Some(0),
             playing: true,
             recording: true,
             step_instruments_note: [[0; 16]; NUM_STEPS as usize],
             step_changed_callback: Box::new(move |s| {
                 let window = window_weak.unwrap();
-                window.set_current_sequencer_bar(s as i32 / 16);
                 window.set_current_sequencer_step(s as i32 % 16);
             }),
             previous_frame_note_events: Vec::new(),
@@ -44,14 +41,6 @@ impl Sequencer {
         }
     }
 
-    pub fn set_locked_bar(&mut self, bar_num: Option<u32>) -> Option<u32> {
-        if self.locked_bar == bar_num {
-            self.locked_bar = None;
-        } else {
-            self.locked_bar = bar_num;
-        }
-        self.locked_bar
-    }
     pub fn set_current_step(&mut self, step_num: u32) -> () {
         self.current_step = step_num;
         (self.step_changed_callback)(self.current_step);
@@ -71,12 +60,9 @@ impl Sequencer {
 
         self.current_frame += 1;
         if self.current_frame % 6 == 0 {
-            let mut next_step = (self.current_step + 1) % NUM_STEPS;
+            let next_step = (self.current_step + 1) % NUM_STEPS;
 
             if next_step % 16 == 0 {
-                if let Some(locked_bar) = self.locked_bar {
-                    next_step = locked_bar * 16;
-                }
                 for i in 0..16 {
                     let empty = self.step_instruments_note[next_step as usize + i].iter().sum::<u32>() == 0;
                     self.visual_step_model.set_row_data(i, StepData{empty: empty,});
