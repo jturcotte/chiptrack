@@ -35,10 +35,11 @@ PianoKey :=  Rectangle {
 InstrumentButton := Rectangle {
     callback clicked();
     property<int> instrument_number: 0;
+    property<bool> highlighted;
     min_width: 50px;
     min_height: 50px;
     background: white;
-    border_color: black;
+    border_color: highlighted ? black : #a0a0a0;
     border_width: 1px;
     Text {
         text: instrument_number;
@@ -91,6 +92,7 @@ MainWindow := Window {
         {note_number: first_note + 8, scale_pos: 4, is_black: true, active: false},
         {note_number: first_note + 10, scale_pos: 5, is_black: true, active: false},
     ];
+    property<int> selected_instrument: 0;
     property<bool> playing: true;
     callback note_pressed(int);
     callback selected_instrument_changed(int);
@@ -173,42 +175,51 @@ MainWindow := Window {
                     Row {
                         InstrumentButton {
                             instrument_number: 0;
+                            highlighted: root.selected_instrument == instrument_number;
                             clicked => { root.selected_instrument_changed(instrument_number); }
                         }
                         InstrumentButton {
                             instrument_number: 1;
+                            highlighted: root.selected_instrument == instrument_number;
                             clicked => { root.selected_instrument_changed(instrument_number); }
                         }
                         InstrumentButton {
                             instrument_number: 2;
+                            highlighted: root.selected_instrument == instrument_number;
                             clicked => { root.selected_instrument_changed(instrument_number); }
                         }
                     }
                     Row {
                         InstrumentButton {
                             instrument_number: 3;
+                            highlighted: root.selected_instrument == instrument_number;
                             clicked => { root.selected_instrument_changed(instrument_number); }
                         }
                         InstrumentButton {
                             instrument_number: 4;
+                            highlighted: root.selected_instrument == instrument_number;
                             clicked => { root.selected_instrument_changed(instrument_number); }
                         }
                         InstrumentButton {
                             instrument_number: 5;
+                            highlighted: root.selected_instrument == instrument_number;
                             clicked => { root.selected_instrument_changed(instrument_number); }
                         }
                     }
                     Row {
                         InstrumentButton {
                             instrument_number: 6;
+                            highlighted: root.selected_instrument == instrument_number;
                             clicked => { root.selected_instrument_changed(instrument_number); }
                         }
                         InstrumentButton {
                             instrument_number: 7;
+                            highlighted: root.selected_instrument == instrument_number;
                             clicked => { root.selected_instrument_changed(instrument_number); }
                         }
                         InstrumentButton {
                             instrument_number: 8;
+                            highlighted: root.selected_instrument == instrument_number;
                             clicked => { root.selected_instrument_changed(instrument_number); }
                         }
                     }

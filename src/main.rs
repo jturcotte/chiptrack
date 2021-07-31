@@ -140,9 +140,12 @@ pub fn main() {
     }));
 
     let cloned_context = context.clone();
+    let window_weak = window.as_weak();
     window.on_selected_instrument_changed(move |instrument| {
         let mut sound = cloned_context.sound.borrow_mut();
         sound.select_instrument(instrument as u32);
+        // Just forward it back to the UI, it doesn't change otherwise.
+        window_weak.unwrap().set_selected_instrument(instrument);
     });
 
     let cloned_context = context.clone();
