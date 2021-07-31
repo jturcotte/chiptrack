@@ -99,6 +99,8 @@ MainWindow := Window {
     callback play_clicked(bool);
     callback record_clicked(bool);
 
+    preferred_width: 640px;
+    preferred_height: 400px;
     FocusScope {
         key-pressed(event) => {
             // FIXME: QWERTY
@@ -122,55 +124,7 @@ MainWindow := Window {
     VerticalBox {
         HorizontalBox {
             height: 50%;
-            Rectangle {} // Spacer
-            VerticalBox {
-                GridBox {
-                    Row {
-                        InstrumentButton {
-                            instrument_number: 0;
-                            clicked => { root.selected_instrument_changed(instrument_number); }
-                        }
-                        InstrumentButton {
-                            instrument_number: 1;
-                            clicked => { root.selected_instrument_changed(instrument_number); }
-                        }
-                        InstrumentButton {
-                            instrument_number: 2;
-                            clicked => { root.selected_instrument_changed(instrument_number); }
-                        }
-                    }
-                    Row {
-                        InstrumentButton {
-                            instrument_number: 3;
-                            clicked => { root.selected_instrument_changed(instrument_number); }
-                        }
-                        InstrumentButton {
-                            instrument_number: 4;
-                            clicked => { root.selected_instrument_changed(instrument_number); }
-                        }
-                        InstrumentButton {
-                            instrument_number: 5;
-                            clicked => { root.selected_instrument_changed(instrument_number); }
-                        }
-                    }
-                    Row {
-                        InstrumentButton {
-                            instrument_number: 6;
-                            clicked => { root.selected_instrument_changed(instrument_number); }
-                        }
-                        InstrumentButton {
-                            instrument_number: 7;
-                            clicked => { root.selected_instrument_changed(instrument_number); }
-                        }
-                        InstrumentButton {
-                            instrument_number: 8;
-                            clicked => { root.selected_instrument_changed(instrument_number); }
-                        }
-                    }
-                }
-            }
-            Rectangle {} // Spacer
-            VerticalBox {
+            HorizontalBox {
                 min_width: 100px;
                 for step[idx] in sequencer_steps:
                     SequencerStep {
@@ -180,7 +134,6 @@ MainWindow := Window {
                         clicked => { root.step_clicked(idx); }
                     }
             }
-            Rectangle {} // Spacer
             VerticalBox {
                 play_button := Button {
                     text: root.playing ? "Stop" : "Play";
@@ -198,22 +151,70 @@ MainWindow := Window {
                 }
             }
         }
-        Rectangle {
-            min_height: 100px;
-            for note[idx] in notes:
-                PianoKey {
-                    is_black: note.is_black;
-                    x: note.is_black
-                        ? (note.scale_pos + 1) * round(parent.width / 8px) * 1px - width / 2
-                        : note.scale_pos * round(parent.width / 8px) * 1px;
-                    width: is_black
-                        ? parent.width / 8 * 0.8
-                        : round(parent.width / 8px) * 1px + 1px;
+        HorizontalBox {
+            Rectangle {
+                width: 70%;
+                // min_height: 100px;
+                // min_width: 50%;
+                for note[idx] in notes:
+                    PianoKey {
+                        is_black: note.is_black;
+                        x: note.is_black
+                            ? (note.scale_pos + 1) * floor(parent.width / 8px) * 1px - width / 2
+                            : note.scale_pos * floor(parent.width / 8px) * 1px;
+                        width: is_black
+                            ? parent.width / 8 * 0.8
+                            : floor(parent.width / 8px) * 1px + 1px;
 
-                    height: is_black ? 60% : 100%;
-                    highlighted: note.active;
-                    clicked => { root.note_pressed(note.note_number); }
+                        height: is_black ? 60% : 100%;
+                        highlighted: note.active;
+                        clicked => { root.note_pressed(note.note_number); }
+                    }
+            }
+            GridBox {
+                Row {
+                    InstrumentButton {
+                        instrument_number: 0;
+                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    }
+                    InstrumentButton {
+                        instrument_number: 1;
+                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    }
+                    InstrumentButton {
+                        instrument_number: 2;
+                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    }
                 }
+                Row {
+                    InstrumentButton {
+                        instrument_number: 3;
+                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    }
+                    InstrumentButton {
+                        instrument_number: 4;
+                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    }
+                    InstrumentButton {
+                        instrument_number: 5;
+                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    }
+                }
+                Row {
+                    InstrumentButton {
+                        instrument_number: 6;
+                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    }
+                    InstrumentButton {
+                        instrument_number: 7;
+                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    }
+                    InstrumentButton {
+                        instrument_number: 8;
+                        clicked => { root.selected_instrument_changed(instrument_number); }
+                    }
+                }
+            }
         }
     }
 }
