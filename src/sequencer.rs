@@ -3,7 +3,8 @@ use sixtyfps::Model;
 use sixtyfps::VecModel;
 use std::rc::Rc;
 
-pub const NUM_STEPS: u32 = 16;
+pub const NUM_INSTRUMENTS: usize = 9;
+pub const NUM_STEPS: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NoteEvent {
@@ -16,7 +17,7 @@ pub struct Sequencer {
     current_step: u32,
     playing: bool,
     recording: bool,
-    step_instruments_note: [[u32; 16]; NUM_STEPS as usize],
+    step_instruments_note: [[u32; NUM_INSTRUMENTS]; NUM_STEPS],
     previous_frame_note_events: Vec<(u32, NoteEvent, u32)>,
     visual_step_model: Rc<VecModel<StepData>>,
 }
@@ -28,7 +29,7 @@ impl Sequencer {
             current_step: 0,
             playing: true,
             recording: true,
-            step_instruments_note: [[0; 16]; NUM_STEPS as usize],
+            step_instruments_note: [[0; NUM_INSTRUMENTS]; NUM_STEPS],
             previous_frame_note_events: Vec::new(),
             visual_step_model: sequencer_step_model,
         }
@@ -60,7 +61,7 @@ impl Sequencer {
 
         self.current_frame += 1;
         if self.current_frame % 6 == 0 {
-            let next_step = (self.current_step + 1) % NUM_STEPS;
+            let next_step = (self.current_step + 1) % (NUM_STEPS as u32);
             self.set_current_step(next_step);
 
             // Each note lasts only one frame, so just release everything pressed on the previous frame.
