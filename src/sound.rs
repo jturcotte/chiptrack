@@ -127,11 +127,13 @@ impl SoundStuff {
             if typ == NoteEvent::Press {
                 self.synth.trigger_instrument(instrument, Self::note_to_freq(note));
             }
-            for row in 0..self.visual_note_model.row_count() {
-                let mut row_data = self.visual_note_model.row_data(row);
-                if row_data.note_number as u32 == note {
-                    row_data.active = typ == NoteEvent::Press;
-                    self.visual_note_model.set_row_data(row, row_data);
+            if instrument == self.selected_instrument {
+                for row in 0..self.visual_note_model.row_count() {
+                    let mut row_data = self.visual_note_model.row_data(row);
+                    if row_data.note_number as u32 == note {
+                        row_data.active = typ == NoteEvent::Press;
+                        self.visual_note_model.set_row_data(row, row_data);
+                    }
                 }
             }
         }
@@ -141,6 +143,13 @@ impl SoundStuff {
     pub fn select_instrument(&mut self, instrument: u32) -> () {
         self.selected_instrument = instrument;
         self.sequencer.select_instrument(instrument);
+
+        // Release all notes visually that might have been pressed for the previous instrument.
+        for row in 0..self.visual_note_model.row_count() {
+            let mut row_data = self.visual_note_model.row_data(row);
+            row_data.active = false;
+            self.visual_note_model.set_row_data(row, row_data);
+        }
     }
 
     pub fn press_note(&mut self, note: u32) -> () {

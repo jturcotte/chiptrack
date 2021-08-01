@@ -91,8 +91,9 @@ impl Sequencer {
                     note_events.push((*instrument, NoteEvent::Release, *note));
                 }
             }
-            // FIXME: This assumes that the current instrument didn't change.
-            for (i, note) in self.step_instruments_note[next_step as usize].iter().enumerate() {                if self.step_instruments_enabled[self.current_step as usize][i] {
+
+            for (i, note) in self.step_instruments_note[next_step as usize].iter().enumerate() {
+                if self.step_instruments_enabled[self.current_step as usize][i] {
                     println!("Instrument {:?} note {:?}", i, note);
                     note_events.push((i as u32, NoteEvent::Press, *note));
                 }
