@@ -164,7 +164,7 @@ pub fn main() {
     let cloned_context = context.clone();
     window.on_step_clicked(move |step_num| {
         let mut sound = cloned_context.sound.borrow_mut();
-        sound.sequencer.set_current_step(step_num as u32);
+        sound.sequencer.toggle_step(step_num as u32);
     });
 
     let cloned_context = context.clone();

@@ -140,6 +140,7 @@ impl SoundStuff {
 
     pub fn select_instrument(&mut self, instrument: u32) -> () {
         self.selected_instrument = instrument;
+        self.sequencer.select_instrument(instrument);
     }
 
     pub fn press_note(&mut self, note: u32) -> () {
