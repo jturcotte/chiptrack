@@ -29,6 +29,10 @@ pub fn main() {
 
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.
+    let sequencer_pattern_model = Rc::new(sixtyfps::VecModel::default());
+    for i in 0..8 {
+        sequencer_pattern_model.push(PatternData{empty: true, active: i == 0});
+    }
     let sequencer_step_model = Rc::new(sixtyfps::VecModel::default());
     for _ in 0..16 {
         sequencer_step_model.push(StepData{empty: true, active: false});
@@ -64,6 +68,7 @@ pub fn main() {
     }
 
     let window = MainWindow::new();
+    window.set_sequencer_patterns(sixtyfps::ModelHandle::new(sequencer_pattern_model.clone()));
     window.set_sequencer_steps(sixtyfps::ModelHandle::new(sequencer_step_model.clone()));
     window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
 
@@ -113,7 +118,7 @@ pub fn main() {
             }
         }
 
-        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, sequencer_step_model, note_model)));
+        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, sequencer_pattern_model, sequencer_step_model, note_model)));
 
         let apu_timer: Timer = Default::default();
         let cloned_sound = sound_stuff.clone();
@@ -159,6 +164,12 @@ pub fn main() {
             std::time::Duration::from_millis(15 * 6),
             Box::new(move || cloned_sound.borrow_mut().release_notes())
         );
+    });
+
+    let cloned_context = context.clone();
+    window.on_pattern_clicked(move |pattern_num| {
+        let mut sound = cloned_context.sound.borrow_mut();
+        sound.sequencer.select_pattern(pattern_num as u32);
     });
 
     let cloned_context = context.clone();

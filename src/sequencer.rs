@@ -1,3 +1,4 @@
+use crate::sixtyfps_generated_MainWindow::PatternData;
 use crate::sixtyfps_generated_MainWindow::StepData;
 use sixtyfps::Model;
 use sixtyfps::VecModel;
@@ -5,6 +6,7 @@ use std::rc::Rc;
 
 pub const NUM_INSTRUMENTS: usize = 9;
 pub const NUM_STEPS: usize = 16;
+pub const NUM_PATTERNS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NoteEvent {
@@ -14,37 +16,59 @@ pub enum NoteEvent {
 
 pub struct Sequencer {
     current_frame: u32,
-    current_step: u32,
+    current_step: usize,
     playing: bool,
     recording: bool,
-    selected_instrument: u32,
-    step_instruments_note: [[u32; NUM_INSTRUMENTS]; NUM_STEPS],
-    step_instruments_enabled: [[bool; NUM_INSTRUMENTS]; NUM_STEPS],
+    selected_pattern: usize,
+    selected_instrument: usize,
+    step_instruments_note: [[[u32; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
+    step_instruments_enabled: [[[bool; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
     previous_frame_note_events: Vec<(u32, NoteEvent, u32)>,
+    visual_pattern_model: Rc<VecModel<PatternData>>,
     visual_step_model: Rc<VecModel<StepData>>,
 }
 
 impl Sequencer {
-    pub fn new(sequencer_step_model: Rc<VecModel<StepData>>) -> Sequencer {
+    pub fn new(sequencer_pattern_model: Rc<VecModel<PatternData>>, sequencer_step_model: Rc<VecModel<StepData>>) -> Sequencer {
         Sequencer {
             current_frame: 0,
             current_step: 0,
             playing: true,
             recording: true,
+            selected_pattern: 0,
             selected_instrument: 0,
             // Initialize all notes to C5
-            step_instruments_note: [[60; NUM_INSTRUMENTS]; NUM_STEPS],
-            step_instruments_enabled: [[false; NUM_INSTRUMENTS]; NUM_STEPS],
+            step_instruments_note: [[[60; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
+            step_instruments_enabled: [[[false; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
             previous_frame_note_events: Vec::new(),
+            visual_pattern_model: sequencer_pattern_model,
             visual_step_model: sequencer_step_model,
         }
     }
 
-    pub fn select_instrument(&mut self, instrument: u32) -> () {
-        self.selected_instrument = instrument;
+    pub fn select_pattern(&mut self, pattern: u32) -> () {
+        let mut pattern_row_data = self.visual_pattern_model.row_data(self.selected_pattern);
+        pattern_row_data.active = false;
+        self.visual_pattern_model.set_row_data(self.selected_pattern, pattern_row_data);
 
+        // FIXME: Queue the playback
+        self.selected_pattern = pattern as usize;
+
+        let mut pattern_row_data = self.visual_pattern_model.row_data(self.selected_pattern);
+        pattern_row_data.active = true;
+        self.visual_pattern_model.set_row_data(self.selected_pattern, pattern_row_data);
+
+        self.update_steps();
+    }
+
+    pub fn select_instrument(&mut self, instrument: u32) -> () {
+        self.selected_instrument = instrument as usize;
+        self.update_steps();
+    }
+
+    fn update_steps(&mut self) -> () {
         for i in 0..NUM_STEPS {
-            let step_enabled = self.step_instruments_enabled[i][instrument as usize];
+            let step_enabled = self.step_instruments_enabled[self.selected_pattern][i][self.selected_instrument];
             let mut row_data = self.visual_step_model.row_data(i);
             row_data.empty = !step_enabled;
             self.visual_step_model.set_row_data(i, row_data);
@@ -52,12 +76,16 @@ impl Sequencer {
     }
 
     pub fn toggle_step(&mut self, step_num: u32) -> () {
-        let toggled = !self.step_instruments_enabled[step_num as usize][self.selected_instrument as usize];
+        let toggled = !self.step_instruments_enabled[self.selected_pattern][step_num as usize][self.selected_instrument];
+        self.step_instruments_enabled[self.selected_pattern][step_num as usize][self.selected_instrument] = toggled;
 
-        let mut row_data = self.visual_step_model.row_data(step_num as usize);
-        self.step_instruments_enabled[step_num as usize][self.selected_instrument as usize] = toggled;
-        row_data.empty = !toggled;
-        self.visual_step_model.set_row_data(step_num as usize, row_data);
+        let mut pattern_row_data = self.visual_pattern_model.row_data(self.selected_pattern);
+        pattern_row_data.empty = false;
+        self.visual_pattern_model.set_row_data(self.selected_pattern, pattern_row_data);
+
+        let mut step_row_data = self.visual_step_model.row_data(step_num as usize);
+        step_row_data.empty = !toggled;
+        self.visual_step_model.set_row_data(step_num as usize, step_row_data);
     }
     pub fn set_playing(&mut self, val: bool) -> () {
         self.playing = val;
@@ -74,16 +102,16 @@ impl Sequencer {
 
         self.current_frame += 1;
         if self.current_frame % 6 == 0 {
-            let mut row_data = self.visual_step_model.row_data(self.current_step as usize);
+            let mut row_data = self.visual_step_model.row_data(self.current_step);
             row_data.active = false;
-            self.visual_step_model.set_row_data(self.current_step as usize, row_data);
+            self.visual_step_model.set_row_data(self.current_step, row_data);
 
-            let next_step = (self.current_step + 1) % (NUM_STEPS as u32);
+            let next_step = (self.current_step + 1) % NUM_STEPS;
             self.current_step = next_step;
 
-            let mut row_data = self.visual_step_model.row_data(self.current_step as usize);
+            let mut row_data = self.visual_step_model.row_data(self.current_step);
             row_data.active = true;
-            self.visual_step_model.set_row_data(self.current_step as usize, row_data);
+            self.visual_step_model.set_row_data(self.current_step, row_data);
 
             // Each note lasts only one frame, so just release everything pressed on the previous frame.
             for (instrument, typ, note) in &self.previous_frame_note_events {
@@ -92,8 +120,8 @@ impl Sequencer {
                 }
             }
 
-            for (i, note) in self.step_instruments_note[next_step as usize].iter().enumerate() {
-                if self.step_instruments_enabled[self.current_step as usize][i] {
+            for (i, note) in self.step_instruments_note[self.selected_pattern][next_step].iter().enumerate() {
+                if self.step_instruments_enabled[self.selected_pattern][self.current_step][i] {
                     println!("Instrument {:?} note {:?}", i, note);
                     note_events.push((i as u32, NoteEvent::Press, *note));
                 }
@@ -108,11 +136,11 @@ impl Sequencer {
             return;
         }
 
-        self.step_instruments_note[self.current_step as usize][instrument as usize] = note;
-        self.step_instruments_enabled[self.current_step as usize][instrument as usize] = true;
+        self.step_instruments_note[self.selected_pattern][self.current_step][instrument as usize] = note;
 
-        let mut row_data = self.visual_step_model.row_data(self.current_step as usize);
-        row_data.empty = false;
-        self.visual_step_model.set_row_data(self.current_step as usize, row_data);
+        let already_enabled = self.step_instruments_enabled[self.selected_pattern][self.current_step][instrument as usize];
+        if !already_enabled {
+            self.toggle_step(self.current_step as u32);
+        }
     }
 }

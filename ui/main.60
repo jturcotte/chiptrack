@@ -1,5 +1,9 @@
 import { Button, CheckBox, SpinBox, Slider, GroupBox, LineEdit, StandardListView, ComboBox, VerticalBox, HorizontalBox, GridBox } from "sixtyfps_widgets.60";
 
+struct PatternData := {
+    empty: bool,
+    active: bool,
+}
 struct StepData := {
     empty: bool,
     active: bool,
@@ -9,6 +13,48 @@ struct NoteData := {
     scale_pos: int,
     is_black: bool,
     active: bool,
+}
+
+
+SequencerPattern := Rectangle {
+    callback clicked();
+    property<int> number: 0;
+    property<bool> highlighted;
+    property<bool> empty;
+    background: empty ? white : #c0c0c0;
+    border_width: 1px;
+    border_color: highlighted ? black : #a0a0a0;
+    border_radius: width/8;
+    Text {
+        text: "P" + number;
+        width: 100%;
+        height: 100%;
+        font_size: height / 4;
+        color: root.border_color;
+        horizontal_alignment: center;
+        vertical_alignment: center;
+    }
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.clicked(); }
+    }
+}
+
+SequencerStep := Rectangle {
+    callback clicked();
+    property<bool> highlighted;
+    property<bool> empty;
+    property<bool> beat;
+    background: empty ? white : #c0c0c0;
+    border_width: beat ? 2px : 1px;
+    border_color: highlighted ? black : #a0a0a0;
+    border_radius: width/8;
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.clicked(); }
+    }
 }
 
 PianoKey :=  Rectangle {
@@ -32,19 +78,21 @@ PianoKey :=  Rectangle {
         }
     }
 }
+
 InstrumentButton := Rectangle {
     callback clicked();
     property<int> instrument_number: 0;
     property<bool> highlighted;
-    min_width: 50px;
-    min_height: 50px;
+    width: height;
     background: white;
     border_color: highlighted ? black : #a0a0a0;
     border_width: 1px;
+    border_radius: width/16;
     Text {
         text: instrument_number;
         width: 100%;
         height: 100%;
+        font_size: height / 4;
         horizontal_alignment: center;
         vertical_alignment: center;
     }
@@ -55,22 +103,11 @@ InstrumentButton := Rectangle {
     }
 }
 
-SequencerStep := Rectangle {
-    callback clicked();
-    property<bool> highlighted;
-    property<bool> empty;
-    property<bool> beat;
-    background: empty ? white : #c0c0c0;
-    border_width: beat ? 2px : 1px;
-    border_color: highlighted ? black : #a0a0a0;
-    TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.clicked(); }
-    }
-}
-
 MainWindow := Window {
+    property<[PatternData]> sequencer_patterns: [
+        {empty: true, active: true},
+        {empty: true}, {empty: true}, {empty: true},
+        {empty: true}, {empty: true}, {empty: true}, {empty: true}];
     property<[StepData]> sequencer_steps: [
         {empty: false}, {empty: true}, {empty: true}, {empty: true},
         {empty: false}, {empty: true}, {empty: true}, {empty: true},
@@ -96,12 +133,13 @@ MainWindow := Window {
     property<bool> playing: true;
     callback note_pressed(int);
     callback selected_instrument_changed(int);
+    callback pattern_clicked(int);
     callback step_clicked(int);
     callback play_clicked(bool);
     callback record_clicked(bool);
 
-    preferred_width: 640px;
-    preferred_height: 400px;
+    preferred_width: 800px;
+    preferred_height: 480px;
 
     forward-focus: KeyHandler;
     KeyHandler := FocusScope {
@@ -124,23 +162,37 @@ MainWindow := Window {
         }
 
         VerticalBox {
-            HorizontalBox {
-                height: 50%;
-                HorizontalBox {
-                    min_width: 100px;
+            GridBox {
+                height: 40%;
+                Row {
+                HorizontalLayout {
+                    spacing: 2px;
+                    for pattern[idx] in sequencer_patterns:
+                        SequencerPattern {
+                            number: idx;
+                            highlighted: pattern.active;
+                            empty: pattern.empty;
+                            clicked => { root.pattern_clicked(idx); }
+                        }
+                }
+
+                play_button := Button {
+                    text: root.playing ? "Stop" : "Play";
+                    clicked => {
+                        root.play_clicked(!root.playing);
+                    }
+                }
+                
+            }
+            Row {
+                HorizontalLayout {
+                    spacing: 2px;
                     for step[idx] in sequencer_steps:
                         SequencerStep {
                             highlighted: step.active;
                             empty: step.empty;
                             beat: mod(idx, 4) == 0;
                             clicked => { root.step_clicked(idx); }
-                        }
-                }
-                VerticalBox {
-                    play_button := Button {
-                        text: root.playing ? "Stop" : "Play";
-                        clicked => {
-                            root.play_clicked(!root.playing);
                         }
                     }
                     record_button := Button {
@@ -155,7 +207,6 @@ MainWindow := Window {
             }
             HorizontalBox {
                 Rectangle {
-                    width: 70%;
                     for note[idx] in notes:
                         PianoKey {
                             is_black: note.is_black;
@@ -171,7 +222,8 @@ MainWindow := Window {
                             clicked => { root.note_pressed(note.note_number); }
                         }
                 }
-                GridBox {
+                GridLayout {
+                    spacing: 5px;
                     Row {
                         InstrumentButton {
                             instrument_number: 0;
