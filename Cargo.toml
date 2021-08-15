@@ -21,16 +21,17 @@ edition = "2018"
 [dependencies]
 once_cell = "1.5"
 cpal = { version = "0.13.3", features = ["wasm-bindgen"] }
+tiny-skia = "0.5.1"
 
 [patch.crates-io]
 blip_buf = { path = "../blip_buf-rs"}
 
 [dependencies.sixtyfps]
-version = "0.1.0"
+version = "0.1.1"
 # path = "../sixtyfps/api/sixtyfps-rs"
 
 [build-dependencies.sixtyfps-build]
-version = "0.1.0"
+version = "0.1.1"
 # path = "../sixtyfps/api/sixtyfps-rs/sixtyfps-build"
 
 [dependencies.gameboy]

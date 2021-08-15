@@ -14,9 +14,10 @@ mod synth;
 use crate::sound::SoundStuff;
 use gameboy::apu::Apu;
 use once_cell::unsync::Lazy;
-use sixtyfps::{Timer, TimerMode};
+use sixtyfps::{SharedPixelBuffer, Timer, TimerMode};
 use std::cell::RefCell;
 use std::rc::Rc;
+use tiny_skia::*;
 
 sixtyfps::include_modules!();
 
@@ -72,6 +73,7 @@ pub fn main() {
     window.set_sequencer_steps(sixtyfps::ModelHandle::new(sequencer_step_model.clone()));
     window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
 
+    let window_weak = window.as_weak();
     let context = Rc::new(Lazy::new(|| {
         let host = cpal::default_host();
         let device = host.default_output_device().unwrap();
@@ -118,6 +120,7 @@ pub fn main() {
             }
         }
 
+        let apu_data = apu.buffer.clone();
         let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, sequencer_pattern_model, sequencer_step_model, note_model)));
 
         let apu_timer: Timer = Default::default();
@@ -129,8 +132,56 @@ pub fn main() {
                // Make sure to always have at least one audio frame in the synth buffer
                // in case cpal calls back to fill the audio output buffer.
                let pre_filled_audio_frames = 44100 / 64;
+               let mut filled = false;
                while cloned_sound.borrow().synth.ready_buffer_samples() < pre_filled_audio_frames {
                     cloned_sound.borrow_mut().advance_frame();
+                    filled = true;
+               }
+
+               if filled {
+                    let window = window_weak.unwrap();
+                    let was_non_zero = !window.get_waveform_is_zero();
+                    let width = window.get_waveform_width();
+                    let height = window.get_waveform_height();
+                    let num_samples = 350;
+                    let mut pb = PathBuilder::new();
+                    let mut non_zero = false;
+                    pb.move_to(0.0, height / 2.0);
+                    {
+                        let apu_data2 = apu_data.lock().unwrap();
+                        let len = std::cmp::min(num_samples, apu_data2.len());
+                        for (i, (data_l, _data_r)) in apu_data2[..len].iter().enumerate() {
+                            if *data_l != 0.0 {
+                                non_zero = true;
+                            }
+                            // Input samples are in the range [-1.0, 1.0].
+                            // The gameboy emulator mixer however just use a gain of 0.25
+                            // per channel to avoid clipping when all channels are playing.
+                            // So multiply by 2.0 to amplify the visualization of single
+                            // channels a bit.
+                            pb.line_to(
+                                i as f32 * width / num_samples as f32,
+                                (data_l * 2.0 + 1.0) * height / 2.0);
+                        }
+                    }
+                    // Painting this takes a lot of CPU since we need to paint, clone
+                    // the whole pixmap buffer, and changing the image will trigger a
+                    // repaint of the full viewport.
+                    // So at least avoig eating CPU while no sound is being output.
+                    if non_zero || was_non_zero {
+                        let path = pb.finish().unwrap();
+
+                        let mut paint = Paint::default();
+                        paint.set_color(Color::BLACK);
+
+                        let mut pixmap = Pixmap::new(width as u32, height as u32).unwrap();
+                        pixmap.stroke_path(&path, &paint, &Stroke::default(), Transform::identity(), None);
+
+                        let pixel_buffer = SharedPixelBuffer::clone_from_slice(pixmap.data(), pixmap.width() as usize, pixmap.height() as usize);
+                        let image = sixtyfps::Image::from_rgba8_premultiplied(pixel_buffer);
+                        window.set_waveform_image(image);
+                        window.set_waveform_is_zero(!non_zero);
+                    }
                }
             })
         );
