@@ -7,24 +7,21 @@ edition = "2018"
 ## wasm build stuff
 ## Uncomment and build with: wasm-pack build --release --target web
 # resolver = "2"
-
 # [lib]
 # crate-type = ["cdylib"]
 # path = "src/main.rs"
-
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
 # wasm-bindgen = { version = "0.2" }
 # web-sys = { version = "0.3", features=["console"] }
 # console_error_panic_hook = "0.1.5"
+# [patch.crates-io]
+# blip_buf = { path = "../blip_buf-rs"}
 
 
 [dependencies]
 once_cell = "1.5"
 cpal = { version = "0.13.3", features = ["wasm-bindgen"] }
 tiny-skia = "0.5.1"
-
-[patch.crates-io]
-blip_buf = { path = "../blip_buf-rs"}
 
 [dependencies.sixtyfps]
 version = "0.1.1"
