@@ -106,8 +106,7 @@ impl Sequencer {
             row_data.active = false;
             self.visual_step_model.set_row_data(self.current_step, row_data);
 
-            let next_step = (self.current_step + 1) % NUM_STEPS;
-            self.current_step = next_step;
+            self.current_step = self.next_step();
 
             let mut row_data = self.visual_step_model.row_data(self.current_step);
             row_data.active = true;
@@ -120,7 +119,7 @@ impl Sequencer {
                 }
             }
 
-            for (i, note) in self.step_instruments_note[self.selected_pattern][next_step].iter().enumerate() {
+            for (i, note) in self.step_instruments_note[self.selected_pattern][self.current_step].iter().enumerate() {
                 if self.step_instruments_enabled[self.selected_pattern][self.current_step][i] {
                     println!("Instrument {:?} note {:?}", i, note);
                     note_events.push((i as u32, NoteEvent::Press, *note));
@@ -136,11 +135,18 @@ impl Sequencer {
             return;
         }
 
-        self.step_instruments_note[self.selected_pattern][self.current_step][instrument as usize] = note;
+        // Try to clamp the even to the nearest frame.
+        // Use 4 instead of 3 just to try to compensate for the key press to visual and audible delay.
+        let step = if self.current_frame < 4 { self.current_step } else { self.next_step() };
+        self.step_instruments_note[self.selected_pattern][step][instrument as usize] = note;
 
-        let already_enabled = self.step_instruments_enabled[self.selected_pattern][self.current_step][instrument as usize];
+        let already_enabled = self.step_instruments_enabled[self.selected_pattern][step][instrument as usize];
         if !already_enabled {
-            self.toggle_step(self.current_step as u32);
+            self.toggle_step(step as u32);
         }
+    }
+
+    fn next_step(&self) -> usize {
+        (self.current_step + 1) % NUM_STEPS
     }
 }
