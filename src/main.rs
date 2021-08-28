@@ -21,6 +21,8 @@ use tiny_skia::*;
 
 sixtyfps::include_modules!();
 
+thread_local! {static FILL_BUFFER_CALLBACK: RefCell<Box<dyn Fn()>> = RefCell::new(Box::new(||()));}
+
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub fn main() {
     // This provides better error messages in debug mode.
@@ -65,7 +67,6 @@ pub fn main() {
         sound: Rc<RefCell<SoundStuff>>,
         key_release_timer: Timer,
         _stream: cpal::Stream,
-        _apu_timer: Timer,
     }
 
     let window = MainWindow::new();
@@ -84,30 +85,98 @@ pub fn main() {
         let audio_buffer_samples = 512;
         assert!(config.sample_rate().0 / 64 > audio_buffer_samples, "We only pre-fill one APU frame.");
         let apu = Apu::power_up(config.sample_rate().0);
-        let apu_data = apu.buffer.clone();
 
         let err_fn = |err| elog!("an error occurred on the output audio stream: {}", err);
         let sample_format = config.sample_format();
         let mut config: cpal::StreamConfig = config.into();
         config.buffer_size = cpal::BufferSize::Fixed(audio_buffer_samples);
 
+        let apu_data = apu.buffer.clone();
+        let apu_data2 = apu.buffer.clone();
+        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, sequencer_pattern_model, sequencer_step_model, note_model)));
+
+        let cloned_sound = sound_stuff.clone();
+        let _ = FILL_BUFFER_CALLBACK.with(|current| current.replace(Box::new(move || {
+           // Make sure to always have at least one audio frame in the synth buffer
+           // in case cpal calls back to fill the audio output buffer.
+           let pre_filled_audio_frames = 44100 / 64;
+           let mut filled = false;
+           while cloned_sound.borrow().synth.ready_buffer_samples() < pre_filled_audio_frames {
+                cloned_sound.borrow_mut().advance_frame();
+                filled = true;
+           }
+
+           if filled {
+                let window = window_weak.unwrap();
+                let was_non_zero = !window.get_waveform_is_zero();
+                let width = window.get_waveform_width();
+                let height = window.get_waveform_height();
+                let num_samples = 350;
+                let mut pb = PathBuilder::new();
+                let mut non_zero = false;
+                pb.move_to(0.0, height / 2.0);
+                {
+                    let source = apu_data.lock().unwrap();
+                    let len = std::cmp::min(num_samples, source.len());
+                    for (i, (source_l, _source_r)) in source[..len].iter().enumerate() {
+                        if *source_l != 0.0 {
+                            non_zero = true;
+                        }
+                        // Input samples are in the range [-1.0, 1.0].
+                        // The gameboy emulator mixer however just use a gain of 0.25
+                        // per channel to avoid clipping when all channels are playing.
+                        // So multiply by 2.0 to amplify the visualization of single
+                        // channels a bit.
+                        pb.line_to(
+                            i as f32 * width / num_samples as f32,
+                            (source_l * 2.0 + 1.0) * height / 2.0);
+                    }
+                }
+                // Painting this takes a lot of CPU since we need to paint, clone
+                // the whole pixmap buffer, and changing the image will trigger a
+                // repaint of the full viewport.
+                // So at least avoig eating CPU while no sound is being output.
+                if non_zero || was_non_zero {
+                    let path = pb.finish().unwrap();
+
+                    let mut paint = Paint::default();
+                    paint.set_color(Color::BLACK);
+
+                    let mut pixmap = Pixmap::new(width as u32, height as u32).unwrap();
+                    pixmap.stroke_path(&path, &paint, &Stroke::default(), Transform::identity(), None);
+
+                    let pixel_buffer = SharedPixelBuffer::clone_from_slice(pixmap.data(), pixmap.width() as usize, pixmap.height() as usize);
+                    let image = sixtyfps::Image::from_rgba8_premultiplied(pixel_buffer);
+                    window.set_waveform_image(image);
+                    window.set_waveform_is_zero(!non_zero);
+                }
+           }
+        })));
+
         let stream = match sample_format {
             SampleFormat::F32 =>
             device.build_output_stream(&config,
-                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    // FIXME: Try a 0ms times instead of a repeated one that checks the buffer.
-                    let mut apu_data2 = apu_data.lock().unwrap();
-                    let len = std::cmp::min(data.len() / 2, apu_data2.len());
-                    for (i, (data_l, data_r)) in apu_data2.drain(..len).enumerate() {
-                        data[i * 2] = data_l;
-                        data[i * 2 + 1] = data_r;
+                move |dest: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    let mut source = apu_data2.lock().unwrap();
+                    let len = std::cmp::min(dest.len() / 2, source.len());
+                    for (i, (source_l, source_r)) in source.drain(..len).enumerate() {
+                        dest[i * 2] = source_l;
+                        dest[i * 2 + 1] = source_r;
                     }
 
-                    for i in len..(data.len() / 2) {
-                        // Buffer underrun!! At least fill with zeros to reduce the glitching.
-                        data[i * 2] = 0.0;
-                        data[i * 2 + 1] = 0.0;
+                    if source.len() < dest.len() / 2 {
+                        elog!("🚨 UNDERRUN! {} / {}", source.len(), dest.len() / 2)
                     }
+                    for i in len..(dest.len() / 2) {
+                        // Buffer underrun!! At least fill with zeros to reduce the glitching.
+                        dest[i * 2] = 0.0;
+                        dest[i * 2 + 1] = 0.0;
+                    }
+                    // To avoid having to make all captured objects threads-safe,
+                    // put the callback in a thread-local variable and access it
+                    // once we're back on the GUI thread.
+                    sixtyfps::invoke_from_event_loop(|| FILL_BUFFER_CALLBACK.with(|current| current.borrow()()));
+                    
                 }, err_fn),
             // FIXME
             SampleFormat::I16 => device.build_output_stream(&config, write_silence::<i16>, err_fn),
@@ -120,78 +189,11 @@ pub fn main() {
             }
         }
 
-        let apu_data = apu.buffer.clone();
-        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, sequencer_pattern_model, sequencer_step_model, note_model)));
-
-        let apu_timer: Timer = Default::default();
-        let cloned_sound = sound_stuff.clone();
-        apu_timer.start(
-            TimerMode::Repeated,
-            std::time::Duration::from_millis(5),
-            Box::new(move || {
-               // Make sure to always have at least one audio frame in the synth buffer
-               // in case cpal calls back to fill the audio output buffer.
-               let pre_filled_audio_frames = 44100 / 64;
-               let mut filled = false;
-               while cloned_sound.borrow().synth.ready_buffer_samples() < pre_filled_audio_frames {
-                    cloned_sound.borrow_mut().advance_frame();
-                    filled = true;
-               }
-
-               if filled {
-                    let window = window_weak.unwrap();
-                    let was_non_zero = !window.get_waveform_is_zero();
-                    let width = window.get_waveform_width();
-                    let height = window.get_waveform_height();
-                    let num_samples = 350;
-                    let mut pb = PathBuilder::new();
-                    let mut non_zero = false;
-                    pb.move_to(0.0, height / 2.0);
-                    {
-                        let apu_data2 = apu_data.lock().unwrap();
-                        let len = std::cmp::min(num_samples, apu_data2.len());
-                        for (i, (data_l, _data_r)) in apu_data2[..len].iter().enumerate() {
-                            if *data_l != 0.0 {
-                                non_zero = true;
-                            }
-                            // Input samples are in the range [-1.0, 1.0].
-                            // The gameboy emulator mixer however just use a gain of 0.25
-                            // per channel to avoid clipping when all channels are playing.
-                            // So multiply by 2.0 to amplify the visualization of single
-                            // channels a bit.
-                            pb.line_to(
-                                i as f32 * width / num_samples as f32,
-                                (data_l * 2.0 + 1.0) * height / 2.0);
-                        }
-                    }
-                    // Painting this takes a lot of CPU since we need to paint, clone
-                    // the whole pixmap buffer, and changing the image will trigger a
-                    // repaint of the full viewport.
-                    // So at least avoig eating CPU while no sound is being output.
-                    if non_zero || was_non_zero {
-                        let path = pb.finish().unwrap();
-
-                        let mut paint = Paint::default();
-                        paint.set_color(Color::BLACK);
-
-                        let mut pixmap = Pixmap::new(width as u32, height as u32).unwrap();
-                        pixmap.stroke_path(&path, &paint, &Stroke::default(), Transform::identity(), None);
-
-                        let pixel_buffer = SharedPixelBuffer::clone_from_slice(pixmap.data(), pixmap.width() as usize, pixmap.height() as usize);
-                        let image = sixtyfps::Image::from_rgba8_premultiplied(pixel_buffer);
-                        window.set_waveform_image(image);
-                        window.set_waveform_is_zero(!non_zero);
-                    }
-               }
-            })
-        );
-
         stream.play().unwrap();
         Context {
             sound: sound_stuff,
             key_release_timer: Default::default(),
             _stream: stream,
-            _apu_timer: apu_timer,
         }
     }));
 
