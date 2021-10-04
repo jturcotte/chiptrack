@@ -1,6 +1,7 @@
 use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
 use crate::sixtyfps_generated_MainWindow::NoteData;
+use crate::sixtyfps_generated_MainWindow::SongPatternData;
 use crate::sixtyfps_generated_MainWindow::PatternData;
 use crate::sixtyfps_generated_MainWindow::StepData;
 use crate::synth::SetSetting;
@@ -18,7 +19,7 @@ pub struct SoundStuff {
 }
 
 impl SoundStuff {
-    pub fn new(apu: gameboy::apu::Apu, sequencer_pattern_model: Rc<VecModel<PatternData>>, sequencer_step_model: Rc<VecModel<StepData>>, note_model: Rc<VecModel<NoteData>>) -> SoundStuff {
+    pub fn new(apu: gameboy::apu::Apu, sequencer_song_model: Rc<VecModel<SongPatternData>>, sequencer_pattern_model: Rc<VecModel<PatternData>>, sequencer_step_model: Rc<VecModel<StepData>>, note_model: Rc<VecModel<NoteData>>) -> SoundStuff {
         let instruments: Vec<Box<dyn Fn(&mut Vec<Vec<SetSetting>>, usize, u32) -> ()>> =
             vec!(
                 // 0
@@ -128,7 +129,7 @@ impl SoundStuff {
             );
 
         SoundStuff {
-                sequencer: Sequencer::new(sequencer_pattern_model, sequencer_step_model),
+                sequencer: Sequencer::new(sequencer_song_model, sequencer_pattern_model, sequencer_step_model),
                 synth: Synth::new(apu, instruments),
                 selected_instrument: 0,
                 visual_note_model: note_model,

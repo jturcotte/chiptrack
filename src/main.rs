@@ -32,6 +32,7 @@ pub fn main() {
 
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.
+    let sequencer_song_model = Rc::new(sixtyfps::VecModel::default());
     let sequencer_pattern_model = Rc::new(sixtyfps::VecModel::default());
     for i in 0..8 {
         sequencer_pattern_model.push(PatternData{empty: true, active: i == 0});
@@ -70,6 +71,7 @@ pub fn main() {
     }
 
     let window = MainWindow::new();
+    window.set_sequencer_song_patterns(sixtyfps::ModelHandle::new(sequencer_song_model.clone()));
     window.set_sequencer_patterns(sixtyfps::ModelHandle::new(sequencer_pattern_model.clone()));
     window.set_sequencer_steps(sixtyfps::ModelHandle::new(sequencer_step_model.clone()));
     window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
@@ -93,7 +95,7 @@ pub fn main() {
 
         let apu_data = apu.buffer.clone();
         let apu_data2 = apu.buffer.clone();
-        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, sequencer_pattern_model, sequencer_step_model, note_model)));
+        let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, sequencer_song_model, sequencer_pattern_model, sequencer_step_model, note_model)));
 
         let cloned_sound = sound_stuff.clone();
         let _ = FILL_BUFFER_CALLBACK.with(|current| current.replace(Box::new(move || {
@@ -244,6 +246,24 @@ pub fn main() {
     window.on_record_clicked(move |toggled| {
         let mut sound = cloned_context.sound.borrow_mut();
         sound.sequencer.set_recording(toggled);
+    });
+
+    let cloned_context = context.clone();
+    window.on_append_song_pattern(move |pattern_num| {
+        let mut sound = cloned_context.sound.borrow_mut();
+        sound.sequencer.append_song_pattern(pattern_num as u32);
+    });
+
+    let cloned_context = context.clone();
+    window.on_remove_last_song_pattern(move || {
+        let mut sound = cloned_context.sound.borrow_mut();
+        sound.sequencer.remove_last_song_pattern();
+    });
+
+    let cloned_context = context.clone();
+    window.on_clear_song_patterns(move || {
+        let mut sound = cloned_context.sound.borrow_mut();
+        sound.sequencer.clear_song_patterns();
     });
 
     window.run();

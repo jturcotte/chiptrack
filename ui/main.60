@@ -1,5 +1,9 @@
 import { Button, CheckBox, SpinBox, Slider, GroupBox, LineEdit, StandardListView, ComboBox, VerticalBox, HorizontalBox, GridBox } from "sixtyfps_widgets.60";
 
+struct SongPatternData := {
+    number: int,
+    active: bool,
+}
 struct PatternData := {
     empty: bool,
     active: bool,
@@ -16,6 +20,30 @@ struct NoteData := {
 }
 
 
+SongPattern := Rectangle {
+    callback clicked();
+    property<int> number: 0;
+    property<bool> highlighted;
+    background: white;
+    border_width: 1px;
+    border_color: highlighted ? black : #a0a0a0;
+    border_radius: width/8;
+    Text {
+        text: "P" + number;
+        width: 100%;
+        height: 100%;
+        font_size: width / 2;
+        color: root.border_color;
+        horizontal_alignment: center;
+        vertical_alignment: center;
+    }
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.clicked(); }
+    }
+}
+
 SequencerPattern := Rectangle {
     callback clicked();
     property<int> number: 0;
@@ -29,7 +57,7 @@ SequencerPattern := Rectangle {
         text: "P" + number;
         width: 100%;
         height: 100%;
-        font_size: height / 4;
+        font_size: width / 2;
         color: root.border_color;
         horizontal_alignment: center;
         vertical_alignment: center;
@@ -104,6 +132,15 @@ InstrumentButton := Rectangle {
 }
 
 MainWindow := Window {
+    property<[SongPatternData]> sequencer_song_patterns: [
+        {number: 0},
+        {number: 1},
+        {number: 0},
+        {number: 1},
+        {number: 0, active: true},
+        {number: 1},
+        {number: 2},
+        {number: 3}];
     property<[PatternData]> sequencer_patterns: [
         {empty: true, active: true},
         {empty: true}, {empty: true}, {empty: true},
@@ -131,12 +168,16 @@ MainWindow := Window {
     ];
     property<int> selected_instrument: 0;
     property<bool> playing: true;
+    property in_song_mode <=> song_mode_button.toggled;
     callback note_pressed(int);
     callback selected_instrument_changed(int);
     callback pattern_clicked(int);
     callback step_clicked(int);
     callback play_clicked(bool);
     callback record_clicked(bool);
+    callback append_song_pattern(int);
+    callback remove_last_song_pattern();
+    callback clear_song_patterns();
 
     property<bool> waveform_is_zero: true;
     property waveform_image <=> waveform.source;
@@ -170,39 +211,60 @@ MainWindow := Window {
             GridBox {
                 height: 40%;
                 Row {
-                HorizontalLayout {
-                    spacing: 2px;
-                    for pattern[idx] in sequencer_patterns:
-                        SequencerPattern {
-                            number: idx;
-                            highlighted: pattern.active;
-                            empty: pattern.empty;
-                            clicked => { root.pattern_clicked(idx); }
+                    Rectangle {
+                        if (in_song_mode):
+                        HorizontalLayout {
+                            spacing: 2px;
+                            for pattern[idx] in sequencer_song_patterns:
+                            SongPattern {
+                                number: pattern.number;
+                                highlighted: pattern.active;
+                                width: (parent.width - (parent.spacing * 15)) / 16;
+                            }
                         }
-                }
-
-                play_button := Button {
-                    text: root.playing ? "Stop" : "Play";
-                    clicked => {
-                        root.play_clicked(!root.playing);
+                        if (!in_song_mode):
+                        HorizontalLayout {
+                            spacing: 2px;
+                            for pattern[idx] in sequencer_patterns:
+                            SequencerPattern {
+                                number: idx;
+                                highlighted: pattern.active;
+                                empty: pattern.empty;
+                                clicked => { root.pattern_clicked(idx); }
+                            }
+                        }
                     }
-                }
-                
-            }
-            Row {
-                HorizontalLayout {
-                    spacing: 2px;
-                    for step[idx] in sequencer_steps:
-                        SequencerStep {
-                            highlighted: step.active;
-                            empty: step.empty;
-                            beat: mod(idx, 4) == 0;
-                            clicked => { root.step_clicked(idx); }
+
+                    play_button := Button {
+                        colspan: 2;
+                        text: root.playing ? "Stop" : "Play";
+                        clicked => {
+                            root.play_clicked(!root.playing);
                         }
+                    }
+                
+                }
+                Row {
+                    HorizontalLayout {
+                        spacing: 2px;
+                        for step[idx] in sequencer_steps:
+                            SequencerStep {
+                                highlighted: step.active;
+                                empty: step.empty;
+                                beat: mod(idx, 4) == 0;
+                                clicked => { root.step_clicked(idx); }
+                            }
+                    }
+                    song_mode_button := Button {
+                        property<bool> toggled: true;
+                        text: toggled ? "Song" : "Notes";
+                            clicked => {
+                                toggled = !toggled;
+                            }
                     }
                     record_button := Button {
                         property<bool> toggled: true;
-                        text: toggled ? "Recording" : "Not\nrecording";
+                        text: toggled ? "Rec" : "No\nRec";
                         clicked => {
                             toggled = !toggled;
                             root.record_clicked(toggled);
@@ -211,6 +273,7 @@ MainWindow := Window {
                 }
             }
             HorizontalBox {
+                if (!in_song_mode):
                 Rectangle {
                     for note[idx] in notes:
                         PianoKey {
@@ -226,6 +289,30 @@ MainWindow := Window {
                             highlighted: note.active;
                             clicked => { root.note_pressed(note.note_number); }
                         }
+                }
+                if (in_song_mode):
+                VerticalLayout {
+                    HorizontalLayout {
+                        spacing: 2px;
+                        for pattern[idx] in sequencer_patterns:
+                        SequencerPattern {
+                            number: idx;
+                            highlighted: pattern.active;
+                            empty: pattern.empty;
+                            clicked => { root.append_song_pattern(idx); }
+                        }
+                    }
+                    HorizontalBox {
+                        height: 25%;
+                        Button {
+                            text: "⌫";
+                            clicked => { root.remove_last_song_pattern(); }
+                        }
+                        Button {
+                            text: "Clear";
+                            clicked => { root.clear_song_patterns(); }
+                        }
+                    }
                 }
                 VerticalBox {
                     padding: 0px;
