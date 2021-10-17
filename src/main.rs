@@ -94,7 +94,6 @@ pub fn main() {
         config.buffer_size = cpal::BufferSize::Fixed(audio_buffer_samples);
 
         let apu_data = apu.buffer.clone();
-        let apu_data2 = apu.buffer.clone();
         let sound_stuff = Rc::new(RefCell::new(SoundStuff::new(apu, sequencer_song_model, sequencer_pattern_model, sequencer_step_model, note_model)));
 
         let cloned_sound = sound_stuff.clone();
@@ -103,6 +102,9 @@ pub fn main() {
            // in case cpal calls back to fill the audio output buffer.
            let pre_filled_audio_frames = 44100 / 64;
            let mut filled = false;
+           // Reset the indicator of the start of the next note wave.
+           cloned_sound.borrow_mut().synth.reset_buffer_wave_start();
+
            while cloned_sound.borrow().synth.ready_buffer_samples() < pre_filled_audio_frames {
                 cloned_sound.borrow_mut().advance_frame();
                 filled = true;
@@ -118,9 +120,19 @@ pub fn main() {
                 let mut non_zero = false;
                 pb.move_to(0.0, height / 2.0);
                 {
-                    let source = apu_data.lock().unwrap();
-                    let len = std::cmp::min(num_samples, source.len());
-                    for (i, (source_l, _source_r)) in source[..len].iter().enumerate() {
+                    let apu_buffer = cloned_sound.borrow().synth.buffer();
+                    let source = apu_buffer.lock().unwrap();
+                    let wave_start = {
+                        let start = cloned_sound.borrow().synth.buffer_wave_start();
+                        if start > source.len() {
+                            0
+                        } else {
+                            start
+                        }
+                    };
+
+                    let end = std::cmp::min(wave_start + num_samples, source.len());
+                    for (i, (source_l, _source_r)) in source[wave_start..end].iter().enumerate() {
                         if *source_l != 0.0 {
                             non_zero = true;
                         }
@@ -159,7 +171,7 @@ pub fn main() {
             SampleFormat::F32 =>
             device.build_output_stream(&config,
                 move |dest: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    let mut source = apu_data2.lock().unwrap();
+                    let mut source = apu_data.lock().unwrap();
                     let len = std::cmp::min(dest.len() / 2, source.len());
                     for (i, (source_l, source_r)) in source.drain(..len).enumerate() {
                         dest[i * 2] = source_l;

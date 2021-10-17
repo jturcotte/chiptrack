@@ -1,6 +1,7 @@
 use gameboy::apu::Apu;
 use gameboy::memory::Memory;
 use std::ops::BitOr;
+use std::sync::{Arc, Mutex};
 
 pub struct Synth {
     apu: Apu,
@@ -20,6 +21,16 @@ impl Synth {
             settings_ring_index: 0,
             instruments: instruments,
         }
+    }
+
+    pub fn buffer(&self) -> Arc<Mutex<Vec<(f32, f32)>>> {
+        self.apu.buffer.clone()
+    }
+    pub fn buffer_wave_start(&self) -> usize {
+        self.apu.buffer_wave_start
+    }
+    pub fn reset_buffer_wave_start(&mut self) {
+        self.apu.buffer_wave_start = usize::MAX;
     }
 
     // The Gameboy APU has 512 frames per second where various registers are read,
