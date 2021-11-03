@@ -32,7 +32,7 @@ version = "0.1.1"
 # path = "../sixtyfps/api/sixtyfps-rs/sixtyfps-build"
 
 [dependencies.gameboy]
-path = "../gameboy"
+path = "gameboy"
 # git = "https://github.com/mohanson/gameboy"
 # rev = "ff9c35b3957b4c215bd817c4d2ca18de0fb7f25e"
 # Use as a lib, features are used by its bin's main.rs only.

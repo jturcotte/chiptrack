@@ -1,0 +1,3 @@
+[submodule "gameboy"]
+	path = gameboy
+	url = ../gameboy
