@@ -317,13 +317,16 @@ MainWindow := Window {
                 VerticalBox {
                     padding: 0px;
                     Rectangle {
-                        border_color: black;
-                        border_width: 1px;
-                        border_radius: height/16;
                         background: white;
                         waveform := Image {
                             width: 100%;
                             height: 100%;
+                            image-rendering: pixelated;
+                        }
+                        Rectangle {
+                            border_color: black;
+                            border_width: 1px;
+                            border_radius: height/16;
                         }
                     }
                     GridLayout {

@@ -24,11 +24,11 @@ cpal = { version = "0.13.3", features = ["wasm-bindgen"] }
 tiny-skia = "0.5.1"
 
 [dependencies.sixtyfps]
-version = "0.1.1"
+version = "=0.1.4"
 # path = "../sixtyfps/api/sixtyfps-rs"
 
 [build-dependencies.sixtyfps-build]
-version = "0.1.1"
+version = "=0.1.4"
 # path = "../sixtyfps/api/sixtyfps-rs/sixtyfps-build"
 
 [dependencies.gameboy]

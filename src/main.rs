@@ -113,8 +113,8 @@ pub fn main() {
            if filled {
                 let window = window_weak.unwrap();
                 let was_non_zero = !window.get_waveform_is_zero();
-                let width = window.get_waveform_width();
-                let height = window.get_waveform_height();
+                let width = window.get_waveform_width() / 2.;
+                let height = window.get_waveform_height() / 2.;
                 let num_samples = 350;
                 let mut pb = PathBuilder::new();
                 let mut non_zero = false;
@@ -154,7 +154,8 @@ pub fn main() {
                     let path = pb.finish().unwrap();
 
                     let mut paint = Paint::default();
-                    paint.set_color(Color::BLACK);
+                    // #a0a0a0
+                    paint.set_color_rgba8(160, 160, 160, 255);
 
                     let mut pixmap = Pixmap::new(width as u32, height as u32).unwrap();
                     pixmap.stroke_path(&path, &paint, &Stroke::default(), Transform::identity(), None);
