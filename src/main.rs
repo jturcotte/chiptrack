@@ -174,15 +174,16 @@ pub fn main() {
             device.build_output_stream(&config,
                 move |dest: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     let mut source = apu_data.lock().unwrap();
+                    if source.len() < dest.len() / 2 {
+                        elog!("🚨 UNDERRUN! {} / {}", source.len(), dest.len() / 2);
+                    }
+
                     let len = std::cmp::min(dest.len() / 2, source.len());
                     for (i, (source_l, source_r)) in source.drain(..len).enumerate() {
                         dest[i * 2] = source_l;
                         dest[i * 2 + 1] = source_r;
                     }
 
-                    if source.len() < dest.len() / 2 {
-                        elog!("🚨 UNDERRUN! {} / {}", source.len(), dest.len() / 2)
-                    }
                     for i in len..(dest.len() / 2) {
                         // Buffer underrun!! At least fill with zeros to reduce the glitching.
                         dest[i * 2] = 0.0;
