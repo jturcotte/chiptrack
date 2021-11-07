@@ -10,6 +10,7 @@ mod log;
 mod sequencer;
 mod sound;
 mod synth;
+mod synth_script;
 
 use crate::sound::SoundStuff;
 use gameboy::apu::Apu;

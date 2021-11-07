@@ -4,8 +4,6 @@ use crate::sixtyfps_generated_MainWindow::NoteData;
 use crate::sixtyfps_generated_MainWindow::SongPatternData;
 use crate::sixtyfps_generated_MainWindow::PatternData;
 use crate::sixtyfps_generated_MainWindow::StepData;
-use crate::synth::SetSetting;
-use crate::synth::Channel::*;
 use crate::synth::Synth;
 use sixtyfps::Model;
 use sixtyfps::VecModel;
@@ -20,117 +18,9 @@ pub struct SoundStuff {
 
 impl SoundStuff {
     pub fn new(apu: gameboy::apu::Apu, sequencer_song_model: Rc<VecModel<SongPatternData>>, sequencer_pattern_model: Rc<VecModel<PatternData>>, sequencer_step_model: Rc<VecModel<StepData>>, note_model: Rc<VecModel<NoteData>>) -> SoundStuff {
-        let instruments: Vec<Box<dyn Fn(&mut Vec<Vec<SetSetting>>, usize, u32) -> ()>> =
-            vec!(
-                // 0
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    settings_ring[f(0)].push(SetSetting::sweep(0x0, 0x0, 0x0));
-                    settings_ring[f(0)].push(SetSetting::duty(0x2, Square1));
-                    settings_ring[f(0)].push(SetSetting::envelope(0xf, 0x1, 0x0, Square1));
-                    settings_ring[f(0)].extend(SetSetting::trigger(freq, Square1));
-                    settings_ring[f(1)].push(SetSetting::envelope(0xd, 0x1, 0x0, Square1));
-                    settings_ring[f(1)].extend(SetSetting::trigger(freq, Square1));
-                    settings_ring[f(5)].push(SetSetting::envelope(0x6, 0x1, 0x0, Square1));
-                    settings_ring[f(5)].extend(SetSetting::trigger(freq, Square1));
-                    settings_ring[f(7)].push(SetSetting::envelope(0x1, 0x1, 0x0, Square1));
-                    settings_ring[f(7)].extend(SetSetting::trigger(freq, Square1));
-                    settings_ring[f(8)].push(SetSetting::envelope(0x0, 0x1, 0x0, Square1));
-                    settings_ring[f(8)].extend(SetSetting::trigger(freq, Square1));
-                }),
-                // 1
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    settings_ring[f(0)].push(SetSetting::duty(0x1, Square1));
-                    settings_ring[f(0)].push(SetSetting::envelope(0xf, 0x0, 0x0, Square1));
-                    settings_ring[f(0)].push(SetSetting::sweep(0x0, 0x0, 0x0));
-                    settings_ring[f(0)].extend(SetSetting::trigger_with_length(freq, 64, Square1));
-                }),
-                // 2
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    // 2:bipp e:a:d:1 f:0:d:2 g
-                    settings_ring[f(0)].push(SetSetting::duty(0x0, Square1));
-                    settings_ring[f(0)].push(SetSetting::envelope(0xa, 0x0, 0x1, Square1));
-                    settings_ring[f(0)].push(SetSetting::sweep(0x0, 0x1, 0x2));
-                    settings_ring[f(0)].extend(SetSetting::trigger(freq, Square1));
-                    // e:0:D:0 g e
-                    settings_ring[f(2)].push(SetSetting::envelope(0x0, 0x0, 0x0, Square1));
-                    settings_ring[f(2)].extend(SetSetting::trigger(freq, Square1));
-                }),
-                // 3
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    // r:1 e:f:d:0 f:0:d:0 g
-                    settings_ring[f(0)].push(SetSetting::duty(0x1, Square1));
-                    settings_ring[f(0)].push(SetSetting::envelope(0xf, 0x0, 0x0, Square1));
-                    settings_ring[f(0)].push(SetSetting::sweep(0x0, 0x1, 0x0));
-                    settings_ring[f(0)].extend(SetSetting::trigger(freq, Square1));
-                    // r:3
-                    settings_ring[f(2)].push(SetSetting::duty(0x1, Square1));
-                    // r:0
-                    settings_ring[f(4)].push(SetSetting::duty(0x0, Square1));
-                    // r:3
-                    settings_ring[f(6)].push(SetSetting::duty(0x3, Square1));
-                    // r:1
-                    settings_ring[f(8)].push(SetSetting::duty(0x1, Square1));
-                    // r:3
-                    settings_ring[f(10)].push(SetSetting::duty(0x3, Square1));
-                    // r:1
-                    settings_ring[f(12)].push(SetSetting::duty(0x1, Square1));
-                    // r:3
-                    settings_ring[f(14)].push(SetSetting::duty(0x3, Square1));
-                    // r:0
-                    settings_ring[f(16)].push(SetSetting::duty(0x0, Square1));
-                    // e:0:d:0 g
-                    settings_ring[f(18)].push(SetSetting::envelope(0x0, 0x0, 0x0, Square1));
-                    settings_ring[f(18)].extend(SetSetting::trigger(freq, Square1));
-                }),
-                // 4
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    settings_ring[f(0)].push(SetSetting::envelope(0xf, 0x0, 0x1, Noise));
-                    // Use the frequency as input for now just so that different
-                    // keys produce different sound.
-                    settings_ring[f(0)].push(SetSetting::noise_params(freq as u8 >> 4, 0x0, freq as u8 & 0x7));
-                    settings_ring[f(0)].push(SetSetting::noise_trigger());
-                }),
-                // 5
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    // 1:superdrum e:d:d:2 f:2:d:2 g e
-                    settings_ring[f(0)].push(SetSetting::duty(0x2, Square1));
-                    settings_ring[f(0)].push(SetSetting::envelope(0xd, 0x0, 0x2, Square1));
-                    settings_ring[f(0)].push(SetSetting::sweep(0x2, 0x1, 0x2));
-                    settings_ring[f(0)].extend(SetSetting::trigger(freq, Square1));
-                }),
-                // 6
-                Box::new(move |settings_ring, i, freq| {
-                    let len = settings_ring.len();
-                    let f = |frame: usize| { (i + frame) % len };
-                    settings_ring[f(0)].push(SetSetting::wave_power(0));
-                    settings_ring[f(0)].extend(SetSetting::wave_table("2266aaeefffffeeaa6668acffeeca633"));
-                    settings_ring[f(0)].push(SetSetting::wave_power(1));
-                    settings_ring[f(0)].push(SetSetting::wave_volume_code(1));
-                    settings_ring[f(0)].extend(SetSetting::trigger_with_length(freq, 64, Wave));
-                }),
-                // 7
-                Box::new(move |_settings_ring, _i, _freq| {
-                }),
-                // 8
-                Box::new(move |_settings_ring, _i, _freq| {
-                }),
-            );
-
         SoundStuff {
                 sequencer: Sequencer::new(sequencer_song_model, sequencer_pattern_model, sequencer_step_model),
-                synth: Synth::new(apu, instruments),
+                synth: Synth::new(apu),
                 selected_instrument: 0,
                 visual_note_model: note_model,
             }

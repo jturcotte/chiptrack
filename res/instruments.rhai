@@ -1,0 +1,137 @@
+fn instrument_0(freq) {
+    dmg.square1.sweep_time = 0;
+    dmg.square1.sweep_dir = dmg::INC;
+    dmg.square1.sweep_shift = 0;
+
+    dmg.square1.duty = dmg::DUTY_2_4;
+    dmg.square1.env_start = 0xf;
+    dmg.square1.env_dir = dmg::INC;
+    dmg.square1.env_period = 0;
+    dmg.square1.trigger(freq);
+
+    dmg.wait_frames(1);
+    dmg.square1.env_start = 0xd;
+    dmg.square1.trigger(freq);
+
+    dmg.wait_frames(4);
+    dmg.square1.env_start = 0x6;
+    dmg.square1.trigger(freq);
+
+    dmg.wait_frames(2);
+    dmg.square1.env_start = 0x1;
+    dmg.square1.trigger(freq);
+
+    dmg.wait_frames(1);
+    dmg.square1.env_start = 0x0;
+    dmg.square1.trigger(freq);
+
+}
+
+fn instrument_1(freq) {
+    dmg.square1.sweep_time = 0;
+    dmg.square1.sweep_dir = dmg::INC;
+    dmg.square1.sweep_shift = 0;
+
+    dmg.square1.duty = dmg::DUTY_1_4;
+    dmg.square1.env_start = 0xf;
+    dmg.square1.env_dir = dmg::DEC;
+    dmg.square1.env_period = 0;
+    dmg.square1.trigger_with_length(freq, 64);
+}
+
+fn instrument_2(freq) {
+    // 2:bipp e:a:d:1 f:0:d:2 g
+    dmg.square1.duty = dmg::DUTY_1_8;
+    dmg.square1.env_start = 0xa;
+    dmg.square1.env_dir = dmg::DEC;
+    dmg.square1.env_period = 1;
+    dmg.square1.sweep_time = 0;
+    dmg.square1.sweep_dir = dmg::DEC;
+    dmg.square1.sweep_shift = 2;
+    dmg.square1.trigger(freq);
+
+    dmg.wait_frames(2);
+    // e:0:D:0 g e
+    dmg.square1.env_start = 0x0;
+    dmg.square1.trigger(freq);
+}
+
+fn instrument_3(freq) {
+    // r:1 e:f:d:0 f:0:d:0 g
+    dmg.square1.duty = dmg::DUTY_1_4;
+    dmg.square1.env_start = 0xf;
+    dmg.square1.env_dir = dmg::DEC;
+    dmg.square1.env_period = 0;
+    dmg.square1.sweep_time = 0;
+    dmg.square1.sweep_dir = dmg::DEC;
+    dmg.square1.sweep_shift = 0;
+    dmg.square1.trigger(freq);
+
+    // r:3
+    dmg.wait_frames(2);
+    dmg.square1.duty = dmg::DUTY_3_4;
+    // r:0
+    dmg.wait_frames(2);
+    dmg.square1.duty = dmg::DUTY_1_8;
+    // r:3
+    dmg.wait_frames(2);
+    dmg.square1.duty = dmg::DUTY_3_4;
+    // r:1
+    dmg.wait_frames(2);
+    dmg.square1.duty = dmg::DUTY_1_4;
+    // r:3
+    dmg.wait_frames(2);
+    dmg.square1.duty = dmg::DUTY_3_4;
+    // r:1
+    dmg.wait_frames(2);
+    dmg.square1.duty = dmg::DUTY_1_4;
+    // r:3
+    dmg.wait_frames(2);
+    dmg.square1.duty = dmg::DUTY_3_4;
+    // r:0
+    dmg.wait_frames(2);
+    dmg.square1.duty = dmg::DUTY_1_8;
+
+    // e:0:d:0 g
+    dmg.square1.env_start = 0x0;
+    dmg.square1.trigger(freq);
+}
+
+fn instrument_4(freq) {
+    dmg.noise.env_start = 0xf;
+    dmg.noise.env_dir = dmg::DEC;
+    dmg.noise.env_period = 1;
+    // Use the frequency as input for now just so that different
+    // keys produce different sound.
+    let gb_freq = freq.to_gb_freq();
+    dmg.noise.clock_shift = (gb_freq >> 4) & 0xf;
+    dmg.noise.counter_width = dmg::WIDTH_15;
+    dmg.noise.clock_divisor = gb_freq & 0x7;
+    dmg.noise.trigger();
+}
+
+fn instrument_5(freq) {
+    // 1:superdrum e:d:d:2 f:2:d:2 g e
+    dmg.square1.duty = dmg::DUTY_2_4;
+    dmg.square1.env_start = 0xd;
+    dmg.square1.env_dir = dmg::DEC;
+    dmg.square1.env_period = 2;
+    dmg.square1.sweep_time = 2;
+    dmg.square1.sweep_dir = dmg::DEC;
+    dmg.square1.sweep_shift = 2;
+    dmg.square1.trigger(freq);
+}
+
+fn instrument_6(freq) {
+    dmg.wave.playing = false;
+    dmg.wave.table = "2266aaeefffffeeaa6668acffeeca633";
+    dmg.wave.playing = true;
+    dmg.wave.volume = dmg::VOLUME_100;
+    dmg.wave.trigger_with_length(freq, 64);
+}
+
+fn instrument_7(freq) {
+}
+
+fn instrument_8(freq) {
+}

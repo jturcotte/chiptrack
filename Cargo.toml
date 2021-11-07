@@ -22,6 +22,7 @@ edition = "2018"
 once_cell = "1.5"
 cpal = { version = "0.13.3", features = ["wasm-bindgen"] }
 tiny-skia = "0.5.1"
+rhai = { version = "1.1.1", features = ["only_i32"] }
 
 [dependencies.sixtyfps]
 version = "=0.1.4"
