@@ -1,9 +1,8 @@
 use crate::sixtyfps_generated_MainWindow::SongPatternData;
-use crate::sixtyfps_generated_MainWindow::PatternData;
-use crate::sixtyfps_generated_MainWindow::StepData;
+use crate::MainWindow;
 use sixtyfps::Model;
 use sixtyfps::VecModel;
-use std::rc::Rc;
+use sixtyfps::Weak;
 
 pub const NUM_INSTRUMENTS: usize = 9;
 pub const NUM_STEPS: usize = 16;
@@ -27,13 +26,12 @@ pub struct Sequencer {
     step_instruments_note: [[[u32; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
     step_instruments_enabled: [[[bool; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
     previous_frame_note_events: Vec<(u32, NoteEvent, u32)>,
-    visual_song_model: Rc<VecModel<SongPatternData>>,
-    visual_pattern_model: Rc<VecModel<PatternData>>,
-    visual_step_model: Rc<VecModel<StepData>>,
+    main_window: Weak<MainWindow>,
 }
 
 impl Sequencer {
-    pub fn new(sequencer_song_model: Rc<VecModel<SongPatternData>>, sequencer_pattern_model: Rc<VecModel<PatternData>>, sequencer_step_model: Rc<VecModel<StepData>>) -> Sequencer {
+    pub fn new(main_window: Weak<MainWindow>) -> Sequencer {
+        let test_patterns = vec!(0,1,2,3);
         let val = Sequencer {
             current_frame: 0,
             current_step: 0,
@@ -42,57 +40,69 @@ impl Sequencer {
             recording: true,
             selected_pattern: 0,
             selected_instrument: 0,
-            song_patterns: vec!(0,1,2,3),
+            song_patterns: test_patterns.clone(),
             // Initialize all notes to C5
             step_instruments_note: [[[60; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
             step_instruments_enabled: [[[false; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
             previous_frame_note_events: Vec::new(),
-            visual_song_model: sequencer_song_model,
-            visual_pattern_model: sequencer_pattern_model,
-            visual_step_model: sequencer_step_model,
+            main_window: main_window.clone(),
         };
-        for (i, number) in val.song_patterns.iter().enumerate() {
-            val.visual_song_model.push(
-                SongPatternData{
-                    number: *number as i32,
-                    active: match val.current_song_pattern {
-                        Some(sp) => i == sp,
-                        None => false,
-                    }
-                });
-        }
+        let current_song_pattern = val.current_song_pattern;
+        main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_sequencer_song_patterns();
+            let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+            for (i, number) in test_patterns.iter().enumerate() {
+                vec_model.push(
+                    SongPatternData{
+                        number: *number as i32,
+                        active: match current_song_pattern {
+                            Some(sp) => i == sp,
+                            None => false,
+                        }
+                    });
+            }
+        });
         val
     }
 
     pub fn select_song_pattern(&mut self, song_pattern: Option<u32>) -> () {
-        if let Some(current) = self.current_song_pattern {
-            let mut pattern_row_data = self.visual_song_model.row_data(current);
-            pattern_row_data.active = false;
-            self.visual_song_model.set_row_data(current, pattern_row_data);
-        }
-
+        let old = self.current_song_pattern;
         self.current_song_pattern = song_pattern.map(|sp| sp as usize);
+        let new = self.current_song_pattern;
 
-        if let Some(current) = self.current_song_pattern {
-            let mut pattern_row_data = self.visual_song_model.row_data(current);
-            pattern_row_data.active = true;
-            self.visual_song_model.set_row_data(current, pattern_row_data);
-        }
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_sequencer_song_patterns();
+            if let Some(current) = old {
+                let mut pattern_row_data = model.row_data(current);
+                pattern_row_data.active = false;
+                model.set_row_data(current, pattern_row_data);
+            }
+            if let Some(current) = new {
+                let mut pattern_row_data = model.row_data(current);
+                pattern_row_data.active = true;
+                model.set_row_data(current, pattern_row_data);
+            }
+        });
     }
 
     pub fn select_pattern(&mut self, pattern: u32) -> () {
-        let mut pattern_row_data = self.visual_pattern_model.row_data(self.selected_pattern);
-        pattern_row_data.active = false;
-        self.visual_pattern_model.set_row_data(self.selected_pattern, pattern_row_data);
-
+        let old = self.selected_pattern;
         // FIXME: Queue the playback?
         self.selected_pattern = pattern as usize;
-
-        let mut pattern_row_data = self.visual_pattern_model.row_data(self.selected_pattern);
-        pattern_row_data.active = true;
-        self.visual_pattern_model.set_row_data(self.selected_pattern, pattern_row_data);
+        let new = self.selected_pattern;
 
         self.update_steps();
+
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_sequencer_patterns();
+            let mut pattern_row_data = model.row_data(old);
+            pattern_row_data.active = false;
+            model.set_row_data(old, pattern_row_data);
+
+            let mut pattern_row_data = model.row_data(new);
+            pattern_row_data.active = true;
+            model.set_row_data(new, pattern_row_data);
+        });
     }
 
     pub fn select_instrument(&mut self, instrument: u32) -> () {
@@ -101,25 +111,34 @@ impl Sequencer {
     }
 
     fn update_steps(&mut self) -> () {
-        for i in 0..NUM_STEPS {
-            let step_enabled = self.step_instruments_enabled[self.selected_pattern][i][self.selected_instrument];
-            let mut row_data = self.visual_step_model.row_data(i);
-            row_data.empty = !step_enabled;
-            self.visual_step_model.set_row_data(i, row_data);
-        }
+        let enabled_list: Vec<bool> = (0..NUM_STEPS).map(|i| self.step_instruments_enabled[self.selected_pattern][i][self.selected_instrument]).collect();
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_sequencer_steps();
+            for (i, step_enabled) in enabled_list.iter().enumerate() {
+                let mut row_data = model.row_data(i);
+                row_data.empty = !step_enabled;
+                model.set_row_data(i, row_data);
+            }
+        });
     }
 
     pub fn toggle_step(&mut self, step_num: u32) -> () {
         let toggled = !self.step_instruments_enabled[self.selected_pattern][step_num as usize][self.selected_instrument];
         self.step_instruments_enabled[self.selected_pattern][step_num as usize][self.selected_instrument] = toggled;
 
-        let mut pattern_row_data = self.visual_pattern_model.row_data(self.selected_pattern);
-        pattern_row_data.empty = false;
-        self.visual_pattern_model.set_row_data(self.selected_pattern, pattern_row_data);
+        let selected_pattern = self.selected_pattern;
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
 
-        let mut step_row_data = self.visual_step_model.row_data(step_num as usize);
-        step_row_data.empty = !toggled;
-        self.visual_step_model.set_row_data(step_num as usize, step_row_data);
+            let patterns = handle.get_sequencer_patterns();
+            let mut pattern_row_data = patterns.row_data(selected_pattern);
+            pattern_row_data.empty = false;
+            patterns.set_row_data(selected_pattern, pattern_row_data);
+
+            let steps = handle.get_sequencer_steps();
+            let mut step_row_data = steps.row_data(step_num as usize);
+            step_row_data.empty = !toggled;
+            steps.set_row_data(step_num as usize, step_row_data);
+        });
     }
     pub fn set_playing(&mut self, val: bool) -> () {
         self.playing = val;
@@ -137,12 +156,10 @@ impl Sequencer {
         // FIXME: Reset or remove overflow check
         self.current_frame += 1;
         if self.current_frame % 6 == 0 {
-            let mut row_data = self.visual_step_model.row_data(self.current_step);
-            row_data.active = false;
-            self.visual_step_model.set_row_data(self.current_step, row_data);
-
             let (next_step, next_pattern, next_song_pattern) = self.next_step_and_pattern_and_song_pattern();
+            let old_step = self.current_step;
             self.current_step = next_step;
+
             if next_pattern != self.selected_pattern {
                 self.select_pattern(next_pattern as u32);
             }
@@ -150,9 +167,16 @@ impl Sequencer {
                 self.select_song_pattern(next_song_pattern.map(|sp| sp as u32));
             }
 
-            let mut row_data = self.visual_step_model.row_data(self.current_step);
-            row_data.active = true;
-            self.visual_step_model.set_row_data(self.current_step, row_data);
+            self.main_window.clone().upgrade_in_event_loop(move |handle| {
+                let model = handle.get_sequencer_steps();
+                let mut row_data = model.row_data(old_step);
+                row_data.active = false;
+                model.set_row_data(old_step, row_data);
+
+                let mut row_data = model.row_data(next_step);
+                row_data.active = true;
+                model.set_row_data(next_step, row_data);
+            });
 
             // Each note lasts only one frame, so just release everything pressed on the previous frame.
             for (instrument, typ, note) in &self.previous_frame_note_events {
@@ -195,7 +219,12 @@ impl Sequencer {
 
     pub fn append_song_pattern(&mut self, pattern: u32) {
         self.song_patterns.push(pattern as usize);
-        self.visual_song_model.push(SongPatternData{number: pattern as i32, active: false});
+
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_sequencer_song_patterns();
+            let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+            vec_model.push(SongPatternData{number: pattern as i32, active: false});
+        });
     }
 
     pub fn remove_last_song_pattern(&mut self) {
@@ -204,16 +233,26 @@ impl Sequencer {
             if self.current_song_pattern.unwrap() == self.song_patterns.len() {
                 self.select_song_pattern(if self.song_patterns.is_empty() { None } else { Some(0) });
             }
-            self.visual_song_model.remove(self.visual_song_model.row_count() - 1);
+
+            self.main_window.clone().upgrade_in_event_loop(move |handle| {
+                let model = handle.get_sequencer_song_patterns();
+                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                vec_model.remove(vec_model.row_count() - 1);
+            });
         }
     }
 
     pub fn clear_song_patterns(&mut self) {
         self.song_patterns.clear();
         self.select_song_pattern(None);
-        for _ in 0..self.visual_song_model.row_count() {
-            self.visual_song_model.remove(0);
-        }
+
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_sequencer_song_patterns();
+            let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+            for _ in 0..vec_model.row_count() {
+                vec_model.remove(0);
+            }
+        });
     }
 
     fn next_step_and_pattern_and_song_pattern(&self) -> (usize, usize, Option<usize>) {

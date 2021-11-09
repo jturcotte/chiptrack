@@ -102,7 +102,7 @@ fn instrument_4(freq) {
     dmg.noise.env_dir = dmg::DEC;
     dmg.noise.env_period = 1;
     // Use the frequency as input for now just so that different
-    // keys produce different sound.
+    // keys produce different sounds.
     let gb_freq = freq.to_gb_freq();
     dmg.noise.clock_shift = (gb_freq >> 4) & 0xf;
     dmg.noise.counter_width = dmg::WIDTH_15;
