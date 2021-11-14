@@ -31,7 +31,7 @@ pub struct Sequencer {
 
 impl Sequencer {
     pub fn new(main_window: Weak<MainWindow>) -> Sequencer {
-        let test_patterns = vec!(0,1,2,3);
+        let test_patterns = vec!(0,1);
         let val = Sequencer {
             current_frame: 0,
             current_step: 0,

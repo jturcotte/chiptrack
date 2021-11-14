@@ -15,7 +15,8 @@ pub struct Synth {
 }
 
 impl Synth {
-    pub fn new(mut apu: Apu) -> Synth {
+    pub fn new(sample_rate: u32) -> Synth {
+        let mut apu = Apu::power_up(sample_rate);
         // Already power it on.
         apu.set( 0xff26, 0x80 );
         let settings_ring = Rc::new(RefCell::new(vec![vec![]; 512]));

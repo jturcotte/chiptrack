@@ -13,15 +13,29 @@ mod synth;
 mod synth_script;
 
 use crate::sound::SoundStuff;
-use gameboy::apu::Apu;
 use once_cell::unsync::Lazy;
-use sixtyfps::{SharedPixelBuffer, Timer, TimerMode};
+use sixtyfps::{Model, SharedPixelBuffer, Timer, TimerMode};
+use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::mpsc;
 use tiny_skia::*;
 
 sixtyfps::include_modules!();
+
+thread_local! {static SOUND_ENGINE: RefCell<Option<SoundStuff>> = RefCell::new(None);}
+
+#[derive(Debug)]
+enum SoundMsg {
+    PressNote(u32),
+    SelectInstrument(u32),
+    SelectPattern(u32),
+    ToggleStep(u32),
+    SetPlaying(bool),
+    SetRecording(bool),
+    AppendSongPattern(u32),
+    RemoveLastSongPattern,
+    ClearSongPatterns,
+}
 
 fn update_waveform(window: &MainWindow, samples: Vec<(f32,f32)>) {
     let was_non_zero = !window.get_waveform_is_zero();
@@ -109,7 +123,6 @@ pub fn main() {
 
 
     struct Context {
-        sound: Arc<Mutex<SoundStuff>>,
         key_release_timer: Timer,
         _stream: cpal::Stream,
     }
@@ -120,6 +133,8 @@ pub fn main() {
     window.set_sequencer_steps(sixtyfps::ModelHandle::new(sequencer_step_model.clone()));
     window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
 
+    let (sound_send, sound_recv) = mpsc::channel();
+
     let window_weak = window.as_weak();
     let context = Rc::new(Lazy::new(|| {
         let host = cpal::default_host();
@@ -127,60 +142,71 @@ pub fn main() {
         log!("Open the audio player: {}", device.name().unwrap());
         let config = device.default_output_config().unwrap();
         log!("Audio format {:?}", config);
-
-        let audio_buffer_samples = 512;
-        // assert!(config.sample_rate().0 / 64 > audio_buffer_samples, "We only pre-fill one APU frame.");
-        let apu = Apu::power_up(config.sample_rate().0);
+        let sample_rate = config.sample_rate().0;
 
         let err_fn = |err| elog!("an error occurred on the output audio stream: {}", err);
         let sample_format = config.sample_format();
         let mut config: cpal::StreamConfig = config.into();
+        let audio_buffer_samples = 512;
         config.buffer_size = cpal::BufferSize::Fixed(audio_buffer_samples);
 
-        let apu_data = apu.buffer.clone();
-        let sound_stuff = Arc::new(Mutex::new(SoundStuff::new(apu, window_weak.clone())));
-
-        let cloned_sound = sound_stuff.clone();
         let stream = match sample_format {
             SampleFormat::F32 =>
             device.build_output_stream(&config,
                 move |dest: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                    let len = dest.len() / 2;
-                    let mut di = 0;
-                    while di < len {
-                        {
-                            let mut sound = cloned_sound.lock().unwrap();
-                            if sound.synth.ready_buffer_samples() < (len - di) {
+                    SOUND_ENGINE.with(|maybe_engine_cell| {
+                        let mut maybe_engine = maybe_engine_cell.borrow_mut();
+                        let engine = maybe_engine.get_or_insert_with(|| SoundStuff::new(sample_rate, window_weak.clone()));
+
+                        while let Ok(msg) = sound_recv.try_recv() {
+                            match msg {
+                                SoundMsg::PressNote(note) => engine.press_note(note),
+                                SoundMsg::SelectInstrument(instrument) => engine.select_instrument(instrument),
+                                SoundMsg::SelectPattern(pattern_num) => engine.sequencer.select_pattern(pattern_num),
+                                SoundMsg::ToggleStep(toggled) => engine.sequencer.toggle_step(toggled),
+                                SoundMsg::SetPlaying(toggled) => engine.sequencer.set_playing(toggled),
+                                SoundMsg::SetRecording(toggled) => engine.sequencer.set_recording(toggled),
+                                SoundMsg::AppendSongPattern(pattern_num) => engine.sequencer.append_song_pattern(pattern_num),
+                                SoundMsg::RemoveLastSongPattern => engine.sequencer.remove_last_song_pattern(),
+                                SoundMsg::ClearSongPatterns => engine.sequencer.clear_song_patterns(),
+                            }
+                        }
+
+                        let len = dest.len() / 2;
+                        let mut di = 0;
+                        while di < len {
+                            let synth_buffer = engine.synth.buffer();
+                            if engine.synth.ready_buffer_samples() < (len - di) {
                                 // Reset the indicator of the start of the next note wave.
-                                sound.synth.reset_buffer_wave_start();
-                                sound.advance_frame();
+                                engine.synth.reset_buffer_wave_start();
+                                engine.advance_frame();
 
                                 let num_samples = 350;
                                 let wave_start = {
-                                    let start = sound.synth.buffer_wave_start();
+                                    let start = engine.synth.buffer_wave_start();
                                     if start > num_samples {
                                         0
                                     } else {
                                         start
                                     }
                                 };
-                                drop(sound); // unlock
 
-                                let copy = apu_data.lock().unwrap()[wave_start..(wave_start+num_samples)].to_vec();
+                                let copy = synth_buffer.lock().unwrap()[wave_start..(wave_start+num_samples)].to_vec();
                                 window_weak.clone().upgrade_in_event_loop(move |handle| {
                                     update_waveform(&handle, copy)
                                 });
                             }
-                        }
-                        let mut source = apu_data.lock().unwrap();
-                        let src_len = std::cmp::min(len-di, source.len());
 
-                        for (i, (source_l, source_r)) in source.drain(..src_len).enumerate() {
-                            dest[(di + i) * 2] = source_l;
-                            dest[(di + i) * 2 + 1] = source_r;
+                            let mut source = synth_buffer.lock().unwrap();
+                            let src_len = std::cmp::min(len-di, source.len());
+
+                            for (i, (source_l, source_r)) in source.drain(..src_len).enumerate() {
+                                dest[(di + i) * 2] = source_l;
+                                dest[(di + i) * 2 + 1] = source_r;
+                            }
+                            di += src_len;
                         }
-                        di += src_len;
-                    }                     
+                    });
                 }, err_fn),
             // FIXME
             SampleFormat::I16 => device.build_output_stream(&config, write_silence::<i16>, err_fn),
@@ -195,77 +221,90 @@ pub fn main() {
 
         stream.play().unwrap();
         Context {
-            sound: sound_stuff,
             key_release_timer: Default::default(),
             _stream: stream,
         }
     }));
 
-    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
     let window_weak = window.as_weak();
     window.on_selected_instrument_changed(move |instrument| {
-        let mut sound = cloned_context.sound.lock().unwrap();
-        sound.select_instrument(instrument as u32);
+        cloned_sound_send.send(SoundMsg::SelectInstrument(instrument as u32)).unwrap();
         // Just forward it back to the UI, it doesn't change otherwise.
         window_weak.unwrap().set_selected_instrument(instrument);
     });
 
     let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
+    let window_weak = window.as_weak();
     window.on_note_pressed(move |note| {
-        let mut sound = cloned_context.sound.lock().unwrap();
-        sound.press_note(note as u32);
+        cloned_sound_send.send(SoundMsg::PressNote(note as u32)).unwrap();
 
-        let cloned_sound = cloned_context.sound.clone();
+        let model = window_weak.clone().upgrade().unwrap().get_notes();
+        for row in 0..model.row_count() {
+            let mut row_data = model.row_data(row);
+            if row_data.note_number == note {
+                row_data.active = true;
+                model.set_row_data(row, row_data);
+            }
+        }
+
+        // We have only one timer for direct interactions, and we don't handle
+        // keys being held or even multiple keys at time yet, so just visually release all notes.
+        let window_weak = window_weak.clone();
         cloned_context.key_release_timer.start(
             TimerMode::SingleShot,
             std::time::Duration::from_millis(15 * 6),
-            Box::new(move || cloned_sound.lock().unwrap().release_notes())
+            Box::new(move || {
+                let model = window_weak.upgrade().unwrap().get_notes();
+                for row in 0..model.row_count() {
+                    let mut row_data = model.row_data(row);
+                    if row_data.active {
+                        row_data.active = false;
+                        model.set_row_data(row, row_data);
+                    }
+                }
+            })
+
         );
     });
 
-    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
     window.on_pattern_clicked(move |pattern_num| {
-        let mut sound = cloned_context.sound.lock().unwrap();
-        sound.sequencer.select_pattern(pattern_num as u32);
+        cloned_sound_send.send(SoundMsg::SelectPattern(pattern_num as u32)).unwrap();
     });
 
-    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
     window.on_step_clicked(move |step_num| {
-        let mut sound = cloned_context.sound.lock().unwrap();
-        sound.sequencer.toggle_step(step_num as u32);
+        cloned_sound_send.send(SoundMsg::ToggleStep(step_num as u32)).unwrap();
     });
 
-    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
     let window_weak = window.as_weak();
     window.on_play_clicked(move |toggled| {
         // FIXME: Stop the sound device
-        let mut sound = cloned_context.sound.lock().unwrap();
-        sound.sequencer.set_playing(toggled);
+        cloned_sound_send.send(SoundMsg::SetPlaying(toggled)).unwrap();
         window_weak.unwrap().set_playing(toggled);
     });
 
-    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
     window.on_record_clicked(move |toggled| {
-        let mut sound = cloned_context.sound.lock().unwrap();
-        sound.sequencer.set_recording(toggled);
+        cloned_sound_send.send(SoundMsg::SetRecording(toggled)).unwrap();
     });
 
-    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
     window.on_append_song_pattern(move |pattern_num| {
-        let mut sound = cloned_context.sound.lock().unwrap();
-        sound.sequencer.append_song_pattern(pattern_num as u32);
+        cloned_sound_send.send(SoundMsg::AppendSongPattern(pattern_num as u32)).unwrap();
     });
 
-    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
     window.on_remove_last_song_pattern(move || {
-        let mut sound = cloned_context.sound.lock().unwrap();
-        sound.sequencer.remove_last_song_pattern();
+        cloned_sound_send.send(SoundMsg::RemoveLastSongPattern).unwrap();
     });
 
-    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
     window.on_clear_song_patterns(move || {
-        let mut sound = cloned_context.sound.lock().unwrap();
-        sound.sequencer.clear_song_patterns();
+        cloned_sound_send.send(SoundMsg::ClearSongPatterns).unwrap();
     });
 
     window.run();
