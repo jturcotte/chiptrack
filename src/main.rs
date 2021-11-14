@@ -39,8 +39,12 @@ enum SoundMsg {
 
 fn update_waveform(window: &MainWindow, samples: Vec<(f32,f32)>) {
     let was_non_zero = !window.get_waveform_is_zero();
-    let width = window.get_waveform_width() / 2.;
-    let height = window.get_waveform_height() / 2.;
+    #[cfg(not(target_arch = "wasm32"))]
+        let res_divider = 2.;
+    #[cfg(target_arch = "wasm32")]
+        let res_divider = 4.;
+    let width = window.get_waveform_width() / res_divider;
+    let height = window.get_waveform_height() / res_divider;
     let mut pb = PathBuilder::new();
     let mut non_zero = false;
     pb.move_to(0.0, height / 2.0);
