@@ -8,11 +8,11 @@ use wasm_bindgen::prelude::*;
 
 mod log;
 mod sequencer;
-mod sound;
+mod sound_engine;
 mod synth;
 mod synth_script;
 
-use crate::sound::SoundStuff;
+use crate::sound_engine::SoundEngine;
 use once_cell::unsync::Lazy;
 use sixtyfps::{Model, SharedPixelBuffer, Timer, TimerMode};
 use std::cell::RefCell;
@@ -22,7 +22,7 @@ use tiny_skia::*;
 
 sixtyfps::include_modules!();
 
-thread_local! {static SOUND_ENGINE: RefCell<Option<SoundStuff>> = RefCell::new(None);}
+thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine>> = RefCell::new(None);}
 
 #[derive(Debug)]
 enum SoundMsg {
@@ -156,7 +156,7 @@ pub fn main() {
                 move |dest: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     SOUND_ENGINE.with(|maybe_engine_cell| {
                         let mut maybe_engine = maybe_engine_cell.borrow_mut();
-                        let engine = maybe_engine.get_or_insert_with(|| SoundStuff::new(sample_rate, window_weak.clone()));
+                        let engine = maybe_engine.get_or_insert_with(|| SoundEngine::new(sample_rate, window_weak.clone()));
 
                         while let Ok(msg) = sound_recv.try_recv() {
                             match msg {

@@ -5,16 +5,16 @@ use crate::MainWindow;
 use sixtyfps::Model;
 use sixtyfps::Weak;
 
-pub struct SoundStuff {
+pub struct SoundEngine {
     pub sequencer: Sequencer,
     pub synth: Synth,
     selected_instrument: u32,
     main_window: Weak<MainWindow>,
 }
 
-impl SoundStuff {
-    pub fn new(sample_rate: u32, main_window: Weak<MainWindow>) -> SoundStuff {
-        SoundStuff {
+impl SoundEngine {
+    pub fn new(sample_rate: u32, main_window: Weak<MainWindow>) -> SoundEngine {
+        SoundEngine {
                 sequencer: Sequencer::new(main_window.clone()),
                 synth: Synth::new(sample_rate),
                 selected_instrument: 0,
