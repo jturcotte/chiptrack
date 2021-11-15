@@ -13,9 +13,9 @@ pub struct SoundEngine {
 }
 
 impl SoundEngine {
-    pub fn new(sample_rate: u32, main_window: Weak<MainWindow>) -> SoundEngine {
+    pub fn new(sample_rate: u32, project_name: &str, main_window: Weak<MainWindow>) -> SoundEngine {
         SoundEngine {
-                sequencer: Sequencer::new(main_window.clone()),
+                sequencer: Sequencer::new(project_name, main_window.clone()),
                 synth: Synth::new(sample_rate),
                 selected_instrument: 0,
                 main_window: main_window,
@@ -64,10 +64,13 @@ impl SoundEngine {
         self.sequencer.record_trigger(self.selected_instrument, note);
     }
 
+    pub fn save_project(&self, project_name: &str) {
+        self.sequencer.save(project_name);
+    }
+
     fn note_to_freq(note: u32) -> f64 {
-        let a = 440.0; //frequency of A (coomon value is 440Hz)
+        let a = 440.0; // Frequency of A
         let key_freq = (a / 32.0) * 2.0_f64.powf((note as f64 - 9.0) / 12.0);
-        println!("NOTE {:?} {:?}", note, key_freq);
         key_freq
     }
 }

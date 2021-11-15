@@ -35,6 +35,7 @@ enum SoundMsg {
     AppendSongPattern(u32),
     RemoveLastSongPattern,
     ClearSongPatterns,
+    SaveProject,
 }
 
 fn update_waveform(window: &MainWindow, samples: Vec<(f32,f32)>) {
@@ -91,6 +92,8 @@ pub fn main() {
     // It's disabled in release mode so it doesn't bloat up the file size.
     #[cfg(all(debug_assertions, target_arch = "wasm32"))]
     console_error_panic_hook::set_once();
+
+    let project_name = "default".to_owned();
 
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.
@@ -160,7 +163,7 @@ pub fn main() {
                 move |dest: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     SOUND_ENGINE.with(|maybe_engine_cell| {
                         let mut maybe_engine = maybe_engine_cell.borrow_mut();
-                        let engine = maybe_engine.get_or_insert_with(|| SoundEngine::new(sample_rate, window_weak.clone()));
+                        let engine = maybe_engine.get_or_insert_with(|| SoundEngine::new(sample_rate, &project_name, window_weak.clone()));
 
                         while let Ok(msg) = sound_recv.try_recv() {
                             match msg {
@@ -173,6 +176,7 @@ pub fn main() {
                                 SoundMsg::AppendSongPattern(pattern_num) => engine.sequencer.append_song_pattern(pattern_num),
                                 SoundMsg::RemoveLastSongPattern => engine.sequencer.remove_last_song_pattern(),
                                 SoundMsg::ClearSongPatterns => engine.sequencer.clear_song_patterns(),
+                                SoundMsg::SaveProject => engine.save_project(&project_name),
                             }
                         }
 
@@ -230,12 +234,11 @@ pub fn main() {
         }
     }));
 
+    let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
-    let window_weak = window.as_weak();
     window.on_selected_instrument_changed(move |instrument| {
+        Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::SelectInstrument(instrument as u32)).unwrap();
-        // Just forward it back to the UI, it doesn't change otherwise.
-        window_weak.unwrap().set_selected_instrument(instrument);
     });
 
     let cloned_context = context.clone();
@@ -273,42 +276,65 @@ pub fn main() {
         );
     });
 
+    let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_pattern_clicked(move |pattern_num| {
+        Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::SelectPattern(pattern_num as u32)).unwrap();
     });
 
+    let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_step_clicked(move |step_num| {
+        Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::ToggleStep(step_num as u32)).unwrap();
     });
 
+    let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     let window_weak = window.as_weak();
     window.on_play_clicked(move |toggled| {
         // FIXME: Stop the sound device
+        Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::SetPlaying(toggled)).unwrap();
         window_weak.unwrap().set_playing(toggled);
     });
 
+    let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_record_clicked(move |toggled| {
+        Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::SetRecording(toggled)).unwrap();
     });
 
+    let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_append_song_pattern(move |pattern_num| {
+        Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::AppendSongPattern(pattern_num as u32)).unwrap();
     });
 
+    let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_remove_last_song_pattern(move || {
+        Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::RemoveLastSongPattern).unwrap();
     });
 
+    let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_clear_song_patterns(move || {
+
+        Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::ClearSongPatterns).unwrap();
+    });
+
+    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
+    window.on_save_project(move || {
+
+        Lazy::force(&*cloned_context);
+        cloned_sound_send.send(SoundMsg::SaveProject).unwrap();
     });
 
     window.run();

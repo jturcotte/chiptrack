@@ -1,8 +1,11 @@
 use crate::sixtyfps_generated_MainWindow::SongPatternData;
 use crate::MainWindow;
+use serde::{Serialize, Deserialize};
 use sixtyfps::Model;
 use sixtyfps::VecModel;
 use sixtyfps::Weak;
+use std::fs::File;
+use std::path::PathBuf;
 
 pub const NUM_INSTRUMENTS: usize = 9;
 pub const NUM_STEPS: usize = 16;
@@ -14,44 +17,56 @@ pub enum NoteEvent {
     Release,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+struct InstrumentStep {
+    note: u32,
+    enabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SequencerSong {
+    selected_instrument: usize,
+    song_patterns: Vec<usize>,
+    step_instruments: [[[InstrumentStep; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
+}
+
 pub struct Sequencer {
     current_frame: u32,
     current_step: usize,
     current_song_pattern: Option<usize>,
+    selected_pattern: usize,
     playing: bool,
     recording: bool,
-    selected_pattern: usize,
-    selected_instrument: usize,
-    song_patterns: Vec<usize>,
-    step_instruments_note: [[[u32; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
-    step_instruments_enabled: [[[bool; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
+    song: SequencerSong,
     previous_frame_note_events: Vec<(u32, NoteEvent, u32)>,
     main_window: Weak<MainWindow>,
 }
 
 impl Sequencer {
-    pub fn new(main_window: Weak<MainWindow>) -> Sequencer {
-        let test_patterns = vec!(0,1);
-        let val = Sequencer {
+    pub fn new(project_name: &str, main_window: Weak<MainWindow>) -> Sequencer {
+        let song = Sequencer::load(project_name).unwrap_or(SequencerSong {
+            selected_instrument: 0,
+            song_patterns: Vec::new(),
+            // Initialize all notes to C5
+            step_instruments: [[[InstrumentStep{note: 60, enabled: false}; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
+        });
+        let mut val = Sequencer {
             current_frame: 0,
             current_step: 0,
-            current_song_pattern: Some(0),
+            current_song_pattern: if song.song_patterns.is_empty() { None } else { Some(0) },
+            selected_pattern: 0,
             playing: true,
             recording: true,
-            selected_pattern: 0,
-            selected_instrument: 0,
-            song_patterns: test_patterns.clone(),
-            // Initialize all notes to C5
-            step_instruments_note: [[[60; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
-            step_instruments_enabled: [[[false; NUM_INSTRUMENTS]; NUM_STEPS]; NUM_PATTERNS],
+            song: song,
             previous_frame_note_events: Vec::new(),
             main_window: main_window.clone(),
         };
         let current_song_pattern = val.current_song_pattern;
+        let song_patterns = val.song.song_patterns.clone();
         main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_song_patterns();
             let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-            for (i, number) in test_patterns.iter().enumerate() {
+            for (i, number) in song_patterns.iter().enumerate() {
                 vec_model.push(
                     SongPatternData{
                         number: *number as i32,
@@ -62,6 +77,13 @@ impl Sequencer {
                     });
             }
         });
+
+        val.select_pattern(
+            *val.current_song_pattern
+                .map(|i| val.song.song_patterns.get(i).unwrap())
+                .unwrap_or(&0_usize) as u32
+            );
+        val.select_instrument(val.song.selected_instrument as u32);
         val
     }
 
@@ -106,12 +128,20 @@ impl Sequencer {
     }
 
     pub fn select_instrument(&mut self, instrument: u32) -> () {
-        self.selected_instrument = instrument as usize;
+        self.song.selected_instrument = instrument as usize;
+
         self.update_steps();
+
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            handle.set_selected_instrument(instrument as i32);
+        });
     }
 
     fn update_steps(&mut self) -> () {
-        let enabled_list: Vec<bool> = (0..NUM_STEPS).map(|i| self.step_instruments_enabled[self.selected_pattern][i][self.selected_instrument]).collect();
+        let enabled_list: Vec<bool> = 
+            (0..NUM_STEPS)
+                .map(|i| self.song.step_instruments[self.selected_pattern][self.song.selected_instrument][i].enabled)
+                .collect();
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_steps();
             for (i, step_enabled) in enabled_list.iter().enumerate() {
@@ -123,8 +153,8 @@ impl Sequencer {
     }
 
     pub fn toggle_step(&mut self, step_num: u32) -> () {
-        let toggled = !self.step_instruments_enabled[self.selected_pattern][step_num as usize][self.selected_instrument];
-        self.step_instruments_enabled[self.selected_pattern][step_num as usize][self.selected_instrument] = toggled;
+        let toggled = !self.song.step_instruments[self.selected_pattern][self.song.selected_instrument][step_num as usize].enabled;
+        self.song.step_instruments[self.selected_pattern][self.song.selected_instrument][step_num as usize].enabled = toggled;
 
         let selected_pattern = self.selected_pattern;
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
@@ -185,10 +215,11 @@ impl Sequencer {
                 }
             }
 
-            for (i, note) in self.step_instruments_note[self.selected_pattern][self.current_step].iter().enumerate() {
-                if self.step_instruments_enabled[self.selected_pattern][self.current_step][i] {
+            for i in 0..NUM_INSTRUMENTS {
+                let InstrumentStep{note, enabled} = self.song.step_instruments[self.selected_pattern][i][self.current_step];
+                if enabled {
                     println!("Instrument {:?} note {:?}", i, note);
-                    note_events.push((i as u32, NoteEvent::Press, *note));
+                    note_events.push((i as u32, NoteEvent::Press, note));
                 }
             }
             self.previous_frame_note_events = note_events.clone();
@@ -209,16 +240,16 @@ impl Sequencer {
             } else {
                 self.next_step_and_pattern_and_song_pattern()
             };
-        self.step_instruments_note[pattern][step][instrument as usize] = note;
+        self.song.step_instruments[pattern][instrument as usize][step].note = note;
 
-        let already_enabled = self.step_instruments_enabled[pattern][step][instrument as usize];
+        let already_enabled = self.song.step_instruments[pattern][instrument as usize][step].enabled;
         if !already_enabled {
             self.toggle_step(step as u32);
         }
     }
 
     pub fn append_song_pattern(&mut self, pattern: u32) {
-        self.song_patterns.push(pattern as usize);
+        self.song.song_patterns.push(pattern as usize);
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_song_patterns();
@@ -228,10 +259,10 @@ impl Sequencer {
     }
 
     pub fn remove_last_song_pattern(&mut self) {
-        if !self.song_patterns.is_empty() {
-            self.song_patterns.pop();
-            if self.current_song_pattern.unwrap() == self.song_patterns.len() {
-                self.select_song_pattern(if self.song_patterns.is_empty() { None } else { Some(0) });
+        if !self.song.song_patterns.is_empty() {
+            self.song.song_patterns.pop();
+            if self.current_song_pattern.unwrap() == self.song.song_patterns.len() {
+                self.select_song_pattern(if self.song.song_patterns.is_empty() { None } else { Some(0) });
             }
 
             self.main_window.clone().upgrade_in_event_loop(move |handle| {
@@ -243,7 +274,7 @@ impl Sequencer {
     }
 
     pub fn clear_song_patterns(&mut self) {
-        self.song_patterns.clear();
+        self.song.song_patterns.clear();
         self.select_song_pattern(None);
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
@@ -255,11 +286,46 @@ impl Sequencer {
         });
     }
 
+    fn project_path(project_name: &str) -> PathBuf {
+        let mut path = PathBuf::new();
+        path.push(project_name.to_owned() + "-song.json");
+        path.canonicalize().unwrap()
+    }
+    fn load(project_name: &str) -> Option<SequencerSong> {
+        let path = Sequencer::project_path(project_name);
+        if path.exists() {
+            let parsed =
+                File::open(path.as_path())
+                .and_then(|f| serde_json::from_reader(f).map_err(|e| e.into()));
+
+            match parsed {
+                Ok(song) => {
+                    log!("Loaded project song from file {:?}", path);
+                    Some(song)
+                },
+                Err(e) => {
+                    elog!("Couldn't load project song from file {:?}, starting from scratch.\n\tError: {:?}", path, e);
+                    None
+                },
+            }            
+        } else {
+            log!("Project song file {:?} doesn't exist, starting from scratch.", path);
+            None
+        }
+    }
+
+    pub fn save(&self, project_name: &str) {
+        let path = Sequencer::project_path(project_name);
+        println!("Saving project song to file {:?}.", path);
+        let f = File::create(path).expect("Unable to create project file");
+        serde_json::to_writer_pretty(&f, &self.song).unwrap()
+    }
+
     fn next_step_and_pattern_and_song_pattern(&self) -> (usize, usize, Option<usize>) {
         if (self.current_step + 1) % NUM_STEPS == 0 {
-            let (next_pattern, next_song_pattern) = if !self.song_patterns.is_empty() {
-                let sp = self.current_song_pattern.map(|sp| (sp + 1) % self.song_patterns.len()).unwrap_or(0);
-                (self.song_patterns[sp], Some(sp))
+            let (next_pattern, next_song_pattern) = if !self.song.song_patterns.is_empty() {
+                let sp = self.current_song_pattern.map(|sp| (sp + 1) % self.song.song_patterns.len()).unwrap_or(0);
+                (self.song.song_patterns[sp], Some(sp))
             } else {
                 (self.selected_pattern, None)
             };
