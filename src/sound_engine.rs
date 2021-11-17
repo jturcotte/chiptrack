@@ -4,6 +4,7 @@ use crate::synth::Synth;
 use crate::MainWindow;
 use sixtyfps::Model;
 use sixtyfps::Weak;
+use std::path::PathBuf;
 
 pub struct SoundEngine {
     pub sequencer: Sequencer,
@@ -14,9 +15,11 @@ pub struct SoundEngine {
 
 impl SoundEngine {
     pub fn new(sample_rate: u32, project_name: &str, main_window: Weak<MainWindow>) -> SoundEngine {
+        let song_path = SoundEngine::project_song_path(project_name);
+        let instruments_path = SoundEngine::project_instruments_path(project_name);
         SoundEngine {
-                sequencer: Sequencer::new(project_name, main_window.clone()),
-                synth: Synth::new(sample_rate),
+                sequencer: Sequencer::new(song_path.as_path(), main_window.clone()),
+                synth: Synth::new(instruments_path.as_path(), sample_rate),
                 selected_instrument: 0,
                 main_window: main_window,
             }
@@ -65,7 +68,20 @@ impl SoundEngine {
     }
 
     pub fn save_project(&self, project_name: &str) {
-        self.sequencer.save(project_name);
+        let path = SoundEngine::project_song_path(project_name);
+        self.sequencer.save(path.as_path());
+    }
+
+    pub fn project_song_path(project_name: &str) -> PathBuf {
+        let mut path = PathBuf::new();
+        path.push(project_name.to_owned() + "-song.json");
+        path
+    }
+
+    pub fn project_instruments_path(project_name: &str) -> PathBuf {
+        let mut path = PathBuf::new();
+        path.push(project_name.to_owned() + "-instruments.rhai");
+        path
     }
 
     fn note_to_freq(note: u32) -> f64 {

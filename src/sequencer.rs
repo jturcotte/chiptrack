@@ -5,7 +5,7 @@ use sixtyfps::Model;
 use sixtyfps::VecModel;
 use sixtyfps::Weak;
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::Path;
 
 pub const NUM_INSTRUMENTS: usize = 9;
 pub const NUM_STEPS: usize = 16;
@@ -43,8 +43,8 @@ pub struct Sequencer {
 }
 
 impl Sequencer {
-    pub fn new(project_name: &str, main_window: Weak<MainWindow>) -> Sequencer {
-        let song = Sequencer::load(project_name).unwrap_or(SequencerSong {
+    pub fn new(project_song_path: &Path, main_window: Weak<MainWindow>) -> Sequencer {
+        let song = Sequencer::load(project_song_path).unwrap_or(SequencerSong {
             selected_instrument: 0,
             song_patterns: Vec::new(),
             // Initialize all notes to C5
@@ -286,38 +286,31 @@ impl Sequencer {
         });
     }
 
-    fn project_path(project_name: &str) -> PathBuf {
-        let mut path = PathBuf::new();
-        path.push(project_name.to_owned() + "-song.json");
-        path.canonicalize().unwrap()
-    }
-    fn load(project_name: &str) -> Option<SequencerSong> {
-        let path = Sequencer::project_path(project_name);
-        if path.exists() {
+    fn load(project_song_path: &Path) -> Option<SequencerSong> {
+        if project_song_path.exists() {
             let parsed =
-                File::open(path.as_path())
+                File::open(project_song_path)
                 .and_then(|f| serde_json::from_reader(f).map_err(|e| e.into()));
 
             match parsed {
                 Ok(song) => {
-                    log!("Loaded project song from file {:?}", path);
+                    log!("Loaded project song from file {:?}", project_song_path);
                     Some(song)
                 },
                 Err(e) => {
-                    elog!("Couldn't load project song from file {:?}, starting from scratch.\n\tError: {:?}", path, e);
+                    elog!("Couldn't load project song from file {:?}, starting from scratch.\n\tError: {:?}", project_song_path, e);
                     None
                 },
             }            
         } else {
-            log!("Project song file {:?} doesn't exist, starting from scratch.", path);
+            log!("Project song file {:?} doesn't exist, starting from scratch.", project_song_path);
             None
         }
     }
 
-    pub fn save(&self, project_name: &str) {
-        let path = Sequencer::project_path(project_name);
-        println!("Saving project song to file {:?}.", path);
-        let f = File::create(path).expect("Unable to create project file");
+    pub fn save(&self, project_song_path: &Path) {
+        println!("Saving project song to file {:?}.", project_song_path);
+        let f = File::create(project_song_path).expect("Unable to create project file");
         serde_json::to_writer_pretty(&f, &self.song).unwrap()
     }
 

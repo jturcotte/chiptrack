@@ -5,6 +5,7 @@ use gameboy::apu::Apu;
 use gameboy::memory::Memory;
 use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
+use std::path::Path;
 use std::rc::Rc;
 
 pub struct Synth {
@@ -15,12 +16,12 @@ pub struct Synth {
 }
 
 impl Synth {
-    pub fn new(sample_rate: u32) -> Synth {
+    pub fn new(project_instruments_path: &Path, sample_rate: u32) -> Synth {
         let mut apu = Apu::power_up(sample_rate);
         // Already power it on.
         apu.set( 0xff26, 0x80 );
         let settings_ring = Rc::new(RefCell::new(vec![vec![]; 512]));
-        let script = SynthScript::new(settings_ring.clone());
+        let script = SynthScript::new(project_instruments_path, settings_ring.clone());
 
         Synth {
             apu: apu,

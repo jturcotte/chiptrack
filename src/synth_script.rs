@@ -3,6 +3,7 @@ use rhai::{AST, Dynamic, Engine, Scope};
 use rhai::plugin::*;
 use std::ops::BitOr;
 use std::cell::RefCell;
+use std::path::Path;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -467,7 +468,7 @@ pub struct SynthScript {
 impl SynthScript {
     const DEFAULT_INSTRUMENTS: &'static str = include_str!("../res/instruments.rhai");
 
-    pub fn new(settings_ring: Rc<RefCell<Vec<Vec<SetSetting>>>>) -> SynthScript {
+    pub fn new(project_instruments_path: &Path, settings_ring: Rc<RefCell<Vec<Vec<SetSetting>>>>) -> SynthScript {
         let mut engine = Engine::new();
 
         engine.register_type::<SharedDmgBindings>()
@@ -506,15 +507,40 @@ impl SynthScript {
             noise: noise,
             }));
 
-        let ast = engine.compile(SynthScript::DEFAULT_INSTRUMENTS).unwrap();
         let mut scope = Scope::new();
         scope.push("dmg", dmg.clone());
 
-        SynthScript {
+        let mut val = SynthScript {
             script_engine: engine,
-            script_ast: ast,
+            script_ast: Default::default(),
             script_context: dmg,
             script_scope: scope,
+        };
+
+        val.try_load(project_instruments_path);
+        val
+    }
+
+    fn default_instruments(&self) -> AST {
+        self.script_engine.compile(SynthScript::DEFAULT_INSTRUMENTS).unwrap()
+    }
+    pub fn try_load(&mut self, project_instruments_path: &Path) {
+        if project_instruments_path.exists() {
+            let maybe_ast = self.script_engine.compile_file(project_instruments_path.to_path_buf());
+
+            match maybe_ast {
+                Ok(ast) => {
+                    log!("Loaded project instruments from file {:?}", project_instruments_path);
+                    self.script_ast = ast;
+                },
+                Err(e) => {
+                    elog!("Couldn't load project instruments from file {:?}, starting from scratch.\n\tError: {:?}", project_instruments_path, e);
+                    self.script_ast = self.default_instruments();
+                },
+            }            
+        } else {
+            log!("Project instruments file {:?} doesn't exist, starting from scratch.", project_instruments_path);
+            self.script_ast = self.default_instruments();
         }
     }
 

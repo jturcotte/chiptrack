@@ -141,6 +141,10 @@ pub fn main() {
     window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
 
     let (sound_send, sound_recv) = mpsc::channel();
+    // let (notify_send, notify_recv) = mpsc::channel();
+
+    // let mut watcher: RecommendedWatcher = try!(Watcher::new(notify_send, Duration::from_secs(2)));
+    // try!(watcher.watch("/home/test/notify", RecursiveMode::Recursive));
 
     let window_weak = window.as_weak();
     let context = Rc::new(Lazy::new(|| {
