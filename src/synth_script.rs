@@ -112,6 +112,15 @@ pub enum Divisor {
     Divisor112 = 7,
 }
 
+// Only works if the function's return type is Result<_, Box<EvalAltResult>>
+macro_rules! runtime_check {
+    ($cond : expr, $($err : tt) +) => {
+        if !$cond { 
+            return Err(format!($( $err )*).into());
+        };
+    }
+}
+
 #[export_module]
 pub mod dmg_api {
 
@@ -149,22 +158,26 @@ pub mod dmg_api {
         this_rc.borrow().noise.clone()
     }
 
-    #[rhai_fn(global)]
-    pub fn wait_frames(dmg: &mut SharedDmgBindings, frames: i32) {
+    #[rhai_fn(global, return_raw)]
+    pub fn wait_frames(dmg: &mut SharedDmgBindings, frames: i32) -> Result<(), Box<EvalAltResult>> {
         let mut this = dmg.borrow_mut();
         this.commit_to_ring();
         let len = this.settings_ring.borrow().len();
+        runtime_check!(frames >= 0, "frames must be >= 0, got {}", frames);
+        runtime_check!((frames as usize) < len, "frames must be < {}, got {}", len, frames);
         this.settings_ring_index = (this.settings_ring_index + frames as usize) % len;
+        Ok(())
     }
 
-    #[rhai_fn(set = "sweep_time", pure)]
-    pub fn set_sweep_time(this_rc: &mut SharedDmgSquare1, v: i32) {
-        assert!(v >= 0);
-        assert!(v <= 7);
+    #[rhai_fn(set = "sweep_time", pure, return_raw)]
+    pub fn set_sweep_time(this_rc: &mut SharedDmgSquare1, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "sweep_time must be >= 0, got {}", v);
+        runtime_check!(v < 8, "sweep_time must be < 8, got {}", v);
         orit(
             &mut this_rc.borrow_mut().nrx0_set_setting,
             SetSetting::new(Setting::new(Square1 as u16 + 0, 0x70), v as u8)
             );
+        Ok(())
     }
     #[rhai_fn(set = "sweep_dir", pure)]
     pub fn set_sweep_dir(this_rc: &mut SharedDmgSquare1, v: Direction) {
@@ -173,14 +186,15 @@ pub mod dmg_api {
             SetSetting::new(Setting::new(Square1 as u16 + 0, 0x08), match v { Direction::Inc => 0, Direction::Dec => 1 })
             );
     }
-    #[rhai_fn(set = "sweep_shift", pure)]
-    pub fn set_sweep_shift(this_rc: &mut SharedDmgSquare1, v: i32) {
-        assert!(v >= 0);
-        assert!(v <= 7);
+    #[rhai_fn(set = "sweep_shift", pure, return_raw)]
+    pub fn set_sweep_shift(this_rc: &mut SharedDmgSquare1, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "sweep_shift must be >= 0, got {}", v);
+        runtime_check!(v < 8, "sweep_shift must be < 8, got {}", v);
         orit(
             &mut this_rc.borrow_mut().nrx0_set_setting,
             SetSetting::new(Setting::new(Square1 as u16 + 0, 0x07), v as u8)
             );
+        Ok(())
     }
 
     #[rhai_fn(set = "duty", pure)]
@@ -191,32 +205,38 @@ pub mod dmg_api {
             );
     }
 
-    #[rhai_fn(set = "env_start", pure)]
-    pub fn set_noise_env_start(this_rc: &mut SharedDmgSquare1, v: i32) {
+    #[rhai_fn(set = "env_start", pure, return_raw)]
+    pub fn set_square_env_start(this_rc: &mut SharedDmgSquare1, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "env_start must be >= 0, got {}", v);
+        runtime_check!(v < 16, "env_start must be < 16, got {}", v);
         orit(
             &mut this_rc.borrow_mut().nrx2_set_setting,
             SetSetting::new(Setting::new(Square1 as u16 + 2, 0xf0), v as u8)
             );
+        Ok(())
     }
     #[rhai_fn(set = "env_dir", pure)]
-    pub fn set_noise_env_dir(this_rc: &mut SharedDmgSquare1, v: Direction) {
+    pub fn set_square_env_dir(this_rc: &mut SharedDmgSquare1, v: Direction) {
         orit(
             &mut this_rc.borrow_mut().nrx2_set_setting,
             SetSetting::new(Setting::new(Square1 as u16 + 2, 0x08), v as u8)
             );
     }
-    #[rhai_fn(set = "env_period", pure)]
-    pub fn set_noise_env_period(this_rc: &mut SharedDmgSquare1, v: i32) {
+    #[rhai_fn(set = "env_period", pure, return_raw)]
+    pub fn set_square_env_period(this_rc: &mut SharedDmgSquare1, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "env_period must be >= 0, got {}", v);
+        runtime_check!(v < 8, "env_period must be < 8, got {}", v);
         orit(
             &mut this_rc.borrow_mut().nrx2_set_setting,
             SetSetting::new(Setting::new(Square1 as u16 + 2, 0x07), v as u8)
             );
+        Ok(())
     }
 
-    #[rhai_fn(global, name = "trigger_with_length")]
-    pub fn square_trigger_with_length(this_rc: &mut SharedDmgSquare1, freq: f64, length: i32) {
-        assert!(length >= 1);
-        assert!(length <= 64);
+    #[rhai_fn(global, name = "trigger_with_length", return_raw)]
+    pub fn square_trigger_with_length(this_rc: &mut SharedDmgSquare1, freq: f64, length: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(length >= 1, "length must be >= 1, got {}", length);
+        runtime_check!(length <= 64, "length must be <= 64, got {}", length);
         let gb_freq = to_gb_freq(freq);
         orit(
             &mut this_rc.borrow_mut().nrx1_set_setting,
@@ -237,6 +257,7 @@ pub mod dmg_api {
                 // Frequency MSB
                 | SetSetting::new(Setting::new(Square1 as u16 + 4, 0x07), (gb_freq >> 8) as u8)
             );
+        Ok(())
     }
 
     #[rhai_fn(global, name = "trigger")]
@@ -272,8 +293,11 @@ pub mod dmg_api {
             SetSetting::new(Setting::new(Wave as u16 + 2, 0x60), v as u8)
             );
     }
-    #[rhai_fn(set = "table", pure)]
-    pub fn set_table(this_rc: &mut SharedDmgWave, hex_string: &str) {
+    #[rhai_fn(set = "table", pure, return_raw)]
+    pub fn set_table(this_rc: &mut SharedDmgWave, hex_string: &str) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(hex_string.len() == 32, "table must have a length of 32, got {}", hex_string.len());
+        runtime_check!(hex_string.chars().all(|c| c >= '0' && c <= '9' || c >= 'a' && c <= 'f' ), "table must only contain characters [0-9a-f], got {}", hex_string);
+
         // Each hexadecimal character in the hex string is one 4 bits sample.
         this_rc.borrow_mut().wave_table_set_settings =
             (0..hex_string.len())
@@ -283,11 +307,12 @@ pub mod dmg_api {
                     SetSetting::new(Setting::new((0xff30 + i / 2) as u16, 0xff), byte)
                 })
                 .collect();
+        Ok(())
     }
-    #[rhai_fn(global, name = "trigger_with_length")]
-    pub fn wave_trigger_with_length(this_rc: &mut SharedDmgWave, freq: f64, length: i32) {
-        assert!(length >= 1);
-        assert!(length <= 256);
+    #[rhai_fn(global, name = "trigger_with_length", return_raw)]
+    pub fn wave_trigger_with_length(this_rc: &mut SharedDmgWave, freq: f64, length: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(length >= 1, "length must be >= 1, got {}", length);
+        runtime_check!(length <= 256, "length must be <= 256, got {}", length);
         let gb_freq = to_gb_freq(freq);
         orit(
             &mut this_rc.borrow_mut().nrx1_set_setting,
@@ -308,6 +333,7 @@ pub mod dmg_api {
                 // Frequency MSB
                 | SetSetting::new(Setting::new(Wave as u16 + 4, 0x07), (gb_freq >> 8) as u8)
             );
+        Ok(())
     }
     #[rhai_fn(global, name = "trigger")]
     pub fn wave_trigger(this_rc: &mut SharedDmgWave, freq: f64) {
@@ -329,39 +355,44 @@ pub mod dmg_api {
     }
 
 
-    #[rhai_fn(set = "env_start", pure)]
-    pub fn set_square_env_start(this_rc: &mut SharedDmgNoise, v: i32) {
-        assert!(v >= 0);
-        assert!(v <= 15);
+    #[rhai_fn(set = "env_start", pure, return_raw)]
+    pub fn set_noise_env_start(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "env_start must be >= 0, got {}", v);
+        runtime_check!(v < 16, "env_start must be < 16, got {}", v);
         orit(
             &mut this_rc.borrow_mut().nrx2_set_setting,
             SetSetting::new(Setting::new(Noise as u16 + 2, 0xf0), v as u8)
             );
+        Ok(())
     }
     #[rhai_fn(set = "env_dir", pure)]
-    pub fn set_square_env_dir(this_rc: &mut SharedDmgNoise, v: Direction) {
+    pub fn set_noise_env_dir(this_rc: &mut SharedDmgNoise, v: Direction) {
         orit(
             &mut this_rc.borrow_mut().nrx2_set_setting,
             SetSetting::new(Setting::new(Noise as u16 + 2, 0x08), v as u8)
             );
     }
-    #[rhai_fn(set = "env_period", pure)]
-    pub fn set_square_env_period(this_rc: &mut SharedDmgNoise, v: i32) {
-        assert!(v >= 0);
-        assert!(v <= 7);
+
+    #[rhai_fn(set = "env_period", pure, return_raw)]
+    pub fn set_noise_env_period(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "env_period must be >= 0, got {}", v);
+        runtime_check!(v < 8, "env_period must be < 8, got {}", v);
+
         orit(
             &mut this_rc.borrow_mut().nrx2_set_setting,
             SetSetting::new(Setting::new(Noise as u16 + 2, 0x07), v as u8)
             );
+        Ok(())
     }
-    #[rhai_fn(set = "clock_shift", pure)]
-    pub fn set_clock_shift(this_rc: &mut SharedDmgNoise, v: i32) {
-        assert!(v >= 0);
-        assert!(v <= 15);
+    #[rhai_fn(set = "clock_shift", pure, return_raw)]
+    pub fn set_clock_shift(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "clock_shift must be >= 0, got {}", v);
+        runtime_check!(v < 16, "clock_shift must be < 16, got {}", v);
         orit(
             &mut this_rc.borrow_mut().nrx3_set_setting,
             SetSetting::new(Setting::new(Noise as u16 + 3, 0xf0), v as u8)
             );
+        Ok(())
     }
     #[rhai_fn(set = "counter_width", pure)]
     pub fn set_counter_width(this_rc: &mut SharedDmgNoise, v: CounterWidth) {
@@ -377,14 +408,15 @@ pub mod dmg_api {
             SetSetting::new(Setting::new(Noise as u16 + 3, 0x07), v as u8)
             );
     }
-    #[rhai_fn(set = "clock_divisor", pure)]
-    pub fn set_clock_divisor_i32(this_rc: &mut SharedDmgNoise, v: i32) {
-        assert!(v >= 0);
-        assert!(v <= 7);
+    #[rhai_fn(set = "clock_divisor", pure, return_raw)]
+    pub fn set_clock_divisor_i32(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "clock_divisor must be >= 0, got {}", v);
+        runtime_check!(v < 8, "clock_divisor must be < 8, got {}", v);
         orit(
             &mut this_rc.borrow_mut().nrx3_set_setting,
             SetSetting::new(Setting::new(Noise as u16 + 3, 0x07), v as u8)
             );
+        Ok(())
     }
     #[rhai_fn(global, name = "trigger")]
     pub fn noise_trigger(this_rc: &mut SharedDmgNoise) {
@@ -534,12 +566,12 @@ impl SynthScript {
                     self.script_ast = ast;
                 },
                 Err(e) => {
-                    elog!("Couldn't load project instruments from file {:?}, starting from scratch.\n\tError: {:?}", project_instruments_path, e);
+                    elog!("Couldn't load project instruments from file {:?}, using default instruments.\n\tError: {:?}", project_instruments_path, e);
                     self.script_ast = self.default_instruments();
                 },
             }            
         } else {
-            log!("Project instruments file {:?} doesn't exist, starting from scratch.", project_instruments_path);
+            log!("Project instruments file {:?} doesn't exist, using default instruments.", project_instruments_path);
             self.script_ast = self.default_instruments();
         }
     }
@@ -548,12 +580,15 @@ impl SynthScript {
         // The script themselves are modifying this state, so reset it.
         self.script_context.borrow_mut().set_settings_ring_index(settings_ring_index);
 
-        let _result: () = self.script_engine.call_fn(
+        let result: Result<(), _> = self.script_engine.call_fn(
             &mut self.script_scope,
             &self.script_ast,
             format!("instrument_{}", instrument),
             ( freq, )
-            ).unwrap();
+            );
+        if let Err(e) = result {
+            elog!("{}", e)
+        }
 
         self.script_context.borrow_mut().commit_to_ring();
     }
