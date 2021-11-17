@@ -52,7 +52,6 @@ impl Synth {
             let prev = self.apu.get(set.setting.addr);
             let new = prev & !set.setting.mask | set.value as u8;
             self.apu.set(set.setting.addr, new);
-            println!("Setting {:x?} Value {:x?} Prev {:x?} New {:x?}", set.setting, set.value, prev, new);
         }
         settings_ring[i].clear();
         self.settings_ring_index = (self.settings_ring_index + 1) % settings_ring.len();
@@ -71,6 +70,10 @@ impl Synth {
 
     pub fn ready_buffer_samples(&self) -> usize {
         self.apu.buffer.lock().unwrap().len()
+    }
+
+    pub fn load(&mut self, project_instruments_path: &Path) {
+        self.script.load(project_instruments_path);
     }
 
 }

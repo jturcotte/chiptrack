@@ -13,11 +13,13 @@ mod synth;
 mod synth_script;
 
 use crate::sound_engine::SoundEngine;
+use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
 use sixtyfps::{Model, SharedPixelBuffer, Timer, TimerMode};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
+use std::time::Duration;
 use tiny_skia::*;
 
 sixtyfps::include_modules!();
@@ -141,10 +143,10 @@ pub fn main() {
     window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
 
     let (sound_send, sound_recv) = mpsc::channel();
-    // let (notify_send, notify_recv) = mpsc::channel();
+    let (notify_send, notify_recv) = mpsc::channel();
 
-    // let mut watcher: RecommendedWatcher = try!(Watcher::new(notify_send, Duration::from_secs(2)));
-    // try!(watcher.watch("/home/test/notify", RecursiveMode::Recursive));
+    let mut watcher = notify::watcher(notify_send, Duration::from_millis(500)).unwrap();
+    watcher.watch(".", RecursiveMode::NonRecursive).unwrap();
 
     let window_weak = window.as_weak();
     let context = Rc::new(Lazy::new(|| {
@@ -169,6 +171,21 @@ pub fn main() {
                         let mut maybe_engine = maybe_engine_cell.borrow_mut();
                         let engine = maybe_engine.get_or_insert_with(|| SoundEngine::new(sample_rate, &project_name, window_weak.clone()));
 
+                        while let Ok(msg) = notify_recv.try_recv() {
+                            println!("WATCH {:?}", msg);
+                            let instruments_path = SoundEngine::project_instruments_path(&project_name);
+                            let instruments = instruments_path.file_name();
+                            let reload = match msg {
+                                DebouncedEvent::Write(path) if path.file_name() == instruments => true,
+                                DebouncedEvent::Create(path) if path.file_name() == instruments => true,
+                                DebouncedEvent::Remove(path) if path.file_name() == instruments => true,
+                                DebouncedEvent::Rename(from, to) if from.file_name() == instruments || to.file_name() == instruments => true,
+                                _ => false,
+                            };
+                            if reload {
+                                engine.synth.load(instruments_path.as_path());
+                            }
+                        }
                         while let Ok(msg) = sound_recv.try_recv() {
                             match msg {
                                 SoundMsg::PressNote(note) => engine.press_note(note),

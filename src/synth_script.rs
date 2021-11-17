@@ -517,14 +517,14 @@ impl SynthScript {
             script_scope: scope,
         };
 
-        val.try_load(project_instruments_path);
+        val.load(project_instruments_path);
         val
     }
 
     fn default_instruments(&self) -> AST {
         self.script_engine.compile(SynthScript::DEFAULT_INSTRUMENTS).unwrap()
     }
-    pub fn try_load(&mut self, project_instruments_path: &Path) {
+    pub fn load(&mut self, project_instruments_path: &Path) {
         if project_instruments_path.exists() {
             let maybe_ast = self.script_engine.compile_file(project_instruments_path.to_path_buf());
 
