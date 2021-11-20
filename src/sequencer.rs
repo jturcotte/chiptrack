@@ -25,13 +25,13 @@ struct InstrumentStep {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SequencerSong {
-    // FIXME: We shouldn't save this, the SoundEngine needs to have the same value.
-    selected_instrument: usize,
+    pub selected_instrument: u32,
     song_patterns: Vec<usize>,
     step_instruments: [[[InstrumentStep; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
 }
 
 pub struct Sequencer {
+    pub song: SequencerSong,
     current_frame: u32,
     current_step: usize,
     current_song_pattern: Option<usize>,
@@ -39,7 +39,6 @@ pub struct Sequencer {
     playing: bool,
     recording: bool,
     erasing: bool,
-    song: SequencerSong,
     previous_frame_note_events: Vec<(u32, NoteEvent, u32)>,
     main_window: Weak<MainWindow>,
 }
@@ -52,15 +51,16 @@ impl Sequencer {
             // Initialize all notes to C5
             step_instruments: [[[InstrumentStep{note: 60, enabled: false}; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
         });
+        let current_song_pattern = if song.song_patterns.is_empty() { None } else { Some(0) };
         let mut val = Sequencer {
+            song: song,
             current_frame: 0,
             current_step: 0,
-            current_song_pattern: if song.song_patterns.is_empty() { None } else { Some(0) },
+            current_song_pattern: current_song_pattern,
             selected_pattern: 0,
             playing: true,
             recording: true,
             erasing: false,
-            song: song,
             previous_frame_note_events: Vec::new(),
             main_window: main_window.clone(),
         };
@@ -131,7 +131,7 @@ impl Sequencer {
     }
 
     pub fn select_instrument(&mut self, instrument: u32) -> () {
-        self.song.selected_instrument = instrument as usize;
+        self.song.selected_instrument = instrument;
 
         self.update_steps();
 
@@ -143,7 +143,7 @@ impl Sequencer {
     fn update_steps(&mut self) -> () {
         let enabled_list: Vec<bool> = 
             (0..NUM_STEPS)
-                .map(|i| self.song.step_instruments[self.selected_pattern][self.song.selected_instrument][i].enabled)
+                .map(|i| self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][i].enabled)
                 .collect();
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_steps();
@@ -156,11 +156,11 @@ impl Sequencer {
     }
 
     pub fn toggle_step(&mut self, step_num: u32) -> () {
-        let toggled = !self.song.step_instruments[self.selected_pattern][self.song.selected_instrument][step_num as usize].enabled;
+        let toggled = !self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][step_num as usize].enabled;
         self.set_step_toggled(step_num, toggled);
     }
     pub fn set_step_toggled(&mut self, step_num: u32, toggled: bool) -> () {
-        let mut step = &mut self.song.step_instruments[self.selected_pattern][self.song.selected_instrument][step_num as usize];
+        let mut step = &mut self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][step_num as usize];
         if step.enabled == toggled {
             return;
         }
@@ -243,7 +243,7 @@ impl Sequencer {
         return note_events;
     }
 
-    pub fn record_trigger(&mut self, instrument: u32, note: u32) {
+    pub fn record_trigger(&mut self, note: u32) {
         if !self.recording {
             return;
         }
@@ -256,7 +256,7 @@ impl Sequencer {
             } else {
                 self.next_step_and_pattern_and_song_pattern()
             };
-        self.song.step_instruments[pattern][instrument as usize][step].note = note;
+        self.song.step_instruments[pattern][self.song.selected_instrument as usize][step].note = note;
 
         self.set_step_toggled(step as u32, true);
     }

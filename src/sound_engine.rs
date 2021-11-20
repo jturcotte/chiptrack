@@ -9,7 +9,6 @@ use std::path::PathBuf;
 pub struct SoundEngine {
     pub sequencer: Sequencer,
     pub synth: Synth,
-    selected_instrument: u32,
     main_window: Weak<MainWindow>,
 }
 
@@ -20,7 +19,6 @@ impl SoundEngine {
         SoundEngine {
                 sequencer: Sequencer::new(song_path.as_path(), main_window.clone()),
                 synth: Synth::new(instruments_path.as_path(), sample_rate),
-                selected_instrument: 0,
                 main_window: main_window,
             }
     }
@@ -31,7 +29,7 @@ impl SoundEngine {
             if typ == NoteEvent::Press {
                 self.synth.trigger_instrument(instrument, Self::note_to_freq(note));
             }
-            if instrument == self.selected_instrument {
+            if instrument == self.sequencer.song.selected_instrument {
                 self.main_window.clone().upgrade_in_event_loop(move |handle| {
                     let model = handle.get_notes();
                     for row in 0..model.row_count() {
@@ -48,7 +46,6 @@ impl SoundEngine {
     }
 
     pub fn select_instrument(&mut self, instrument: u32) -> () {
-        self.selected_instrument = instrument;
         self.sequencer.select_instrument(instrument);
 
         // Release all notes visually that might have been pressed for the previous instrument.
@@ -63,8 +60,8 @@ impl SoundEngine {
     }
 
     pub fn press_note(&mut self, note: u32) -> () {
-        self.synth.trigger_instrument(self.selected_instrument, Self::note_to_freq(note));
-        self.sequencer.record_trigger(self.selected_instrument, note);
+        self.synth.trigger_instrument(self.sequencer.song.selected_instrument, Self::note_to_freq(note));
+        self.sequencer.record_trigger(note);
     }
 
     pub fn save_project(&self, project_name: &str) {
