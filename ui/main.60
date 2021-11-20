@@ -167,7 +167,7 @@ MainWindow := Window {
         {note_number: first_note + 10, scale_pos: 5, is_black: true, active: false},
     ];
     property<int> selected_instrument: 0;
-    property<bool> playing: true;
+    property<bool> playing: false;
     property in_song_mode <=> song_mode_button.toggled;
     callback note_pressed(int);
     callback selected_instrument_changed(int);
@@ -268,7 +268,7 @@ MainWindow := Window {
                             }
                     }
                     song_mode_button := Button {
-                        property<bool> toggled: true;
+                        property<bool> toggled: false;
                         text: toggled ? "Song" : "Notes";
                             clicked => {
                                 toggled = !toggled;

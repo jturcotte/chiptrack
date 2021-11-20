@@ -58,7 +58,7 @@ impl Sequencer {
             current_step: 0,
             current_song_pattern: current_song_pattern,
             selected_pattern: 0,
-            playing: true,
+            playing: false,
             recording: true,
             erasing: false,
             previous_frame_note_events: Vec::new(),
