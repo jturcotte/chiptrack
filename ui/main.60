@@ -179,6 +179,7 @@ MainWindow := Window {
     callback remove_last_song_pattern();
     callback clear_song_patterns();
     callback save_project();
+    callback global_key_event(string, bool);
 
     property<bool> waveform_is_zero: true;
     property waveform_image <=> waveform.source;
@@ -208,7 +209,13 @@ MainWindow := Window {
                 else if (event.text == "g") { note_pressed(first_note + 6); }
                 else if (event.text == "j") { note_pressed(first_note + 8); }
                 else if (event.text == "l") { note_pressed(first_note + 10); }
+                else if (event.text == "\n") { root.play_clicked(!root.playing); }
             }
+            global_key_event(event.text, true);
+            accept
+        }
+        key-released(event) => {
+            global_key_event(event.text, false);
             accept
         }
 

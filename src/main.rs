@@ -17,6 +17,7 @@ use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
 use sixtyfps::{Model, SharedPixelBuffer, Timer, TimerMode};
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -34,6 +35,7 @@ enum SoundMsg {
     ToggleStep(u32),
     SetPlaying(bool),
     SetRecording(bool),
+    SetErasing(bool),
     AppendSongPattern(u32),
     RemoveLastSongPattern,
     ClearSongPatterns,
@@ -194,6 +196,7 @@ pub fn main() {
                                 SoundMsg::ToggleStep(toggled) => engine.sequencer.toggle_step(toggled),
                                 SoundMsg::SetPlaying(toggled) => engine.sequencer.set_playing(toggled),
                                 SoundMsg::SetRecording(toggled) => engine.sequencer.set_recording(toggled),
+                                SoundMsg::SetErasing(toggled) => engine.sequencer.set_erasing(toggled),
                                 SoundMsg::AppendSongPattern(pattern_num) => engine.sequencer.append_song_pattern(pattern_num),
                                 SoundMsg::RemoveLastSongPattern => engine.sequencer.remove_last_song_pattern(),
                                 SoundMsg::ClearSongPatterns => engine.sequencer.clear_song_patterns(),
@@ -356,6 +359,35 @@ pub fn main() {
 
         Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::SaveProject).unwrap();
+    });
+
+    // KeyEvent doesn't expose yet whether a press event is due to auto-repeat.
+    // Do the deduplication natively until such an API exists.
+    let already_pressed = Rc::new(RefCell::new(HashSet::new()));
+    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
+    window.on_global_key_event(move |text, pressed| {
+        let code = text.as_str().chars().next().unwrap();
+        if pressed {
+            if !already_pressed.borrow().contains(&code) {
+                already_pressed.borrow_mut().insert(code.to_owned());
+                match code {
+                    '\u{7}' => {
+                        Lazy::force(&*cloned_context);
+                        cloned_sound_send.send(SoundMsg::SetErasing(true)).unwrap();
+                    },
+                    _ => (),
+                }
+            }
+        } else {
+            match code {
+                '\u{7}' => {                    
+                    cloned_sound_send.send(SoundMsg::SetErasing(false)).unwrap();
+                }
+                _ => (),
+            };
+            already_pressed.borrow_mut().remove(&code);
+        }
     });
 
     window.run();
