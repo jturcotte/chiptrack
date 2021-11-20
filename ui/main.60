@@ -239,6 +239,7 @@ MainWindow := Window {
                 else if (event.text == "7") { root.selected_instrument_changed(6); }
                 else if (event.text == "8") { root.selected_instrument_changed(7); }
                 else if (event.text == "9") { root.selected_instrument_changed(8); }
+                else if (event.text == "\u{9}") { song_mode_button.toggled = !song_mode_button.toggled; }
                 else if (event.text == "\n") { root.play_clicked(!root.playing); }
             }
             global_key_event(event.text, true);
@@ -301,9 +302,9 @@ MainWindow := Window {
                     song_mode_button := Button {
                         property<bool> toggled: false;
                         text: toggled ? "Song" : "Notes";
-                            clicked => {
-                                toggled = !toggled;
-                            }
+                        clicked => {
+                            toggled = !toggled;
+                        }
                     }
                     record_button := Button {
                         property<bool> toggled: true;
