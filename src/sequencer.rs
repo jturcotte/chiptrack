@@ -223,6 +223,10 @@ impl Sequencer {
     }
     pub fn set_playing(&mut self, val: bool) -> () {
         self.playing = val;
+        // Reset the current_frame so that it's aligned with full
+        // steps and that record_trigger would record any key while
+        // stopped to the current frame and not the next.
+        self.current_frame = 0;
     }
     pub fn set_recording(&mut self, val: bool) -> () {
         self.recording = val;
@@ -294,7 +298,7 @@ impl Sequencer {
         // Try to clamp the event to the nearest frame.
         // Use 4 instead of 3 just to try to compensate for the key press to visual and audible delay.
         let (step, pattern, _) =
-            if self.current_frame < 4 {
+            if self.current_frame % 6 < 4 {
                 (self.current_step, self.selected_pattern, None)
             } else {
                 self.next_step_and_pattern_and_song_pattern()
