@@ -2,6 +2,7 @@ use crate::sixtyfps_generated_MainWindow::SongPatternData;
 use crate::MainWindow;
 use serde::{Serialize, Deserialize};
 use sixtyfps::Model;
+use sixtyfps::SharedString;
 use sixtyfps::VecModel;
 use sixtyfps::Weak;
 use std::fs::File;
@@ -164,15 +165,21 @@ impl Sequencer {
     }
 
     fn update_steps(&mut self) -> () {
-        let enabled_list: Vec<bool> = 
+        let steps: Vec<InstrumentStep> = 
             (0..NUM_STEPS)
-                .map(|i| self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][i].enabled)
+                .map(|i| self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][i])
                 .collect();
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_steps();
-            for (i, step_enabled) in enabled_list.iter().enumerate() {
+            for (i, step) in steps.iter().enumerate() {
+                let octave = (step.note / 12) - 1;
+                let note_names = ["C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"];
+                let mut note_name = SharedString::from(note_names[step.note as usize % 12]);
+                note_name.push_str(&octave.to_string());
+
                 let mut row_data = model.row_data(i);
-                row_data.empty = !step_enabled;
+                row_data.empty = !step.enabled;
+                row_data.note_name = note_name;
                 model.set_row_data(i, row_data);
             }
         });

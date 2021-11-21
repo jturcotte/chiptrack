@@ -108,7 +108,7 @@ pub fn main() {
     }
     let sequencer_step_model = Rc::new(sixtyfps::VecModel::default());
     for _ in 0..16 {
-        sequencer_step_model.push(StepData{empty: true, active: false});
+        sequencer_step_model.push(StepData{empty: true, active: false, note_name: "".into()});
     }
     let note_model = Rc::new(sixtyfps::VecModel::default());
     let start: i32 = 60;

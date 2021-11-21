@@ -11,6 +11,7 @@ struct PatternData := {
 struct StepData := {
     empty: bool,
     active: bool,
+    note_name: string,
 }
 struct NoteData := {
     note_number: int,
@@ -33,7 +34,7 @@ SongPattern := Rectangle {
         width: 100%;
         height: 100%;
         font_size: width / 2;
-        color: root.border_color;
+        color: highlighted ? #505050 : #a0a0a0;
         horizontal_alignment: center;
         vertical_alignment: center;
     }
@@ -58,7 +59,7 @@ SequencerPattern := Rectangle {
         width: 100%;
         height: 100%;
         font_size: width / 2;
-        color: root.border_color;
+        color: highlighted ? #505050 : #a0a0a0;
         horizontal_alignment: center;
         vertical_alignment: center;
     }
@@ -73,11 +74,22 @@ SequencerStep := Rectangle {
     callback clicked();
     property<bool> highlighted;
     property<bool> empty;
+    property<string> name;
     property<bool> beat;
     background: empty ? white : #c0c0c0;
     border_width: beat ? 2px : 1px;
     border_color: highlighted ? black : #a0a0a0;
     border_radius: width/8;
+    Text {
+        text: name;
+        visible: !empty;
+        width: 100%;
+        height: 100%;
+        font_size: width / 3;
+        color: #505050;
+        horizontal_alignment: center;
+        vertical_alignment: center;
+    }
     TouchArea {
         width: 100%;
         height: 100%;
@@ -146,10 +158,10 @@ MainWindow := Window {
         {empty: true}, {empty: true}, {empty: true},
         {empty: true}, {empty: true}, {empty: true}, {empty: true}];
     property<[StepData]> sequencer_steps: [
-        {empty: false}, {empty: true}, {empty: true}, {empty: true},
-        {empty: false}, {empty: true}, {empty: true}, {empty: true},
-        {empty: false}, {empty: true}, {empty: true}, {empty: true},
-        {empty: false}, {empty: true}, {empty: true}, {empty: true}];
+        {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true},
+        {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true},
+        {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true},
+        {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true}];
     property<int> first_note: 60;
     property<[NoteData]> notes: [
         {note_number: first_note, scale_pos: 0, is_black: false, active: false},
@@ -281,6 +293,7 @@ MainWindow := Window {
                             SequencerStep {
                                 highlighted: step.active;
                                 empty: step.empty;
+                                name: step.note_name;
                                 beat: mod(idx, 4) == 0;
                                 clicked => { root.step_clicked(idx); }
                             }
