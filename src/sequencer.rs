@@ -190,13 +190,22 @@ impl Sequencer {
             return;
         }
         step.enabled = toggled;
+        let pattern_empty =
+            if toggled {
+                false
+            } else {
+                (0..NUM_INSTRUMENTS)
+                    .all(|i| {
+                        (0..NUM_STEPS).all(|s| !self.song.step_instruments[self.selected_pattern][i][s].enabled)
+                    })
+            };
 
         let selected_pattern = self.selected_pattern;
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
 
             let patterns = handle.get_sequencer_patterns();
             let mut pattern_row_data = patterns.row_data(selected_pattern);
-            pattern_row_data.empty = false;
+            pattern_row_data.empty = pattern_empty;
             patterns.set_row_data(selected_pattern, pattern_row_data);
 
             let steps = handle.get_sequencer_steps();
@@ -213,6 +222,8 @@ impl Sequencer {
     }
     pub fn set_erasing(&mut self, val: bool) -> () {
         self.erasing = val;
+        // Already remove the current step.
+        self.set_step_toggled(self.current_step as u32, false);
     }
     pub fn advance_frame(&mut self) -> Vec<(u32, NoteEvent, u32)> {
         let mut note_events: Vec<(u32, NoteEvent, u32)> = Vec::new();
