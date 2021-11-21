@@ -182,14 +182,18 @@ impl Sequencer {
 
     pub fn toggle_step(&mut self, step_num: u32) -> () {
         let toggled = !self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][step_num as usize].enabled;
-        self.set_step_toggled(step_num, toggled);
+        self.set_step_toggled(step_num as usize, self.selected_pattern, toggled, None);
     }
-    pub fn set_step_toggled(&mut self, step_num: u32, toggled: bool) -> () {
-        let mut step = &mut self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][step_num as usize];
-        if step.enabled == toggled {
+    fn set_step_toggled(&mut self, step_num: usize, pattern: usize, toggled: bool, set_note: Option<u32>) -> () {
+        let mut step = &mut self.song.step_instruments[pattern][self.song.selected_instrument as usize][step_num];
+        if step.enabled == toggled && set_note.map_or(true, |n| n == step.note) {
             return;
         }
         step.enabled = toggled;
+        if let Some(note) = set_note {
+            step.note = note;
+        }
+
         let pattern_empty =
             if toggled {
                 false
@@ -209,9 +213,12 @@ impl Sequencer {
             patterns.set_row_data(selected_pattern, pattern_row_data);
 
             let steps = handle.get_sequencer_steps();
-            let mut step_row_data = steps.row_data(step_num as usize);
+            let mut step_row_data = steps.row_data(step_num);
             step_row_data.empty = !toggled;
-            steps.set_row_data(step_num as usize, step_row_data);
+            if let Some(note) = set_note {
+                step_row_data.note_name = utils::midi_note_name(note);
+            }
+            steps.set_row_data(step_num, step_row_data);
         });
     }
     pub fn set_playing(&mut self, val: bool) -> () {
@@ -223,7 +230,7 @@ impl Sequencer {
     pub fn set_erasing(&mut self, val: bool) -> () {
         self.erasing = val;
         // Already remove the current step.
-        self.set_step_toggled(self.current_step as u32, false);
+        self.set_step_toggled(self.current_step, self.selected_pattern, false, None);
     }
     pub fn advance_frame(&mut self) -> Vec<(u32, NoteEvent, u32)> {
         let mut note_events: Vec<(u32, NoteEvent, u32)> = Vec::new();
@@ -246,7 +253,7 @@ impl Sequencer {
                 self.select_song_pattern(next_song_pattern.map(|sp| sp as u32));
             }
             if self.erasing {
-                self.set_step_toggled(self.current_step as u32, false);
+                self.set_step_toggled(next_step, next_pattern, false, None);
             }
 
             self.main_window.clone().upgrade_in_event_loop(move |handle| {
@@ -292,9 +299,8 @@ impl Sequencer {
             } else {
                 self.next_step_and_pattern_and_song_pattern()
             };
-        self.song.step_instruments[pattern][self.song.selected_instrument as usize][step].note = note;
 
-        self.set_step_toggled(step as u32, true);
+        self.set_step_toggled(step, pattern, true, Some(note));
     }
 
     pub fn append_song_pattern(&mut self, pattern: u32) {
