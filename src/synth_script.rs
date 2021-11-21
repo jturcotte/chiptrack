@@ -235,9 +235,10 @@ pub mod dmg_api {
 
     #[rhai_fn(global, name = "trigger_with_length", return_raw)]
     pub fn square_trigger_with_length(this_rc: &mut SharedDmgSquare1, freq: f64, length: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(freq >= 64.0, "freq must be >= 64, got {}", freq);
         runtime_check!(length >= 1, "length must be >= 1, got {}", length);
         runtime_check!(length <= 64, "length must be <= 64, got {}", length);
-        let gb_freq = to_gb_freq(freq);
+        let gb_freq = to_square_gb_freq(freq);
         orit(
             &mut this_rc.borrow_mut().nrx1_set_setting,
             // Length load
@@ -260,9 +261,10 @@ pub mod dmg_api {
         Ok(())
     }
 
-    #[rhai_fn(global, name = "trigger")]
-    pub fn square_trigger(this_rc: &mut SharedDmgSquare1, freq: f64) {
-        let gb_freq = to_gb_freq(freq);
+    #[rhai_fn(global, name = "trigger", return_raw)]
+    pub fn square_trigger(this_rc: &mut SharedDmgSquare1, freq: f64) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(freq >= 64.0, "freq must be >= 64, got {}", freq);
+        let gb_freq = to_square_gb_freq(freq);
         orit(
             &mut this_rc.borrow_mut().nrx3_set_setting,
             // Frequency LSB
@@ -277,6 +279,7 @@ pub mod dmg_api {
                 // Frequency MSB
                 | SetSetting::new(Setting::new(Square1 as u16 + 4, 0x07), (gb_freq >> 8) as u8)
             );
+        Ok(())
     }
 
     #[rhai_fn(set = "playing", pure)]
@@ -311,9 +314,10 @@ pub mod dmg_api {
     }
     #[rhai_fn(global, name = "trigger_with_length", return_raw)]
     pub fn wave_trigger_with_length(this_rc: &mut SharedDmgWave, freq: f64, length: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(freq >= 32.0, "freq must be >= 32, got {}", freq);
         runtime_check!(length >= 1, "length must be >= 1, got {}", length);
         runtime_check!(length <= 256, "length must be <= 256, got {}", length);
-        let gb_freq = to_gb_freq(freq);
+        let gb_freq = to_wave_gb_freq(freq);
         orit(
             &mut this_rc.borrow_mut().nrx1_set_setting,
             // Length load
@@ -335,9 +339,10 @@ pub mod dmg_api {
             );
         Ok(())
     }
-    #[rhai_fn(global, name = "trigger")]
-    pub fn wave_trigger(this_rc: &mut SharedDmgWave, freq: f64) {
-        let gb_freq = to_gb_freq(freq);
+    #[rhai_fn(global, name = "trigger", return_raw)]
+    pub fn wave_trigger(this_rc: &mut SharedDmgWave, freq: f64) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(freq >= 32.0, "freq must be >= 32, got {}", freq);
+        let gb_freq = to_wave_gb_freq(freq);
         orit(
             &mut this_rc.borrow_mut().nrx3_set_setting,
             // Frequency LSB
@@ -352,6 +357,7 @@ pub mod dmg_api {
                 // Frequency MSB
                 | SetSetting::new(Setting::new(Wave as u16 + 4, 0x07), (gb_freq >> 8) as u8)
             );
+        Ok(())
     }
 
 
@@ -428,8 +434,13 @@ pub mod dmg_api {
     }
 
     #[rhai_fn(global)]
-    pub fn to_gb_freq(freq: f64) -> i32 {
+    pub fn to_square_gb_freq(freq: f64) -> i32 {
         2048 - (131072.0/freq).round() as i32
+    }
+
+    #[rhai_fn(global)]
+    pub fn to_wave_gb_freq(freq: f64) -> i32 {
+        2048 - (65536.0/freq).round() as i32
     }
 
     fn orit(dest: &mut Option<SetSetting>, with: SetSetting) {

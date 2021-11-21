@@ -11,6 +11,7 @@ mod sequencer;
 mod sound_engine;
 mod synth;
 mod synth_script;
+mod utils;
 
 use crate::sound_engine::SoundEngine;
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
@@ -223,7 +224,9 @@ pub fn main() {
                                     }
                                 };
 
-                                let copy = synth_buffer.lock().unwrap()[wave_start..(wave_start+num_samples)].to_vec();
+                                let source = synth_buffer.lock().unwrap();
+                                let end = source.len().min(wave_start+num_samples);
+                                let copy = source[wave_start..end].to_vec();
                                 window_weak.clone().upgrade_in_event_loop(move |handle| {
                                     update_waveform(&handle, copy)
                                 });
@@ -257,6 +260,10 @@ pub fn main() {
             _stream: stream,
         }
     }));
+
+    window.on_get_midi_note_name(move |note| {
+        utils::midi_note_name(note as u32)
+    });
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
@@ -298,6 +305,26 @@ pub fn main() {
             })
 
         );
+    });
+
+    let window_weak = window.as_weak();
+    window.on_octave_increased(move |octave_delta| {
+        let window = window_weak.clone().upgrade().unwrap();
+        let first_note = window.get_first_note();
+        if first_note <= 24 && octave_delta < 0
+            || first_note >= 96 && octave_delta > 0 {
+            return;
+        }
+        window.set_first_note(first_note + octave_delta * 12);
+        let model = window.get_notes();
+        for row in 0..model.row_count() {
+            let mut row_data = model.row_data(row);
+            row_data.note_number += octave_delta * 12;
+            // The note_number changed and thus the sequencer release events
+            // won't see that note anymore, so release it already while we're here here.
+            row_data.active = false;
+            model.set_row_data(row, row_data);
+        }
     });
 
     let cloned_context = context.clone();

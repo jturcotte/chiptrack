@@ -100,6 +100,7 @@ SequencerStep := Rectangle {
 PianoKey :=  Rectangle {
     property<bool> highlighted;
     property<bool> is_black: false;
+    property<string> note_name;
     callback clicked();
     background: {
         if (is_black != highlighted) {
@@ -110,6 +111,15 @@ PianoKey :=  Rectangle {
     };
     border_color: black;
     border_width: 1px;
+    Text {
+        text: note_name;
+        width: 100%;
+        height: 98%;
+        font_size: width / 3;
+        color: #505050;
+        horizontal_alignment: center;
+        vertical_alignment: bottom;
+    }
     area := TouchArea {
         width: parent.width;
         height: parent.height;
@@ -181,7 +191,10 @@ MainWindow := Window {
     property<int> selected_instrument: 0;
     property<bool> playing: false;
     property in_song_mode <=> song_mode_button.toggled;
+    callback get_midi_note_name(int) -> string;
+
     callback note_pressed(int);
+    callback octave_increased(int);
     callback selected_instrument_changed(int);
     callback pattern_clicked(int);
     callback step_clicked(int);
@@ -239,6 +252,11 @@ MainWindow := Window {
                 else if (event.text == "7") { root.selected_instrument_changed(6); }
                 else if (event.text == "8") { root.selected_instrument_changed(7); }
                 else if (event.text == "9") { root.selected_instrument_changed(8); }
+                // Home
+                else if (event.text == "\u{2}") { root.octave_increased(-1); }
+                // End
+                else if (event.text == "\u{3}") { root.octave_increased(1); }
+                // Tab
                 else if (event.text == "\u{9}") { song_mode_button.toggled = !song_mode_button.toggled; }
                 else if (event.text == "\n") { root.play_clicked(!root.playing); }
             }
@@ -321,6 +339,7 @@ MainWindow := Window {
                 Rectangle {
                     for note[idx] in notes:
                         PianoKey {
+                            note_name: idx == 0 ? get_midi_note_name(note.note_number) : "";
                             is_black: note.is_black;
                             x: note.is_black
                                 ? (note.scale_pos + 1) * floor(parent.width / 8px) * 1px - width / 2
