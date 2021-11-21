@@ -87,6 +87,7 @@ impl Sequencer {
                 .unwrap_or(&0_usize) as u32
             );
         val.select_instrument(val.song.selected_instrument as u32);
+        val.update_patterns();
         val
     }
 
@@ -138,6 +139,28 @@ impl Sequencer {
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             handle.set_selected_instrument(instrument as i32);
         });
+    }
+
+    fn update_patterns(&mut self) -> () {
+        let non_empty_patterns: Vec<usize> =
+            (0..NUM_PATTERNS)
+                .filter(|p| {
+                    (0..NUM_INSTRUMENTS)
+                        .any(|i| {
+                            (0..NUM_STEPS).any(|s| self.song.step_instruments[*p][i][s].enabled)
+                        })
+                })
+                .collect();
+
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let patterns = handle.get_sequencer_patterns();
+            for p in non_empty_patterns {
+                let mut pattern_row_data = patterns.row_data(p);
+                pattern_row_data.empty = false;
+                patterns.set_row_data(p, pattern_row_data);                
+            }
+        });
+
     }
 
     fn update_steps(&mut self) -> () {
