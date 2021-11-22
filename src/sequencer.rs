@@ -132,6 +132,21 @@ impl Sequencer {
         });
     }
 
+    pub fn select_step(&mut self, step: u32) -> () {
+        let old_step = self.current_step;
+        self.current_step = step as usize;
+
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_sequencer_steps();
+            let mut row_data = model.row_data(old_step);
+            row_data.active = false;
+            model.set_row_data(old_step, row_data);
+
+            let mut row_data = model.row_data(step as usize);
+            row_data.active = true;
+            model.set_row_data(step as usize, row_data);
+        });
+    }
     pub fn select_instrument(&mut self, instrument: u32) -> () {
         self.song.selected_instrument = instrument;
 
@@ -180,10 +195,18 @@ impl Sequencer {
         });
     }
 
-    pub fn toggle_step(&mut self, step_num: u32) -> () {
-        let toggled = !self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][step_num as usize].enabled;
-        self.set_step_toggled(step_num as usize, self.selected_pattern, toggled, None);
+    pub fn toggle_step(&mut self, step: u32) -> () {
+        let toggled = !self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][step as usize].enabled;
+        self.set_step_toggled(step as usize, self.selected_pattern, toggled, None);
+
+        // We don't yet have a separate concept of step cursor independent of the
+        // current sequencer step. But for now use the same thing to allow selecting
+        // which step to record a note onto when the playback is stopped.
+        if !self.playing {
+            self.select_step(step);
+        }
     }
+
     fn set_step_toggled(&mut self, step_num: usize, pattern: usize, toggled: bool, set_note: Option<u32>) -> () {
         let mut step = &mut self.song.step_instruments[pattern][self.song.selected_instrument as usize][step_num];
         if step.enabled == toggled && set_note.map_or(true, |n| n == step.note) {
@@ -247,8 +270,7 @@ impl Sequencer {
         self.current_frame += 1;
         if self.current_frame % 6 == 0 {
             let (next_step, next_pattern, next_song_pattern) = self.next_step_and_pattern_and_song_pattern();
-            let old_step = self.current_step;
-            self.current_step = next_step;
+            self.select_step(next_step as u32);
 
             if next_pattern != self.selected_pattern {
                 self.select_pattern(next_pattern as u32);
@@ -259,17 +281,6 @@ impl Sequencer {
             if self.erasing {
                 self.set_step_toggled(next_step, next_pattern, false, None);
             }
-
-            self.main_window.clone().upgrade_in_event_loop(move |handle| {
-                let model = handle.get_sequencer_steps();
-                let mut row_data = model.row_data(old_step);
-                row_data.active = false;
-                model.set_row_data(old_step, row_data);
-
-                let mut row_data = model.row_data(next_step);
-                row_data.active = true;
-                model.set_row_data(next_step, row_data);
-            });
 
             // Each note lasts only one frame, so just release everything pressed on the previous frame.
             for (instrument, typ, note) in &self.previous_frame_note_events {
