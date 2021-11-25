@@ -268,7 +268,7 @@ impl Sequencer {
 
         // FIXME: Reset or remove overflow check
         self.current_frame += 1;
-        if self.current_frame % 6 == 0 {
+        if self.current_frame % 8 == 0 {
             let (next_step, next_pattern, next_song_pattern) = self.next_step_and_pattern_and_song_pattern();
             self.select_step(next_step as u32);
 
@@ -309,7 +309,7 @@ impl Sequencer {
         // Try to clamp the event to the nearest frame.
         // Use 4 instead of 3 just to try to compensate for the key press to visual and audible delay.
         let (step, pattern, _) =
-            if self.current_frame % 6 < 4 {
+            if self.current_frame % 8 < 5 {
                 (self.current_step, self.selected_pattern, None)
             } else {
                 self.next_step_and_pattern_and_song_pattern()

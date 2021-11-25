@@ -7,14 +7,15 @@ use std::path::Path;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
-pub struct DmgSquare1 {
+pub struct DmgSquare {
+    channel: Channel,
     nrx0_set_setting: Option<SetSetting>,
     nrx1_set_setting: Option<SetSetting>,
     nrx2_set_setting: Option<SetSetting>,
     nrx3_set_setting: Option<SetSetting>,
     nrx4_set_setting: Option<SetSetting>,
 }
-pub type SharedDmgSquare1 = Rc<RefCell<DmgSquare1>>;
+pub type SharedDmgSquare = Rc<RefCell<DmgSquare>>;
 
 #[derive(Debug, Clone)]
 pub struct DmgWave {
@@ -40,7 +41,8 @@ pub type SharedDmgNoise = Rc<RefCell<DmgNoise>>;
 pub struct DmgBindings {
     settings_ring: Rc<RefCell<Vec<Vec<SetSetting>>>>,
     settings_ring_index: usize,
-    square1: SharedDmgSquare1,
+    square1: SharedDmgSquare,
+    square2: SharedDmgSquare,
     wave: SharedDmgWave,
     noise: SharedDmgNoise,
 }
@@ -58,6 +60,12 @@ impl DmgBindings {
         dest.extend(square1.nrx2_set_setting.take());
         dest.extend(square1.nrx3_set_setting.take());
         dest.extend(square1.nrx4_set_setting.take());
+        let mut square2 = self.square2.borrow_mut();
+        // dest.extend(square2.nrx0_set_setting.take());
+        dest.extend(square2.nrx1_set_setting.take());
+        dest.extend(square2.nrx2_set_setting.take());
+        dest.extend(square2.nrx3_set_setting.take());
+        dest.extend(square2.nrx4_set_setting.take());
         let mut wave = self.wave.borrow_mut();
         dest.extend(wave.nrx0_set_setting.take());
         dest.extend(wave.nrx1_set_setting.take());
@@ -146,8 +154,12 @@ pub mod dmg_api {
     pub const DIVISOR_112: Divisor = Divisor::Divisor112;
 
     #[rhai_fn(get = "square1", pure)]
-    pub fn get_square1(this_rc: &mut SharedDmgBindings) -> SharedDmgSquare1 {
+    pub fn get_square1(this_rc: &mut SharedDmgBindings) -> SharedDmgSquare {
         this_rc.borrow().square1.clone()
+    }
+    #[rhai_fn(get = "square2", pure)]
+    pub fn get_square2(this_rc: &mut SharedDmgBindings) -> SharedDmgSquare {
+        this_rc.borrow().square2.clone()
     }
     #[rhai_fn(get = "wave", pure)]
     pub fn get_wave(this_rc: &mut SharedDmgBindings) -> SharedDmgWave {
@@ -170,114 +182,123 @@ pub mod dmg_api {
     }
 
     #[rhai_fn(set = "sweep_time", pure, return_raw)]
-    pub fn set_sweep_time(this_rc: &mut SharedDmgSquare1, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_sweep_time(this_rc: &mut SharedDmgSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "sweep_time must be >= 0, got {}", v);
         runtime_check!(v < 8, "sweep_time must be < 8, got {}", v);
+        let channel = this_rc.borrow().channel as u16;
         orit(
             &mut this_rc.borrow_mut().nrx0_set_setting,
-            SetSetting::new(Setting::new(Square1 as u16 + 0, 0x70), v as u8)
+            SetSetting::new(Setting::new(channel + 0, 0x70), v as u8)
             );
         Ok(())
     }
     #[rhai_fn(set = "sweep_dir", pure)]
-    pub fn set_sweep_dir(this_rc: &mut SharedDmgSquare1, v: Direction) {
+    pub fn set_sweep_dir(this_rc: &mut SharedDmgSquare, v: Direction) {
+        let channel = this_rc.borrow().channel as u16;
         orit(
             &mut this_rc.borrow_mut().nrx0_set_setting,
-            SetSetting::new(Setting::new(Square1 as u16 + 0, 0x08), match v { Direction::Inc => 0, Direction::Dec => 1 })
+            SetSetting::new(Setting::new(channel + 0, 0x08), match v { Direction::Inc => 0, Direction::Dec => 1 })
             );
     }
     #[rhai_fn(set = "sweep_shift", pure, return_raw)]
-    pub fn set_sweep_shift(this_rc: &mut SharedDmgSquare1, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_sweep_shift(this_rc: &mut SharedDmgSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "sweep_shift must be >= 0, got {}", v);
         runtime_check!(v < 8, "sweep_shift must be < 8, got {}", v);
+        let channel = this_rc.borrow().channel as u16;
         orit(
             &mut this_rc.borrow_mut().nrx0_set_setting,
-            SetSetting::new(Setting::new(Square1 as u16 + 0, 0x07), v as u8)
+            SetSetting::new(Setting::new(channel + 0, 0x07), v as u8)
             );
         Ok(())
     }
 
     #[rhai_fn(set = "duty", pure)]
-    pub fn set_duty(this_rc: &mut SharedDmgSquare1, v: Duty) {
+    pub fn set_duty(this_rc: &mut SharedDmgSquare, v: Duty) {
+        let channel = this_rc.borrow().channel as u16;
         orit(
             &mut this_rc.borrow_mut().nrx1_set_setting,
-            SetSetting::new(Setting::new(Square1 as u16 + 1, 0xC0), v as u8)
+            SetSetting::new(Setting::new(channel + 1, 0xC0), v as u8)
             );
     }
 
     #[rhai_fn(set = "env_start", pure, return_raw)]
-    pub fn set_square_env_start(this_rc: &mut SharedDmgSquare1, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_env_start(this_rc: &mut SharedDmgSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "env_start must be >= 0, got {}", v);
         runtime_check!(v < 16, "env_start must be < 16, got {}", v);
+        let channel = this_rc.borrow().channel as u16;
         orit(
             &mut this_rc.borrow_mut().nrx2_set_setting,
-            SetSetting::new(Setting::new(Square1 as u16 + 2, 0xf0), v as u8)
+            SetSetting::new(Setting::new(channel + 2, 0xf0), v as u8)
             );
         Ok(())
     }
     #[rhai_fn(set = "env_dir", pure)]
-    pub fn set_square_env_dir(this_rc: &mut SharedDmgSquare1, v: Direction) {
+    pub fn set_square_env_dir(this_rc: &mut SharedDmgSquare, v: Direction) {
+        let channel = this_rc.borrow().channel as u16;
         orit(
             &mut this_rc.borrow_mut().nrx2_set_setting,
-            SetSetting::new(Setting::new(Square1 as u16 + 2, 0x08), v as u8)
+            SetSetting::new(Setting::new(channel + 2, 0x08), v as u8)
             );
     }
     #[rhai_fn(set = "env_period", pure, return_raw)]
-    pub fn set_square_env_period(this_rc: &mut SharedDmgSquare1, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_env_period(this_rc: &mut SharedDmgSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "env_period must be >= 0, got {}", v);
         runtime_check!(v < 8, "env_period must be < 8, got {}", v);
+        let channel = this_rc.borrow().channel as u16;
         orit(
             &mut this_rc.borrow_mut().nrx2_set_setting,
-            SetSetting::new(Setting::new(Square1 as u16 + 2, 0x07), v as u8)
+            SetSetting::new(Setting::new(channel + 2, 0x07), v as u8)
             );
         Ok(())
     }
 
     #[rhai_fn(global, name = "trigger_with_length", return_raw)]
-    pub fn square_trigger_with_length(this_rc: &mut SharedDmgSquare1, freq: f64, length: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn square_trigger_with_length(this_rc: &mut SharedDmgSquare, freq: f64, length: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(freq >= 64.0, "freq must be >= 64, got {}", freq);
         runtime_check!(length >= 1, "length must be >= 1, got {}", length);
         runtime_check!(length <= 64, "length must be <= 64, got {}", length);
         let gb_freq = to_square_gb_freq(freq);
+        let channel = this_rc.borrow().channel as u16;
         orit(
             &mut this_rc.borrow_mut().nrx1_set_setting,
             // Length load
-            SetSetting::new(Setting::new(Square1 as u16 + 1, 0x3f), 64 - length as u8)
+            SetSetting::new(Setting::new(channel + 1, 0x3f), 64 - length as u8)
             );
         orit(
             &mut this_rc.borrow_mut().nrx3_set_setting,
             // Frequency LSB
-            SetSetting::new(Setting::new(Square1 as u16 + 3, 0xff), (gb_freq & 0xff) as u8)
+            SetSetting::new(Setting::new(channel + 3, 0xff), (gb_freq & 0xff) as u8)
             );
         orit(
             &mut this_rc.borrow_mut().nrx4_set_setting,
             // Trigger
-            SetSetting::new(Setting::new(Square1 as u16 + 4, 0x80), 1)
+            SetSetting::new(Setting::new(channel + 4, 0x80), 1)
                 // Length enable
-                | SetSetting::new(Setting::new(Square1 as u16 + 4, 0x40), 1)
+                | SetSetting::new(Setting::new(channel + 4, 0x40), 1)
                 // Frequency MSB
-                | SetSetting::new(Setting::new(Square1 as u16 + 4, 0x07), (gb_freq >> 8) as u8)
+                | SetSetting::new(Setting::new(channel + 4, 0x07), (gb_freq >> 8) as u8)
             );
         Ok(())
     }
 
     #[rhai_fn(global, name = "trigger", return_raw)]
-    pub fn square_trigger(this_rc: &mut SharedDmgSquare1, freq: f64) -> Result<(), Box<EvalAltResult>> {
+    pub fn square_trigger(this_rc: &mut SharedDmgSquare, freq: f64) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(freq >= 64.0, "freq must be >= 64, got {}", freq);
         let gb_freq = to_square_gb_freq(freq);
+        let channel = this_rc.borrow().channel as u16;
         orit(
             &mut this_rc.borrow_mut().nrx3_set_setting,
             // Frequency LSB
-            SetSetting::new(Setting::new(Square1 as u16 + 3, 0xff), (gb_freq & 0xff) as u8)
+            SetSetting::new(Setting::new(channel + 3, 0xff), (gb_freq & 0xff) as u8)
             );
         orit(
             &mut this_rc.borrow_mut().nrx4_set_setting,
             // Trigger
-            SetSetting::new(Setting::new(Square1 as u16 + 4, 0x80), 1)
+            SetSetting::new(Setting::new(channel + 4, 0x80), 1)
                 // Length enable
-                | SetSetting::new(Setting::new(Square1 as u16 + 4, 0x40), 0)
+                | SetSetting::new(Setting::new(channel + 4, 0x40), 0)
                 // Frequency MSB
-                | SetSetting::new(Setting::new(Square1 as u16 + 4, 0x07), (gb_freq >> 8) as u8)
+                | SetSetting::new(Setting::new(channel + 4, 0x07), (gb_freq >> 8) as u8)
             );
         Ok(())
     }
@@ -424,6 +445,24 @@ pub mod dmg_api {
             );
         Ok(())
     }
+    #[rhai_fn(global, name = "trigger_with_length", return_raw)]
+    pub fn noise_trigger_with_length(this_rc: &mut SharedDmgNoise, length: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(length >= 1, "length must be >= 1, got {}", length);
+        runtime_check!(length <= 64, "length must be <= 64, got {}", length);
+        orit(
+            &mut this_rc.borrow_mut().nrx1_set_setting,
+            // Length load
+            SetSetting::new(Setting::new(Noise as u16 + 1, 0x3f), 64 - length as u8)
+            );
+        orit(
+            &mut this_rc.borrow_mut().nrx4_set_setting,
+            // Trigger
+            SetSetting::new(Setting::new(Noise as u16 + 4, 0x80), 1)
+                // Length enable
+                | SetSetting::new(Setting::new(Noise as u16 + 4, 0x40), 1)
+            );
+        Ok(())
+    }
     #[rhai_fn(global, name = "trigger")]
     pub fn noise_trigger(this_rc: &mut SharedDmgNoise) {
         orit(
@@ -468,7 +507,7 @@ impl Setting {
 #[derive(Debug, Clone, Copy)]
 pub enum Channel {
     Square1 = 0xff10,
-    _Square2 = 0xff15,
+    Square2 = 0xff15,
     Wave = 0xff1a,
     Noise = 0xff1f,
 }
@@ -515,11 +554,21 @@ impl SynthScript {
         let mut engine = Engine::new();
 
         engine.register_type::<SharedDmgBindings>()
-              .register_type::<SharedDmgSquare1>();
+              .register_type::<SharedDmgSquare>();
         engine.register_static_module("dmg", exported_module!(dmg_api).into());
 
         let square1 = Rc::new(RefCell::new(
-            DmgSquare1 {
+            DmgSquare {
+                channel: Square1,
+                nrx0_set_setting: None,
+                nrx1_set_setting: None,
+                nrx2_set_setting: None,
+                nrx3_set_setting: None,
+                nrx4_set_setting: None,
+            }));
+        let square2 = Rc::new(RefCell::new(
+            DmgSquare {
+                channel: Square2,
                 nrx0_set_setting: None,
                 nrx1_set_setting: None,
                 nrx2_set_setting: None,
@@ -546,6 +595,7 @@ impl SynthScript {
             settings_ring: settings_ring.clone(),
             settings_ring_index: 0,
             square1: square1,
+            square2: square2,
             wave: wave,
             noise: noise,
             }));
