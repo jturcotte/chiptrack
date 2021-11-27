@@ -617,6 +617,13 @@ impl SynthScript {
     fn default_instruments(&self) -> AST {
         self.script_engine.compile(SynthScript::DEFAULT_INSTRUMENTS).unwrap()
     }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn load(&mut self, _project_instruments_path: &Path) {
+        self.script_ast = self.default_instruments();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load(&mut self, project_instruments_path: &Path) {
         if project_instruments_path.exists() {
             let maybe_ast = self.script_engine.compile_file(project_instruments_path.to_path_buf());

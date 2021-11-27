@@ -148,7 +148,9 @@ pub fn main() {
     let (sound_send, sound_recv) = mpsc::channel();
     let (notify_send, notify_recv) = mpsc::channel();
 
+    #[cfg(not(target_arch = "wasm32"))]
     let mut watcher = notify::watcher(notify_send, Duration::from_millis(500)).unwrap();
+    #[cfg(not(target_arch = "wasm32"))]
     watcher.watch(".", RecursiveMode::NonRecursive).unwrap();
 
     let window_weak = window.as_weak();

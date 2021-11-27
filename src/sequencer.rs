@@ -356,6 +356,12 @@ impl Sequencer {
         });
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn load(_project_song_path: &Path) -> Option<SequencerSong> {
+        None
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn load(project_song_path: &Path) -> Option<SequencerSong> {
         if project_song_path.exists() {
             let parsed =
