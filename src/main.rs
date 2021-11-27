@@ -43,7 +43,7 @@ enum SoundMsg {
     SaveProject,
 }
 
-fn update_waveform(window: &MainWindow, samples: Vec<(f32,f32)>) {
+fn update_waveform(window: &MainWindow, samples: Vec<f32>) {
     let was_non_zero = !window.get_waveform_is_zero();
     #[cfg(not(target_arch = "wasm32"))]
         let res_divider = 2.;
@@ -55,8 +55,11 @@ fn update_waveform(window: &MainWindow, samples: Vec<(f32,f32)>) {
     let mut non_zero = false;
     pb.move_to(0.0, height / 2.0);
     {
-        for (i, (source_l, _source_r)) in samples.iter().enumerate() {
-            if *source_l != 0.0 {
+        for (i, source) in samples.iter().enumerate() {
+            if i % 2 != 0 {
+                continue;
+            }
+            if *source != 0.0 {
                 non_zero = true;
             }
             // Input samples are in the range [-1.0, 1.0].
@@ -65,8 +68,8 @@ fn update_waveform(window: &MainWindow, samples: Vec<(f32,f32)>) {
             // So multiply by 2.0 to amplify the visualization of single
             // channels a bit.
             pb.line_to(
-                i as f32 * width / samples.len() as f32,
-                (source_l * 2.0 + 1.0) * height / 2.0);
+                i as f32 * width / (samples.len() / 2) as f32,
+                (source * 2.0 + 1.0) * height / 2.0);
         }
     }
     // Painting this takes a lot of CPU since we need to paint, clone
@@ -207,7 +210,7 @@ pub fn main() {
                             }
                         }
 
-                        let len = dest.len() / 2;
+                        let len = dest.len();
                         let mut di = 0;
                         while di < len {
                             let synth_buffer = engine.synth.buffer();
@@ -216,18 +219,11 @@ pub fn main() {
                                 engine.synth.reset_buffer_wave_start();
                                 engine.advance_frame();
 
-                                let num_samples = 350;
-                                let wave_start = {
-                                    let start = engine.synth.buffer_wave_start();
-                                    if start > num_samples {
-                                        0
-                                    } else {
-                                        start
-                                    }
-                                };
+                                let num_samples = sample_rate as usize / 64 * 2 / 3;
+                                let wave_start = engine.synth.buffer_wave_start().lock().unwrap().unwrap_or(0);
 
                                 let source = synth_buffer.lock().unwrap();
-                                let end = source.len().min(wave_start+num_samples);
+                                let end = source.len().min(wave_start + num_samples * 2);
                                 let copy = source[wave_start..end].to_vec();
                                 window_weak.clone().upgrade_in_event_loop(move |handle| {
                                     update_waveform(&handle, copy)
@@ -236,11 +232,9 @@ pub fn main() {
 
                             let mut source = synth_buffer.lock().unwrap();
                             let src_len = std::cmp::min(len-di, source.len());
+                            let part = source.drain(..src_len);
+                            dest[di..di+src_len].copy_from_slice(part.as_slice());
 
-                            for (i, (source_l, source_r)) in source.drain(..src_len).enumerate() {
-                                dest[(di + i) * 2] = source_l;
-                                dest[(di + i) * 2 + 1] = source_r;
-                            }
                             di += src_len;
                         }
                     });

@@ -124,7 +124,7 @@ fn instrument_5(freq) {
 
 fn instrument_6(freq) {
     dmg.wave.playing = false;
-    dmg.wave.table = "2266aaeefffffeeaa6668acffeeca633";
+    dmg.wave.table = "0123456789abcdeffedcba9876543210";
     dmg.wave.playing = true;
     dmg.wave.volume = dmg::VOLUME_100;
     dmg.wave.trigger_with_length(freq, 64);

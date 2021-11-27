@@ -1,44 +1,84 @@
 use crate::synth_script::SynthScript;
 use crate::synth_script::SetSetting;
-// use crate::synth::Channel::*;
-use gameboy::apu::Apu;
-use gameboy::memory::Memory;
 use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 
 pub struct Synth {
-    apu: Apu,
+    dmg: rboy::Sound,
     script: SynthScript,
     settings_ring: Rc<RefCell<Vec<Vec<SetSetting>>>>,
     settings_ring_index: usize,
+    buffer: Arc<Mutex<Vec<f32>>>,
+    buffer_wave_start: Arc<Mutex<Option<usize>>>,
+}
+
+struct FakePlayer {
+    sample_rate: u32,
+    buffer: Arc<Mutex<Vec<f32>>>,
+    buffer_wave_start: Arc<Mutex<Option<usize>>>,
+}
+
+impl rboy::AudioPlayer for FakePlayer {
+    fn play(&mut self, left_channel: &[f32], right_channel: &[f32], buffer_wave_start: Option<usize>) {
+        let mut left_iter = left_channel.iter();
+        let mut right_iter = right_channel.iter();
+        let mut vec = self.buffer.lock().unwrap();
+        let mut wave_start = self.buffer_wave_start.lock().unwrap();
+        *wave_start = wave_start.or(buffer_wave_start.map(|s| s * 2 + vec.len()));
+
+        vec.reserve(left_channel.len() * 2);
+        while let Some(left) = left_iter.next() {
+            let right = right_iter.next().unwrap();
+            vec.push(*left);
+            vec.push(*right);
+        }
+    }
+    fn samples_rate(&self) -> u32 {
+        self.sample_rate
+    }
+    fn underflowed(&self) -> bool {
+        // We're always underflowed, we advance frames when we need to fill the audio buffer.
+        true
+    }
 }
 
 impl Synth {
     pub fn new(project_instruments_path: &Path, sample_rate: u32) -> Synth {
-        let mut apu = Apu::power_up(sample_rate);
-        // Already power it on.
-        apu.set( 0xff26, 0x80 );
-        let settings_ring = Rc::new(RefCell::new(vec![vec![]; 512]));
+        let settings_ring = Rc::new(RefCell::new(vec![vec![]; 1048576]));
         let script = SynthScript::new(project_instruments_path, settings_ring.clone());
 
+        let buffer = Arc::new(Mutex::new(Vec::new()));
+        let buffer_wave_start = Arc::new(Mutex::new(None));
+
+        let player = Box::new(FakePlayer{
+            sample_rate: sample_rate,
+            buffer: buffer.clone(),
+            buffer_wave_start: buffer_wave_start.clone(),
+        });
+        let mut dmg = rboy::Sound::new(player);
+        // Already power it on.
+        dmg.wb( 0xff26, 0x80 );
+
         Synth {
-            apu: apu,
+            dmg: dmg,
             script: script,
             settings_ring: settings_ring,
             settings_ring_index: 0,
+            buffer: buffer,
+            buffer_wave_start: buffer_wave_start,
         }
     }
 
-    pub fn buffer(&self) -> Arc<Mutex<Vec<(f32, f32)>>> {
-        self.apu.buffer.clone()
+    pub fn buffer(&self) -> Arc<Mutex<Vec<f32>>> {
+        self.buffer.clone()
     }
-    pub fn buffer_wave_start(&self) -> usize {
-        self.apu.buffer_wave_start
+    pub fn buffer_wave_start(&self) -> Arc<Mutex<Option<usize>>> {
+        self.buffer_wave_start.clone()
     }
     pub fn reset_buffer_wave_start(&mut self) {
-        self.apu.buffer_wave_start = usize::MAX;
+        *self.buffer_wave_start.lock().unwrap() = None;
     }
 
     // The Gameboy APU has 512 frames per second where various registers are read,
@@ -49,19 +89,20 @@ impl Synth {
         let mut settings_ring = self.settings_ring.borrow_mut();
         let i = self.settings_ring_index;
         for set in settings_ring[i].iter() {
-            let prev = self.apu.get(set.setting.addr);
+            let prev = self.dmg.rb(set.setting.addr);
             let new = prev & !set.setting.mask | set.value as u8;
-            self.apu.set(set.setting.addr, new);
+            self.dmg.wb(set.setting.addr, new);    
         }
         settings_ring[i].clear();
         self.settings_ring_index = (self.settings_ring_index + 1) % settings_ring.len();
 
-        self.apu.set( 0xff24, 0xff );
-        self.apu.set( 0xff25, 0xff );
+        // Just enable all channels for now
+        self.dmg.wb(0xff24, 0xff);    
+        self.dmg.wb(0xff25, 0xff);    
 
         // Generate one frame of mixed output.
-        // For 44100hz audio, this will put 44100/64 audio samples in self.apu.buffer.
-        self.apu.next(gameboy::cpu::CLOCK_FREQUENCY / 64);
+        // For 44100hz audio, this will put 44100/64 audio samples in self.buffer.
+        self.dmg.do_cycle(rboy::CLOCKS_PER_SECOND / 64)
     }
 
     pub fn trigger_instrument(&mut self, instrument: u32, freq: f64) -> () {
@@ -69,7 +110,7 @@ impl Synth {
     }
 
     pub fn ready_buffer_samples(&self) -> usize {
-        self.apu.buffer.lock().unwrap().len()
+        self.buffer.lock().unwrap().len()
     }
 
     pub fn load(&mut self, project_instruments_path: &Path) {
