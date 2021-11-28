@@ -8,7 +8,7 @@ use sixtyfps::Weak;
 use std::fs::File;
 use std::path::Path;
 
-pub const NUM_INSTRUMENTS: usize = 9;
+pub const NUM_INSTRUMENTS: usize = 16;
 pub const NUM_STEPS: usize = 16;
 pub const NUM_PATTERNS: usize = 8;
 
@@ -268,7 +268,7 @@ impl Sequencer {
 
         // FIXME: Reset or remove overflow check
         self.current_frame += 1;
-        if self.current_frame % 8 == 0 {
+        if self.current_frame % 6 == 0 {
             let (next_step, next_pattern, next_song_pattern) = self.next_step_and_pattern_and_song_pattern();
             self.select_step(next_step as u32);
 

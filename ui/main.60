@@ -410,13 +410,13 @@ MainWindow := Window {
                                 highlighted: root.selected_instrument == instrument_number;
                                 clicked => { root.selected_instrument_changed(instrument_number); }
                             }
-                        }
-                        Row {
                             InstrumentButton {
                                 instrument_number: 3;
                                 highlighted: root.selected_instrument == instrument_number;
                                 clicked => { root.selected_instrument_changed(instrument_number); }
                             }
+                        }
+                        Row {
                             InstrumentButton {
                                 instrument_number: 4;
                                 highlighted: root.selected_instrument == instrument_number;
@@ -427,8 +427,6 @@ MainWindow := Window {
                                 highlighted: root.selected_instrument == instrument_number;
                                 clicked => { root.selected_instrument_changed(instrument_number); }
                             }
-                        }
-                        Row {
                             InstrumentButton {
                                 instrument_number: 6;
                                 highlighted: root.selected_instrument == instrument_number;
@@ -439,8 +437,47 @@ MainWindow := Window {
                                 highlighted: root.selected_instrument == instrument_number;
                                 clicked => { root.selected_instrument_changed(instrument_number); }
                             }
+                        }
+                        Row {
                             InstrumentButton {
                                 instrument_number: 8;
+                                highlighted: root.selected_instrument == instrument_number;
+                                clicked => { root.selected_instrument_changed(instrument_number); }
+                            }
+                            InstrumentButton {
+                                instrument_number: 9;
+                                highlighted: root.selected_instrument == instrument_number;
+                                clicked => { root.selected_instrument_changed(instrument_number); }
+                            }
+                            InstrumentButton {
+                                instrument_number: 10;
+                                highlighted: root.selected_instrument == instrument_number;
+                                clicked => { root.selected_instrument_changed(instrument_number); }
+                            }
+                            InstrumentButton {
+                                instrument_number: 11;
+                                highlighted: root.selected_instrument == instrument_number;
+                                clicked => { root.selected_instrument_changed(instrument_number); }
+                            }
+                        }
+                        Row {
+                            InstrumentButton {
+                                instrument_number: 12;
+                                highlighted: root.selected_instrument == instrument_number;
+                                clicked => { root.selected_instrument_changed(instrument_number); }
+                            }
+                            InstrumentButton {
+                                instrument_number: 13;
+                                highlighted: root.selected_instrument == instrument_number;
+                                clicked => { root.selected_instrument_changed(instrument_number); }
+                            }
+                            InstrumentButton {
+                                instrument_number: 14;
+                                highlighted: root.selected_instrument == instrument_number;
+                                clicked => { root.selected_instrument_changed(instrument_number); }
+                            }
+                            InstrumentButton {
+                                instrument_number: 15;
                                 highlighted: root.selected_instrument == instrument_number;
                                 clicked => { root.selected_instrument_changed(instrument_number); }
                             }
