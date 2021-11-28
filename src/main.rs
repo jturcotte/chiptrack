@@ -19,6 +19,7 @@ use once_cell::unsync::Lazy;
 use sixtyfps::{Model, SharedPixelBuffer, Timer, TimerMode};
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::env;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -101,7 +102,7 @@ pub fn main() {
     #[cfg(all(debug_assertions, target_arch = "wasm32"))]
     console_error_panic_hook::set_once();
 
-    let project_name = "default".to_owned();
+    let project_name = env::args().nth(1).unwrap_or("default".to_owned());
 
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.
