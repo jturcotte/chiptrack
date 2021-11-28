@@ -207,6 +207,24 @@ impl Sequencer {
         }
     }
 
+    pub fn manually_advance_step(&mut self, forwards: bool) -> () {
+        if !self.playing {
+            self.advance_step(forwards);
+        }
+    }
+
+    fn advance_step(&mut self, forwards: bool) -> () {
+        let (next_step, next_pattern, next_song_pattern) = self.next_step_and_pattern_and_song_pattern(forwards);
+        self.select_step(next_step as u32);
+
+        if next_pattern != self.selected_pattern {
+            self.select_pattern(next_pattern as u32);
+        }
+        if next_song_pattern != self.current_song_pattern {
+            self.select_song_pattern(next_song_pattern.map(|sp| sp as u32));
+        }
+    }
+
     fn set_step_toggled(&mut self, step_num: usize, pattern: usize, toggled: bool, set_note: Option<u32>) -> () {
         let mut step = &mut self.song.step_instruments[pattern][self.song.selected_instrument as usize][step_num];
         if step.enabled == toggled && set_note.map_or(true, |n| n == step.note) {
@@ -269,17 +287,9 @@ impl Sequencer {
         // FIXME: Reset or remove overflow check
         self.current_frame += 1;
         if self.current_frame % 6 == 0 {
-            let (next_step, next_pattern, next_song_pattern) = self.next_step_and_pattern_and_song_pattern();
-            self.select_step(next_step as u32);
-
-            if next_pattern != self.selected_pattern {
-                self.select_pattern(next_pattern as u32);
-            }
-            if next_song_pattern != self.current_song_pattern {
-                self.select_song_pattern(next_song_pattern.map(|sp| sp as u32));
-            }
+            self.advance_step(true);
             if self.erasing {
-                self.set_step_toggled(next_step, next_pattern, false, None);
+                self.set_step_toggled(self.current_step, self.selected_pattern, false, None);
             }
 
             // Each note lasts only one frame, so just release everything pressed on the previous frame.
@@ -312,7 +322,7 @@ impl Sequencer {
             if self.current_frame % 8 < 5 {
                 (self.current_step, self.selected_pattern, None)
             } else {
-                self.next_step_and_pattern_and_song_pattern()
+                self.next_step_and_pattern_and_song_pattern(true)
             };
 
         self.set_step_toggled(step, pattern, true, Some(note));
@@ -390,16 +400,21 @@ impl Sequencer {
         serde_json::to_writer_pretty(&f, &self.song).unwrap()
     }
 
-    fn next_step_and_pattern_and_song_pattern(&self) -> (usize, usize, Option<usize>) {
-        if (self.current_step + 1) % NUM_STEPS == 0 {
+    fn next_step_and_pattern_and_song_pattern(&self, forwards: bool) -> (usize, usize, Option<usize>) {
+        let delta = if forwards { 1_isize } else { -1 };
+        let next_step = ((self.current_step as isize + NUM_STEPS as isize + delta) % NUM_STEPS as isize) as usize;
+        let wraps = forwards && next_step == 0 || !forwards && self.current_step == 0;
+        if wraps {
             let (next_pattern, next_song_pattern) = if !self.song.song_patterns.is_empty() {
-                let sp = self.current_song_pattern.map(|sp| (sp + 1) % self.song.song_patterns.len()).unwrap_or(0);
+                let sp = self.current_song_pattern.map(|sp|
+                        ((sp as isize + self.song.song_patterns.len() as isize + delta) % self.song.song_patterns.len() as isize) as usize
+                    ).unwrap_or(0);
                 (self.song.song_patterns[sp], Some(sp))
             } else {
                 (self.selected_pattern, None)
             };
-            return (0, next_pattern, next_song_pattern);
+            return (next_step, next_pattern, next_song_pattern);
         }
-        ((self.current_step + 1) % NUM_STEPS, self.selected_pattern, self.current_song_pattern)
+        (next_step, self.selected_pattern, self.current_song_pattern)
     }
 }

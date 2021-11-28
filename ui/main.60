@@ -77,7 +77,7 @@ SequencerStep := Rectangle {
     property<string> name;
     property<bool> beat;
     background: empty ? white : #c0c0c0;
-    border_width: beat ? 2px : 1px;
+    border_width: beat || highlighted ? 2px : 1px;
     border_color: highlighted ? black : #a0a0a0;
     border_radius: width/8;
     Text {
@@ -198,6 +198,7 @@ MainWindow := Window {
     callback selected_instrument_changed(int);
     callback pattern_clicked(int);
     callback step_clicked(int);
+    callback manually_advance_step(bool);
     callback play_clicked(bool);
     callback record_clicked(bool);
     callback append_song_pattern(int);
@@ -252,6 +253,10 @@ MainWindow := Window {
                 else if (event.text == "7") { root.selected_instrument_changed(6); }
                 else if (event.text == "8") { root.selected_instrument_changed(7); }
                 else if (event.text == "9") { root.selected_instrument_changed(8); }
+                // Left
+                else if (event.text == "\u{e}") { root.manually_advance_step(false); }
+                // Left
+                else if (event.text == "\u{f}") { root.manually_advance_step(true); }
                 // Home
                 else if (event.text == "\u{2}") { root.octave_increased(-1); }
                 // End
