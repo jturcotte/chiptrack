@@ -109,7 +109,7 @@ pub fn main() {
     // Rewrite the models and use that version.
     let sequencer_song_model = Rc::new(sixtyfps::VecModel::default());
     let sequencer_pattern_model = Rc::new(sixtyfps::VecModel::default());
-    for i in 0..8 {
+    for i in 0..16 {
         sequencer_pattern_model.push(PatternData{empty: true, active: i == 0});
     }
     let sequencer_step_model = Rc::new(sixtyfps::VecModel::default());

@@ -10,7 +10,7 @@ use std::path::Path;
 
 pub const NUM_INSTRUMENTS: usize = 16;
 pub const NUM_STEPS: usize = 16;
-pub const NUM_PATTERNS: usize = 8;
+pub const NUM_PATTERNS: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NoteEvent {
@@ -28,7 +28,7 @@ struct InstrumentStep {
 pub struct SequencerSong {
     pub selected_instrument: u32,
     song_patterns: Vec<usize>,
-    step_instruments: [[[InstrumentStep; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
+    step_instruments: Vec<[[InstrumentStep; NUM_STEPS]; NUM_INSTRUMENTS]>,
 }
 
 pub struct Sequencer {
@@ -50,7 +50,7 @@ impl Sequencer {
             selected_instrument: 0,
             song_patterns: Vec::new(),
             // Initialize all notes to C5
-            step_instruments: [[[InstrumentStep{note: 60, enabled: false}; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
+            step_instruments: vec![[[InstrumentStep{note: 60, enabled: false}; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
         });
         let current_song_pattern = if song.song_patterns.is_empty() { None } else { Some(0) };
         let mut val = Sequencer {
@@ -374,13 +374,15 @@ impl Sequencer {
     #[cfg(not(target_arch = "wasm32"))]
     fn load(project_song_path: &Path) -> Option<SequencerSong> {
         if project_song_path.exists() {
-            let parsed =
+            let parsed: Result<SequencerSong, std::io::Error> =
                 File::open(project_song_path)
                 .and_then(|f| serde_json::from_reader(f).map_err(|e| e.into()));
 
             match parsed {
-                Ok(song) => {
+                Ok(mut song) => {
                     log!("Loaded project song from file {:?}", project_song_path);
+                    // Expand the song in memory again.
+                    song.step_instruments.resize_with(NUM_PATTERNS, || [[InstrumentStep{note: 60, enabled: false}; NUM_STEPS]; NUM_INSTRUMENTS]);
                     Some(song)
                 },
                 Err(e) => {
