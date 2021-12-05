@@ -148,12 +148,20 @@ impl Sequencer {
         });
     }
     pub fn select_instrument(&mut self, instrument: u32) -> () {
+        let old_instrument = self.song.selected_instrument as usize;
         self.song.selected_instrument = instrument;
 
         self.update_steps();
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            handle.set_selected_instrument(instrument as i32);
+            let model = handle.get_instruments();
+            let mut row_data = model.row_data(old_instrument);
+            row_data.selected = false;
+            model.set_row_data(old_instrument, row_data);
+
+            let mut row_data = model.row_data(instrument as usize);
+            row_data.selected = true;
+            model.set_row_data(instrument as usize, row_data);
         });
     }
 

@@ -13,6 +13,10 @@ struct StepData := {
     active: bool,
     note_name: string,
 }
+struct InstrumentData := {
+    selected: bool,
+    active: bool,
+}
 struct NoteData := {
     note_number: int,
     scale_pos: int,
@@ -133,8 +137,9 @@ InstrumentButton := Rectangle {
     callback clicked();
     property<int> instrument_number: 0;
     property<bool> highlighted;
+    property<bool> active;
     width: height;
-    background: white;
+    background: active ? #e0e0e0 : white;
     border_color: highlighted ? black : #a0a0a0;
     border_width: 1px;
     border_radius: width/16;
@@ -175,6 +180,12 @@ MainWindow := Window {
         {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true},
         {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true},
         {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true}];
+    property<[InstrumentData]> instruments: [
+        {active: false}, {active: false}, {active: false}, {active: false},
+        {active: false}, {active: false}, {active: false}, {active: false},
+        {active: false}, {active: false}, {active: false}, {active: false},
+        {active: false}, {active: false}, {active: false}, {active: false},
+        ];
     property<int> first_note: 60;
     property<[NoteData]> notes: [
         {note_number: first_note, scale_pos: 0, is_black: false, active: false},
@@ -191,14 +202,14 @@ MainWindow := Window {
         {note_number: first_note + 8, scale_pos: 4, is_black: true, active: false},
         {note_number: first_note + 10, scale_pos: 5, is_black: true, active: false},
     ];
-    property<int> selected_instrument: 0;
     property<bool> playing: false;
     property in_song_mode <=> song_mode_button.toggled;
     callback get_midi_note_name(int) -> string;
+    callback mod(float, float) -> float;
 
     callback note_pressed(int);
     callback octave_increased(int);
-    callback selected_instrument_changed(int);
+    callback select_instrument(int);
     callback pattern_clicked(int);
     callback step_clicked(int);
     callback manually_advance_step(bool);
@@ -248,15 +259,16 @@ MainWindow := Window {
                 else if (event.text == "g") { note_pressed(first_note + 6); }
                 else if (event.text == "j") { note_pressed(first_note + 8); }
                 else if (event.text == "l") { note_pressed(first_note + 10); }
-                else if (event.text == "1") { root.selected_instrument_changed(0); }
-                else if (event.text == "2") { root.selected_instrument_changed(1); }
-                else if (event.text == "3") { root.selected_instrument_changed(2); }
-                else if (event.text == "4") { root.selected_instrument_changed(3); }
-                else if (event.text == "5") { root.selected_instrument_changed(4); }
-                else if (event.text == "6") { root.selected_instrument_changed(5); }
-                else if (event.text == "7") { root.selected_instrument_changed(6); }
-                else if (event.text == "8") { root.selected_instrument_changed(7); }
-                else if (event.text == "9") { root.selected_instrument_changed(8); }
+                else if (event.text == "1") { root.select_instrument(0); }
+                else if (event.text == "2") { root.select_instrument(1); }
+                else if (event.text == "3") { root.select_instrument(2); }
+                else if (event.text == "4") { root.select_instrument(3); }
+                else if (event.text == "5") { root.select_instrument(4); }
+                else if (event.text == "6") { root.select_instrument(5); }
+                else if (event.text == "7") { root.select_instrument(6); }
+                else if (event.text == "8") { root.select_instrument(7); }
+                else if (event.text == "9") { root.select_instrument(8); }
+                else if (event.text == "0") { root.select_instrument(9); }
                 // Left
                 else if (event.text == "\u{e}") { root.manually_advance_step(false); }
                 // Left
@@ -400,97 +412,28 @@ MainWindow := Window {
                             border_width: 1px;
                             border_radius: height/16;
                         }
+                        // This wouldn't be necessary if instruments_grid defined its
+                        // height as a percentage, but I couldn't find a way to make one depend
+                        // on grid_size.
+                        vertical-stretch: 1 - instruments_grid.vertical_stretch;
+
                     }
-                    GridLayout {
-                        spacing: 5px;
-                        Row {
+                    instruments_grid := Rectangle {
+                        property<length> spacing: 5px;
+                        property<int> grid_size: 4;
+                        property<length> item_size: (width - (spacing * (grid_size - 1))) / grid_size;
+                        vertical-stretch: (grid_size / (grid_size + 1));
+                        width: height;
+                        for instrument[idx] in instruments:
                             InstrumentButton {
-                                instrument_number: 0;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
+                                instrument_number: idx;
+                                highlighted: instrument.selected;
+                                active: instrument.active;
+                                clicked => { root.select_instrument(instrument_number); }
+                                x: mod(idx, 4) * (width + parent.spacing);
+                                y: floor(idx / 4) * (height + parent.spacing);
+                                height: parent.item_size;
                             }
-                            InstrumentButton {
-                                instrument_number: 1;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 2;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 3;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                        }
-                        Row {
-                            InstrumentButton {
-                                instrument_number: 4;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 5;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 6;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 7;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                        }
-                        Row {
-                            InstrumentButton {
-                                instrument_number: 8;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 9;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 10;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 11;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                        }
-                        Row {
-                            InstrumentButton {
-                                instrument_number: 12;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 13;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 14;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                            InstrumentButton {
-                                instrument_number: 15;
-                                highlighted: root.selected_instrument == instrument_number;
-                                clicked => { root.selected_instrument_changed(instrument_number); }
-                            }
-                        }
                     }
                 }
             }

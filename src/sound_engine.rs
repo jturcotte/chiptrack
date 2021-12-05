@@ -29,18 +29,24 @@ impl SoundEngine {
             if typ == NoteEvent::Press {
                 self.synth.trigger_instrument(instrument, Self::note_to_freq(note));
             }
-            if instrument == self.sequencer.song.selected_instrument {
-                self.main_window.clone().upgrade_in_event_loop(move |handle| {
-                    let model = handle.get_notes();
-                    for row in 0..model.row_count() {
-                        let mut row_data = model.row_data(row);
+            let selected_instrument = self.sequencer.song.selected_instrument;
+            self.main_window.clone().upgrade_in_event_loop(move |handle| {
+                let pressed = typ == NoteEvent::Press;
+                if instrument == selected_instrument {
+                    let notes_model = handle.get_notes();
+                    for row in 0..notes_model.row_count() {
+                        let mut row_data = notes_model.row_data(row);
                         if row_data.note_number as u32 == note {
-                            row_data.active = typ == NoteEvent::Press;
-                            model.set_row_data(row, row_data);
+                            row_data.active = pressed;
+                            notes_model.set_row_data(row, row_data);
                         }
                     }
-                });
-            }
+                }
+                let instruments_model = handle.get_instruments();
+                let mut row_data = instruments_model.row_data(instrument as usize);
+                row_data.active = pressed;
+                instruments_model.set_row_data(instrument as usize, row_data);
+            });
         }
         self.synth.advance_frame();
     }

@@ -264,9 +264,13 @@ pub fn main() {
         utils::midi_note_name(note as u32)
     });
 
+    window.on_mod(|x, y| {
+        x % y
+    });
+
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
-    window.on_selected_instrument_changed(move |instrument| {
+    window.on_select_instrument(move |instrument| {
         Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::SelectInstrument(instrument as u32)).unwrap();
     });
@@ -293,12 +297,22 @@ pub fn main() {
             TimerMode::SingleShot,
             std::time::Duration::from_millis(15 * 6),
             Box::new(move || {
-                let model = window_weak.upgrade().unwrap().get_notes();
-                for row in 0..model.row_count() {
-                    let mut row_data = model.row_data(row);
+                let handle = window_weak.upgrade().unwrap();
+                let notes_model = handle.get_notes();
+                for row in 0..notes_model.row_count() {
+                    let mut row_data = notes_model.row_data(row);
                     if row_data.active {
                         row_data.active = false;
-                        model.set_row_data(row, row_data);
+                        notes_model.set_row_data(row, row_data);
+                    }
+                }
+
+                let instruments_model = handle.get_instruments();
+                for row in 0..instruments_model.row_count() {
+                    let mut row_data = instruments_model.row_data(row);
+                    if row_data.active {
+                        row_data.active = false;
+                        instruments_model.set_row_data(row, row_data);
                     }
                 }
             })
