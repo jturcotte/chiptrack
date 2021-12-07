@@ -170,7 +170,14 @@ pub fn main() {
         let err_fn = |err| elog!("an error occurred on the output audio stream: {}", err);
         let sample_format = config.sample_format();
         let mut config: cpal::StreamConfig = config.into();
-        let audio_buffer_samples = 512;
+
+        // Everything happens on the same thread in wasm32, and is a bit slower,
+        // so increase the buffer size there.
+        #[cfg(not(target_arch = "wasm32"))]
+            let audio_buffer_samples = 512;
+        #[cfg(target_arch = "wasm32")]
+            let audio_buffer_samples = 2048;
+
         config.buffer_size = cpal::BufferSize::Fixed(audio_buffer_samples);
 
         let stream = match sample_format {
