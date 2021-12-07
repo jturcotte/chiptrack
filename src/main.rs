@@ -21,6 +21,8 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::env;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 use tiny_skia::*;
@@ -45,12 +47,16 @@ enum SoundMsg {
     SaveProject,
 }
 
-fn update_waveform(window: &MainWindow, samples: Vec<f32>) {
+fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicBool>) {
     let was_non_zero = !window.get_waveform_is_zero();
     #[cfg(not(target_arch = "wasm32"))]
         let res_divider = 2.;
     #[cfg(target_arch = "wasm32")]
         let res_divider = 4.;
+
+    // Already let the audio thread know that it can send us a new waveform.
+    consumed.store(true, Ordering::Relaxed);
+
     let width = window.get_waveform_width() / res_divider;
     let height = window.get_waveform_height() / res_divider;
     let mut pb = PathBuilder::new();
@@ -180,6 +186,8 @@ pub fn main() {
 
         config.buffer_size = cpal::BufferSize::Fixed(audio_buffer_samples);
 
+        let last_waveform_consumed  = Arc::new(AtomicBool::new(true));
+
         let stream = match sample_format {
             SampleFormat::F32 =>
             device.build_output_stream(&config,
@@ -229,15 +237,19 @@ pub fn main() {
                                 engine.synth.reset_buffer_wave_start();
                                 engine.advance_frame();
 
-                                let num_samples = sample_rate as usize / 64 * 2 / 3;
-                                let wave_start = engine.synth.buffer_wave_start().lock().unwrap().unwrap_or(0);
+                                if last_waveform_consumed.load(Ordering::Relaxed) {
+                                    let num_samples = sample_rate as usize / 64 * 2 / 3;
+                                    let wave_start = engine.synth.buffer_wave_start().lock().unwrap().unwrap_or(0);
 
-                                let source = synth_buffer.lock().unwrap();
-                                let end = source.len().min(wave_start + num_samples * 2);
-                                let copy = source[wave_start..end].to_vec();
-                                window_weak.clone().upgrade_in_event_loop(move |handle| {
-                                    update_waveform(&handle, copy)
-                                });
+                                    let source = synth_buffer.lock().unwrap();
+                                    let end = source.len().min(wave_start + num_samples * 2);
+                                    let copy = source[wave_start..end].to_vec();
+                                    last_waveform_consumed.store(false, Ordering::Relaxed);
+                                    let consumed_clone = last_waveform_consumed.clone();
+                                    window_weak.clone().upgrade_in_event_loop(move |handle| {
+                                        update_waveform(&handle, copy, consumed_clone)
+                                    });
+                                }
                             }
 
                             let mut source = synth_buffer.lock().unwrap();
