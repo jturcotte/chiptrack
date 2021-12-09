@@ -49,10 +49,7 @@ enum SoundMsg {
 
 fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicBool>) {
     let was_non_zero = !window.get_waveform_is_zero();
-    #[cfg(not(target_arch = "wasm32"))]
-        let res_divider = 2.;
-    #[cfg(target_arch = "wasm32")]
-        let res_divider = 4.;
+    let res_divider = 2.;
 
     // Already let the audio thread know that it can send us a new waveform.
     consumed.store(true, Ordering::Relaxed);
@@ -88,11 +85,15 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
         if let Some(path) = pb.finish() {
 
             let mut paint = Paint::default();
+            paint.blend_mode = BlendMode::Source;
             // #a0a0a0
             paint.set_color_rgba8(160, 160, 160, 255);
 
+            let mut stroke = Stroke::default();
+            // Use hairline stroking, faster.
+            stroke.width = 0.0;
             let mut pixmap = Pixmap::new(width as u32, height as u32).unwrap();
-            pixmap.stroke_path(&path, &paint, &Stroke::default(), Transform::identity(), None);
+            pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
 
             let pixel_buffer = SharedPixelBuffer::clone_from_slice(pixmap.data(), pixmap.width() as usize, pixmap.height() as usize);
             let image = sixtyfps::Image::from_rgba8_premultiplied(pixel_buffer);
