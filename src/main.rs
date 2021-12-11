@@ -83,22 +83,22 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
     // So at least avoig eating CPU while no sound is being output.
     if non_zero || was_non_zero {
         if let Some(path) = pb.finish() {
+            if let Some(mut pixmap) = Pixmap::new(width as u32, height as u32) {
+                let mut paint = Paint::default();
+                paint.blend_mode = BlendMode::Source;
+                // #a0a0a0
+                paint.set_color_rgba8(160, 160, 160, 255);
 
-            let mut paint = Paint::default();
-            paint.blend_mode = BlendMode::Source;
-            // #a0a0a0
-            paint.set_color_rgba8(160, 160, 160, 255);
+                let mut stroke = Stroke::default();
+                // Use hairline stroking, faster.
+                stroke.width = 0.0;
+                pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
 
-            let mut stroke = Stroke::default();
-            // Use hairline stroking, faster.
-            stroke.width = 0.0;
-            let mut pixmap = Pixmap::new(width as u32, height as u32).unwrap();
-            pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
-
-            let pixel_buffer = SharedPixelBuffer::clone_from_slice(pixmap.data(), pixmap.width() as usize, pixmap.height() as usize);
-            let image = sixtyfps::Image::from_rgba8_premultiplied(pixel_buffer);
-            window.set_waveform_image(image);
-            window.set_waveform_is_zero(!non_zero);
+                let pixel_buffer = SharedPixelBuffer::clone_from_slice(pixmap.data(), pixmap.width() as usize, pixmap.height() as usize);
+                let image = sixtyfps::Image::from_rgba8_premultiplied(pixel_buffer);
+                window.set_waveform_image(image);
+                window.set_waveform_is_zero(!non_zero);
+            }
         }
     }
 }
