@@ -178,10 +178,13 @@ pub fn main() {
         let sample_format = config.sample_format();
         let mut config: cpal::StreamConfig = config.into();
 
-        // Everything happens on the same thread in wasm32, and is a bit slower,
-        // so increase the buffer size there.
+        // The sequencer won't produce anything faster than every 1/64th second,
+        // and live notes should probably eventually be quantized onto that,
+        // so a buffer roughly the size of a frame should work fine.
         #[cfg(not(target_arch = "wasm32"))]
             let audio_buffer_samples = 512;
+        // Everything happens on the same thread in wasm32, and is a bit slower,
+        // so increase the buffer size there.
         #[cfg(target_arch = "wasm32")]
             let audio_buffer_samples = 2048;
 
@@ -198,7 +201,6 @@ pub fn main() {
                         let engine = maybe_engine.get_or_insert_with(|| SoundEngine::new(sample_rate, &project_name, window_weak.clone()));
 
                         while let Ok(msg) = notify_recv.try_recv() {
-                            println!("WATCH {:?}", msg);
                             let instruments_path = SoundEngine::project_instruments_path(&project_name);
                             let instruments = instruments_path.file_name();
                             let reload = match msg {
@@ -209,6 +211,7 @@ pub fn main() {
                                 _ => false,
                             };
                             if reload {
+                                #[cfg(not(target_arch = "wasm32"))]
                                 engine.synth.load(instruments_path.as_path());
                             }
                         }

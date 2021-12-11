@@ -1,6 +1,7 @@
 use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
 use crate::synth::Synth;
+use crate::utils;
 use crate::MainWindow;
 use sixtyfps::Model;
 use sixtyfps::Weak;
@@ -14,11 +15,29 @@ pub struct SoundEngine {
 
 impl SoundEngine {
     pub fn new(sample_rate: u32, project_name: &str, main_window: Weak<MainWindow>) -> SoundEngine {
-        let song_path = SoundEngine::project_song_path(project_name);
-        let instruments_path = SoundEngine::project_instruments_path(project_name);
+        let mut sequencer = Sequencer::new(main_window.clone());
+        let mut synth = Synth::new(sample_rate);
+
+
+        #[cfg(not(target_arch = "wasm32"))] {
+            let song_path = SoundEngine::project_song_path(project_name);
+            let instruments_path = SoundEngine::project_instruments_path(project_name);
+            sequencer.load(song_path.as_path());
+            synth.load(instruments_path.as_path());
+        }
+
+        #[cfg(target_arch = "wasm32")] {
+            let window = web_sys::window().unwrap();
+            let query_string = window.location().search().unwrap();
+            let search_params = web_sys::UrlSearchParams::new_with_str(&query_string).unwrap();
+
+            sequencer.load(search_params.get("s"));
+            synth.load(search_params.get("i"));
+        }
+
         SoundEngine {
-                sequencer: Sequencer::new(song_path.as_path(), main_window.clone()),
-                synth: Synth::new(instruments_path.as_path(), sample_rate),
+                sequencer: sequencer,
+                synth: synth,
                 main_window: main_window,
             }
     }
@@ -73,6 +92,11 @@ impl SoundEngine {
     pub fn save_project(&self, project_name: &str) {
         let path = SoundEngine::project_song_path(project_name);
         self.sequencer.save(path.as_path());
+
+        // Until a better export function is available, just print this on the console when saving.
+        let encoded_song = utils::encode_file(SoundEngine::project_song_path(project_name));
+        let encoded_instruments = utils::encode_file(SoundEngine::project_instruments_path(project_name));
+        println!("Online player URL: http://localhost:8080?p={}&s={}&i={}", project_name, encoded_song, encoded_instruments);
     }
 
     pub fn project_song_path(project_name: &str) -> PathBuf {

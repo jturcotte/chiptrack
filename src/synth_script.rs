@@ -1,9 +1,8 @@
 use crate::synth_script::Channel::*;
 use rhai::{AST, Dynamic, Engine, Scope};
 use rhai::plugin::*;
-use std::ops::BitOr;
 use std::cell::RefCell;
-use std::path::Path;
+use std::ops::BitOr;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -550,7 +549,7 @@ pub struct SynthScript {
 impl SynthScript {
     const DEFAULT_INSTRUMENTS: &'static str = include_str!("../res/instruments.rhai");
 
-    pub fn new(project_instruments_path: &Path, settings_ring: Rc<RefCell<Vec<Vec<SetSetting>>>>) -> SynthScript {
+    pub fn new(settings_ring: Rc<RefCell<Vec<Vec<SetSetting>>>>) -> SynthScript {
         let mut engine = Engine::new();
 
         engine.register_type::<SharedDmgBindings>()
@@ -603,15 +602,12 @@ impl SynthScript {
         let mut scope = Scope::new();
         scope.push("dmg", dmg.clone());
 
-        let mut val = SynthScript {
+        SynthScript {
             script_engine: engine,
             script_ast: Default::default(),
             script_context: dmg,
             script_scope: scope,
-        };
-
-        val.load(project_instruments_path);
-        val
+        }
     }
 
     fn default_instruments(&self) -> AST {
@@ -619,12 +615,35 @@ impl SynthScript {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub fn load(&mut self, _project_instruments_path: &Path) {
-        self.script_ast = self.default_instruments();
+    fn deserialize_instruments(&self, base64: String) -> Result<AST, Box<dyn std::error::Error>> {
+        let decoded = crate::utils::decode_string(&base64)?;
+        let ast = self.script_engine.compile(&decoded)?;
+        Ok(ast)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn load(&mut self, maybe_base64: Option<String>) {
+        if let Some(base64) = maybe_base64 {
+            let maybe_ast = self.deserialize_instruments(base64);
+
+            match maybe_ast {
+                Ok(ast) => {
+                    log!("Loaded the project instruments from the URL.");
+                    self.script_ast = ast;
+                },
+                Err(e) => {
+                    elog!("Couldn't load the project instruments from the URL, using default instruments.\n\tError: {:?}", e);
+                    self.script_ast = self.default_instruments();
+                },
+            }            
+        } else {
+            log!("No instruments provided in the URL, using default instruments.");
+            self.script_ast = self.default_instruments();
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load(&mut self, project_instruments_path: &Path) {
+    pub fn load(&mut self, project_instruments_path: &std::path::Path) {
         if project_instruments_path.exists() {
             let maybe_ast = self.script_engine.compile_file(project_instruments_path.to_path_buf());
 

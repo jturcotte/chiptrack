@@ -2,7 +2,6 @@ use crate::synth_script::SynthScript;
 use crate::synth_script::SetSetting;
 use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
-use std::path::Path;
 use std::rc::Rc;
 
 pub struct Synth {
@@ -45,9 +44,9 @@ impl rboy::AudioPlayer for FakePlayer {
 }
 
 impl Synth {
-    pub fn new(project_instruments_path: &Path, sample_rate: u32) -> Synth {
+    pub fn new(sample_rate: u32) -> Synth {
         let settings_ring = Rc::new(RefCell::new(vec![vec![]; 1048576]));
-        let script = SynthScript::new(project_instruments_path, settings_ring.clone());
+        let script = SynthScript::new(settings_ring.clone());
 
         let buffer = Arc::new(Mutex::new(Vec::new()));
         let buffer_wave_start = Arc::new(Mutex::new(None));
@@ -113,7 +112,12 @@ impl Synth {
         self.buffer.lock().unwrap().len()
     }
 
-    pub fn load(&mut self, project_instruments_path: &Path) {
+    #[cfg(target_arch = "wasm32")]
+    pub fn load(&mut self, maybe_base64: Option<String>) {
+        self.script.load(maybe_base64);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load(&mut self, project_instruments_path: &std::path::Path) {
         self.script.load(project_instruments_path);
     }
 

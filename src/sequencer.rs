@@ -31,6 +31,17 @@ pub struct SequencerSong {
     step_instruments: Vec<[[InstrumentStep; NUM_STEPS]; NUM_INSTRUMENTS]>,
 }
 
+impl Default for SequencerSong {
+    fn default() -> Self {
+        SequencerSong {
+            selected_instrument: 0,
+            song_patterns: Vec::new(),
+            // Initialize all notes to C5
+            step_instruments: vec![[[InstrumentStep{note: 60, enabled: false}; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
+        }
+    }
+}
+
 pub struct Sequencer {
     pub song: SequencerSong,
     current_frame: u32,
@@ -45,51 +56,19 @@ pub struct Sequencer {
 }
 
 impl Sequencer {
-    pub fn new(project_song_path: &Path, main_window: Weak<MainWindow>) -> Sequencer {
-        let song = Sequencer::load(project_song_path).unwrap_or(SequencerSong {
-            selected_instrument: 0,
-            song_patterns: Vec::new(),
-            // Initialize all notes to C5
-            step_instruments: vec![[[InstrumentStep{note: 60, enabled: false}; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
-        });
-        let current_song_pattern = if song.song_patterns.is_empty() { None } else { Some(0) };
-        let mut val = Sequencer {
-            song: song,
+    pub fn new(main_window: Weak<MainWindow>) -> Sequencer {
+        Sequencer {
+            song: Default::default(),
             current_frame: 0,
             current_step: 0,
-            current_song_pattern: current_song_pattern,
+            current_song_pattern: None,
             selected_pattern: 0,
             playing: false,
             recording: true,
             erasing: false,
             previous_frame_note_events: Vec::new(),
             main_window: main_window.clone(),
-        };
-        let current_song_pattern = val.current_song_pattern;
-        let song_patterns = val.song.song_patterns.clone();
-        main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_sequencer_song_patterns();
-            let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-            for (i, number) in song_patterns.iter().enumerate() {
-                vec_model.push(
-                    SongPatternData{
-                        number: *number as i32,
-                        active: match current_song_pattern {
-                            Some(sp) => i == sp,
-                            None => false,
-                        }
-                    });
-            }
-        });
-
-        val.select_pattern(
-            *val.current_song_pattern
-                .map(|i| val.song.song_patterns.get(i).unwrap())
-                .unwrap_or(&0_usize) as u32
-            );
-        val.select_instrument(val.song.selected_instrument as u32);
-        val.update_patterns();
-        val
+        }
     }
 
     pub fn select_song_pattern(&mut self, song_pattern: Option<u32>) -> () {
@@ -374,13 +353,68 @@ impl Sequencer {
         });
     }
 
+    fn set_song(&mut self, song: SequencerSong) {
+        self.song = song;
+        self.current_song_pattern = if self.song.song_patterns.is_empty() { None } else { Some(0) };
+
+        let current_song_pattern = self.current_song_pattern;
+        let song_patterns = self.song.song_patterns.clone();
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_sequencer_song_patterns();
+            let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+            for (i, number) in song_patterns.iter().enumerate() {
+                vec_model.push(
+                    SongPatternData{
+                        number: *number as i32,
+                        active: match current_song_pattern {
+                            Some(sp) => i == sp,
+                            None => false,
+                        }
+                    });
+            }
+        });
+
+        self.select_pattern(
+            *self.current_song_pattern
+                .map(|i| self.song.song_patterns.get(i).unwrap())
+                .unwrap_or(&0_usize) as u32
+            );
+        self.select_instrument(self.song.selected_instrument as u32);
+        self.update_patterns();
+    }
+
     #[cfg(target_arch = "wasm32")]
-    fn load(_project_song_path: &Path) -> Option<SequencerSong> {
-        None
+    fn deserialize_song(base64: String) -> Result<SequencerSong, Box<dyn std::error::Error>> {
+        let decoded = utils::decode_string(&base64)?;
+        let deserialized = serde_json::from_str(&decoded)?;
+        Ok(deserialized)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn load(&mut self, maybe_base64: Option<String>) {
+        if let Some(base64) = maybe_base64 {
+            let parsed = Sequencer::deserialize_song(base64);
+
+            match parsed {
+                Ok(mut song) => {
+                    log!("Loaded the project song from the URL.");
+                    // Expand the song in memory again.
+                    song.step_instruments.resize_with(NUM_PATTERNS, || [[InstrumentStep{note: 60, enabled: false}; NUM_STEPS]; NUM_INSTRUMENTS]);
+                    self.set_song(song);
+                },
+                Err(e) => {
+                    elog!("Couldn't load the project song from the URL, starting from scratch.\n\tError: {:?}", e);
+                    self.set_song(Default::default());
+                },
+            }
+        } else {
+            log!("No song provided in the URL, starting from scratch.");
+            self.set_song(Default::default());
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn load(project_song_path: &Path) -> Option<SequencerSong> {
+    pub fn load(&mut self, project_song_path: &Path) {
         if project_song_path.exists() {
             let parsed: Result<SequencerSong, std::io::Error> =
                 File::open(project_song_path)
@@ -391,16 +425,16 @@ impl Sequencer {
                     log!("Loaded project song from file {:?}", project_song_path);
                     // Expand the song in memory again.
                     song.step_instruments.resize_with(NUM_PATTERNS, || [[InstrumentStep{note: 60, enabled: false}; NUM_STEPS]; NUM_INSTRUMENTS]);
-                    Some(song)
+                    self.set_song(song);
                 },
                 Err(e) => {
                     elog!("Couldn't load project song from file {:?}, starting from scratch.\n\tError: {:?}", project_song_path, e);
-                    None
+                    self.set_song(Default::default());
                 },
             }            
         } else {
             log!("Project song file {:?} doesn't exist, starting from scratch.", project_song_path);
-            None
+            self.set_song(Default::default());
         }
     }
 
