@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>chiptrack (Web Assembly version)</title>
+  <style>
+    body {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      -o-user-select: none;
+      user-select: none;
+    }
+
+    canvas {
+      box-sizing: border-box;
+    }
+
+    canvas:focus {
+      outline: none;
+    }
+
+    @media screen and (max-width: 992px) and (orientation: landscape) {
+      .hide-in-mobile-landscape {
+        display: none;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      canvas {
+        width: 100vw !important;
+        height: 100vh !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas" width="640" height="480" unselectable="on"></canvas>
+  <script type="module">
+    import init from './chiptrack.js';
+    // The song is stored in the URL.
+    // If no song is provided, load the demo song.
+    if (location.search === '')
+      location.search = 'p=tetris&s=7d1Rb9NWGAbge_-KiOtekNZO0v0VhBAb2TSJFUSzK8R_X0QCWKPd3OIeXp_z3BAE45n71rx8PrFPPnar1bPb_dv9b4f9m1d_3twePvz91_7m8OyXVX_x-ffe3fzx6v3rw2H_4eb2-Ksvjr-4Wj2_-PyyPr1cnl6uTi_96WU4vWxOL9uLH_pzu9PL9fmPf2HOzvoMrc_S-kyth-PLy9OXcdi_H315376S04_fXlerj19_dvxzN-8O--N_uz3_n86_ur95_evb_Zvjbxy9_dff-XTxn8jm-T3I76_f3i5T2eXEch1zKEEny3Yzw6Fs-zm-npzvT9Gz9vyzlxeTeqbCiqBQKMUUfUOhUPQNhUJpu29muf6tL-ykFYrLnEPpnSzh36G1lRsKheJKStoUCkXfUCiUyvqmfx5z1TnkXABLRSpSmbNntDqFQtE3FApF31AoFIq-oVAo-uaHlcafEhVL-Viqy9ZSMYVCMdpIm0KhTO-bbtQ60za82XgW5kG7mCQdS9sPca09ZvdkJ8vOmNOmcu9fcMfin8mfragbCoWibygUSuN9E7TR6hJWbtpeLbE_UvhOQFuPTlEoFJONtCkUir6hUCjVbXkz5GzYsc3ZxkQqUpHKylxDoVBcR1EoFH0jJwqFom8oFIq-sbeLWMTiUIw2FArFaEOhUGx5M6V7dk-5RcaDkKDNd3Y5hxL0BFfQxi4-KdyQQ6FQXFTJiUKh6BsKhdJG37gatzKwyL1dor5Dre4EZLahUCj6hkKh6BtpUyiUEn3T51yNDzlXwFK5M5WcW_aHnPWsVlMx11DilV4urqOkTaFQ9A2FQtE3FApF31TWN-43FEvhWKrL1lIxhUIx2kibQqFM75tu1DoT97zxYeHpG_CIhWLQoVAojdewuqFQKPqGQqG03TfN7ra6mG2CxbLcWJSNUqZQ1LC6oVAo-kbaFAplhm1vhpxNO7Y5W5lIRSpTUwk6lJKfkWauoVAopRR9Q6FQ9A2FQtE30qZQKPrGHWRiWXIslR-K0YZCoZRS9A2FQindN92odaZtezMETYQ5d3e4T_7pnrMbcg5lHmSdc9peu6aiUCiuqaRNoVD0DYVC0TdPtyxgM9w7Y8l5LmcXtEaR9B0KWlrbWrqhUChGG2lTKBR9Q6FQKuubpFtuKJQHKFe7mFM3aC-gfm3tZlknj1golKrbhkKh6BtpUygUfUOhUPSNzV3EsuxYqsvWQjGFQjHaSJtCoUzvm27UOtP2vNnkPJhDuUcJeqQs6GyZ5XmlWb6eoL2aehdVFArFRZW0KRSKvqFQKJX1zXZj4SZcmWVL3ZkOxdkSvltT0ZPFaEOhUEop-oZCoegbCoXSdt9cuRhPV_qcjSiCzpb-yolrtqnhLxXlgWXT-r8HrTafKykKhaJvKBSKvpE2xeUURd9YvcmKZRFtE3S2VH4oRhsKhVJK0TcUCqV033Sj1pm46U3QG9FBm7sEpRL0YdRBHxee8w0KerStaCpmHAqFUkrRNxQKRd9QKJS2-ybpWjxpF5OcWJK2vAlaWUs6WWZ5nKw32ih2CoWibygUir6hUCj65s4H6H3OFIVSkzKU3JhoudPNkHMvm1jyYwm6sc5o41KKQqHoGwqFom-kTaFQbHrjclwsRWOpLlvrxBQKxWgjbQqFMr1vulHrTNz0Zo43XOd5vqevC6nvZBSLWAw5FApF31AoFH0jbQqFUrhvkvZaTVI8QCAWysxlI20KhaJvKBSKvqFQKJTH9U0_xFyOB20tIJXwVChGGwqFom_kRKFQ9A2FQtE30qZQKA32jaVIsSwylsoPxWhDoVBKKfqGQqGU7ptu1DovdA-FQjHrUCgUfWNNkvI_9zv7IFaK6YZCoegbCoWib-REoVCK942t9iluQKSUaRtpUyiUQn2T9GZDzqAlFalIZc6e0eoUCkXfUCgUfUOhUCj6hkKh6BtvsYplabFUl62lYgqFYrSRNoVCmd433ah1bH1DoVDMOhQKpdHbi6-tSVKm30u7cbpQTDcUCkXfUCgUfSNtCoVSum8uXY5Tpq_eWOyjmG4oFMoC3psKerMhaDsTqUhFKitzDYVCcR1FoVD0jZwoFIq-oVAo-sYeL2IRi0Mx2lAoFKMNhUKx9Y3uoVAoZh0KhdJg3yR9LiAl_-Epz9pRTDcUCkXfUCgUfSMnCoUS0zcuxynfKxb7KKYbCoXivamlbmciFalIZWWuoVAorqMoFIq-kROFQtE3FApF39jMRCztxlJdtpaKKRSK0UbaFAplet90o9ax9Q2FQjHrUCjVPeXR6gccP_DuYluZUPytohRpG2lTKBR9Q6FQ9A2FQvm3Mmws3kyom2ZjolAopetG2hQKpVTfJI03QbuZGPoolLnLRtoLUHJamEJRNxQKRd9QKBR9IycKhaJv7lQsU4hlkbFUfihGGwqFUkrRNxQKpXTfdKPWsfsNhUIx61AoFH1jTZLio8MpphsKhaJvKBSKvtE3FAolrm88D0hxAyKlTNtIm0KhFOqbpDcbgra_kYpUpLIy11AoFNdRFApF38iJQqHoGwqFom-8xSqWdmOpLltLxRQKxWgjbQqFMr1vulHr2PqGQqGYdSgUSqO3F19bk6T42FFKibaRNoVC0TcUCkXfUCgUyiP75tLlOGX66o3FPorphkKhLOC9qaA3G4K2M5GKVKSyMtdQKBTXURQKRd_IiUKh6BsKhaJv7PEiFrE4FKMNhUIx2lAoFFvf6B4KhWLWoVAoDfZN0ucCWpOMV3zKPMVwQ6FQ9A2FQtE3cqJQKDF9Y5VCLN8rNr6hGG4oFIp3pha6mYlUpCKVlbmGQqG4jqJQKPpGThQKRd9QKBR947EBsbQbS3XZWiqmUChGG2lTKJTpfdONWsfGNxQKxayzCMWnG1Mos9eNv1YUCqVQ3UibQqHoGwqFom8oLSs7l9-Ux9eN04dCoRSqG2lTKJRCfTNsbGeSnQqFYrih2NGUom7UDYVC0TcUCkXfSJtCoegbyxRiWW4slR-K0YZCoZRS9A2FQindN92XH192n_4B&i=7V1Lcxo5EL7zK9jkEh-i6D1SqBwS25vdqt3aS7Jbe6LGZsBUMCTD2K5UKv89IjCGGSRA84KJmyN60P11t7pb-soeTrvzL3dhHJEXwzj6ctb91umaz-B2hFbfo8Fd8rX7ZvHV69cXHz_836d93usuP1uTo-l9f56EcWJW8J51eDCOH7e7PLfP-RzF49nATGPb40k8Ho2ieClvr_O9M3zUoT-_mcVJWzVJhx_CcdIfxuFtNH9B2FmvOj1wBXoQP4tMZtNR9QZhFSiCD1NkPJ0n8d1tNE36OKPIatFvrtnENnvpoc411LpmgeHGkjW81IEs9UGWZpBVPevwbmRpFlm-Pe52EbozaEtogivQhPhpssPZSygiKlAEH6bIhityiytSp-MK2-w9zi6tayzOfhXOoy1YH8L7CH2ehF_H05FRcBhO5lEvO5qEV5PIjD3DhDIuZKB0eHU9iIbDaHB9FWoVSMEZJfhZz7WtkTW_6_1sYuRPof_3n78-_n3ZJxjnf9wC70KR_sM4uelPoukouWm7Unsz1gH6-It1CNIbbqYyKC9M4PRIvTV101o5rxyYRdtV03Q2nkeuc2g96Are9Qxb6C5Hryez608mtsZD6_bXs7tpEsVG8kFyk_7If39efPijT4R9r8H4fjyfxbbdVuBmvFbyDAj0ABBIWRTI6aFgy_k5LBYu4i4Q2NZkmvOxzdnCXn1wzZEkxET8WZpNHj-vXnXfveTdUZhEbwjJHuRSKCQFo1Ja112-FJl1y7hRFHEmKMWONXS1Bm-qLzky8zvOg2K5NTHTpGSMBFt7_9yaZcRZgbVv6zVKhKNAcUXskr9_7kDJE10_lIgPSmtVmEaKKU3thnvrMrigHFGlMLaLdW41eM1WKei7QgUokFIROwQXpXy3mFUKhVOV6Mq8RJ4gee7eqBfWHFBNng31BhSjGi18kDEHUi5V_Ky5UgVrpIUOGLWp8raYVZZbU2K2JppLZt-6BEonpe1xwqlGdIm3SOUKkjqtkravJ4hxo4nTH2P6ND2_2USCGVISC6Ztqrx_7uP5soQme_fyzEkrQ-EAMU05FnbtGjVU9YAfOwzqRbf1VX191blvDd9kLm0JlMfuiFtZ9UJvAChVhlJaGBfDKl1dDDHKECdaSyti74rVoqutGUaCa4WJbevzkn5FuERBEBDhSm6seqzMT2pOAsxtCl1YFPIpWBjXSFDBHMb_vcIsn32ECRhiSolAOdYXcoGmyjWpA0Q04Uo7UDuK9qXrDRVoJINACeqAQ5TytUKJukqkyhZmvperBSto09OYFoXSQNj7msavUBoNlIUbIioXR7hjTbngMB2TKZCNWZQD3Spf2qRApj0j2uVfhUuD7HFSS9LzTiUFa65i9Xutab79PlI0cpcimajVi5NLOtQvdeh6gLt_r2OVL1UidLRQOu2bUe8eocbDatsBKDeXb1hIie3iteIO-oSvNxtFu5mrzppftC1lwZO5-mwA2trv29t6_VnG5vU8O9VIyClwaVa1jid7WQmkmP0N1YlfzzbO9q6FldBU_n9i73NAvgXyLZBv9xT4QL6t_WyAOgPIt0C-BfItkG-BfAvkWyDfAvkWyLdAvgXyLdBKAaW2oATkWyDfAvkWyLdAvgXyLZBv1-gC-RbIt0C-BfItkG-BfAvk20rKACDfFkIbyLdAvq0jtoB8C-RbIN92gXwL5Nv1X8WnkiBsyk1MHaeWHefl4mKv496X-weH4g55LOJ4XbC3Teqcld3S28TPWtnTRVqFl19990u4gnlYUUxrKhxV_05X0AwpxTh23UtXU0CeRMC3TOqclY30ASXY8YCQFz9nZT8XeVpWpnCsQ_Ju1MqLBkOZh3Du4jbttLKfi0Dy_oVdwS8nQPLe-wB5euVaqgqrviMvWDimq_2cD1peyJpQG0HWhJYXWl5oeY9sZWh5W3z2QbHjhVfBd6fl4kKPblA2nGro-GX-nCs0Q7WAZrsai6ddajGTp6_Ofjav9v280LSf3-z7h_Kd750f';
+    init();
+  </script>
+</body>
+
+</html>
