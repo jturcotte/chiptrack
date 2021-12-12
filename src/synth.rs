@@ -1,3 +1,6 @@
+// Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
+// SPDX-License-Identifier: MIT
+
 use crate::synth_script::SynthScript;
 use crate::synth_script::SetSetting;
 use std::sync::{Arc, Mutex};

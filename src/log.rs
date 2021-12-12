@@ -1,3 +1,6 @@
+// Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
+// SPDX-License-Identifier: MIT
+
 #![macro_use]
 
 #[cfg(target_arch = "wasm32")]

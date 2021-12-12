@@ -1,5 +1,6 @@
-// Note: Game BoyTM, Game Boy PocketTM, Super Game BoyTM and Game Boy ColorTM are registered trademarks of
-// Nintendo CO., LTD. © 1989 to 1999 by Nintendo CO., LTD.
+// Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
+// SPDX-License-Identifier: MIT
+
 use cpal::{Sample, SampleFormat};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 

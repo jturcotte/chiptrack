@@ -1,3 +1,6 @@
+// Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
+// SPDX-License-Identifier: MIT
+
 fn instrument_0(freq) {
     dmg.square1.sweep_time = 0;
     dmg.square1.sweep_dir = dmg::INC;

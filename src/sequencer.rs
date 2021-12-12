@@ -1,3 +1,6 @@
+// Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
+// SPDX-License-Identifier: MIT
+
 use crate::sixtyfps_generated_MainWindow::SongPatternData;
 use crate::MainWindow;
 use crate::utils;
