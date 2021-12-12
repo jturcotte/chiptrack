@@ -11,6 +11,13 @@ It uses:
 
 "Game Boy" is registered trade mark of Nintendo
 
+## Build and run
+
+```
+git submodule update --init
+SIXTYFPS_NO_QT=1 cargo run --release
+```
+
 ## License
 
 The source code is available under the terms of the MIT license
