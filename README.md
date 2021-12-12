@@ -13,7 +13,11 @@ It uses:
 
 ## Build and run
 
-```
+```bash
+# On Linux you might need CPAL local dependencies:
+# sudo apt install libasound2-dev
+# OR
+# sudo yum install alsa-lib-devel
 git submodule update --init
 SIXTYFPS_NO_QT=1 cargo run --release
 ```
