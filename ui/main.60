@@ -248,20 +248,19 @@ MainWindow := Window {
                 else if (event.text == "9") { root.pattern_clicked(8); }
                 else if (event.text == "0") { root.pattern_clicked(9); }
             } else {
-                // FIXME: QWERTY
                 if (event.text == "a") { note_pressed(first_note); }
-                else if (event.text == "r") { note_pressed(first_note + 2); }
-                else if (event.text == "s") { note_pressed(first_note + 4); }
-                else if (event.text == "t") { note_pressed(first_note + 5); }
-                else if (event.text == "d") { note_pressed(first_note + 7); }
+                else if (event.text == "s") { note_pressed(first_note + 2); }
+                else if (event.text == "d") { note_pressed(first_note + 4); }
+                else if (event.text == "f") { note_pressed(first_note + 5); }
+                else if (event.text == "g") { note_pressed(first_note + 7); }
                 else if (event.text == "h") { note_pressed(first_note + 9); }
-                else if (event.text == "n") { note_pressed(first_note + 11); }
-                else if (event.text == "e") { note_pressed(first_note + 12); }
+                else if (event.text == "j") { note_pressed(first_note + 11); }
+                else if (event.text == "k") { note_pressed(first_note + 12); }
                 else if (event.text == "w") { note_pressed(first_note + 1); }
-                else if (event.text == "f") { note_pressed(first_note + 3); }
-                else if (event.text == "g") { note_pressed(first_note + 6); }
-                else if (event.text == "j") { note_pressed(first_note + 8); }
-                else if (event.text == "l") { note_pressed(first_note + 10); }
+                else if (event.text == "e") { note_pressed(first_note + 3); }
+                else if (event.text == "t") { note_pressed(first_note + 6); }
+                else if (event.text == "y") { note_pressed(first_note + 8); }
+                else if (event.text == "u") { note_pressed(first_note + 10); }
                 else if (event.text == "1") { root.select_instrument(0); }
                 else if (event.text == "2") { root.select_instrument(1); }
                 else if (event.text == "3") { root.select_instrument(2); }
