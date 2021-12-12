@@ -30,11 +30,11 @@ miniz_oxide = "0.5.1"
 base64-url = "1.4.10"
 
 [dependencies.sixtyfps]
-version = "=0.1.5"
+version = "0.1.5"
 # path = "../sixtyfps/api/sixtyfps-rs"
 
 [build-dependencies.sixtyfps-build]
-version = "=0.1.5"
+version = "0.1.5"
 # path = "../sixtyfps/api/sixtyfps-rs/sixtyfps-build"
 
 [dependencies.rboy]
