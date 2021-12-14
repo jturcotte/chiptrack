@@ -1,8 +1,12 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+use crate::MainWindow;
 use crate::synth_script::SynthScript;
 use crate::synth_script::SetSetting;
+use sixtyfps::Model;
+use sixtyfps::SharedString;
+use sixtyfps::Weak;
 use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -14,6 +18,7 @@ pub struct Synth {
     settings_ring_index: usize,
     buffer: Arc<Mutex<Vec<f32>>>,
     buffer_wave_start: Arc<Mutex<Option<usize>>>,
+    main_window: Weak<MainWindow>,
 }
 
 struct FakePlayer {
@@ -47,7 +52,7 @@ impl rboy::AudioPlayer for FakePlayer {
 }
 
 impl Synth {
-    pub fn new(sample_rate: u32) -> Synth {
+    pub fn new(main_window: Weak<MainWindow>, sample_rate: u32) -> Synth {
         let settings_ring = Rc::new(RefCell::new(vec![vec![]; 1048576]));
         let script = SynthScript::new(settings_ring.clone());
 
@@ -70,6 +75,7 @@ impl Synth {
             settings_ring_index: 0,
             buffer: buffer,
             buffer_wave_start: buffer_wave_start,
+            main_window: main_window,
         }
     }
 
@@ -115,13 +121,26 @@ impl Synth {
         self.buffer.lock().unwrap().len()
     }
 
+    fn update_instrument_ids(&self) {
+        let ids = self.script.instrument_ids().clone();
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_instruments();
+            for (i, id) in ids.iter().enumerate() {
+                let mut row_data = model.row_data(i);
+                row_data.id = SharedString::from(id);
+                model.set_row_data(i, row_data);
+            }
+        });
+    }
     #[cfg(target_arch = "wasm32")]
     pub fn load(&mut self, maybe_base64: Option<String>) {
         self.script.load(maybe_base64);
+        self.update_instrument_ids();
     }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load(&mut self, project_instruments_path: &std::path::Path) {
         self.script.load(project_instruments_path);
+        self.update_instrument_ids();
     }
 
 }

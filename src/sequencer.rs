@@ -11,9 +11,9 @@ use sixtyfps::Weak;
 use std::fs::File;
 use std::path::Path;
 
-pub const NUM_INSTRUMENTS: usize = 16;
-pub const NUM_STEPS: usize = 16;
-pub const NUM_PATTERNS: usize = 16;
+use crate::sound_engine::NUM_INSTRUMENTS;
+use crate::sound_engine::NUM_STEPS;
+use crate::sound_engine::NUM_PATTERNS;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NoteEvent {

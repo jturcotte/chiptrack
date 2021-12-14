@@ -3,10 +3,13 @@
 
 use crate::synth_script::Channel::*;
 use rhai::{AST, Dynamic, Engine, Scope};
+use rhai::EvalAltResult::ErrorFunctionNotFound;
 use rhai::plugin::*;
 use std::cell::RefCell;
 use std::ops::BitOr;
 use std::rc::Rc;
+
+use crate::sound_engine::NUM_INSTRUMENTS;
 
 #[derive(Debug, Clone)]
 pub struct DmgSquare {
@@ -547,6 +550,7 @@ pub struct SynthScript {
     script_ast: AST,
     script_scope: Scope<'static>,
     script_context: SharedDmgBindings,
+    instrument_ids: Vec<String>,
 }
 
 impl SynthScript {
@@ -610,7 +614,12 @@ impl SynthScript {
             script_ast: Default::default(),
             script_context: dmg,
             script_scope: scope,
+            instrument_ids: Vec::new(),
         }
+    }
+
+    pub fn instrument_ids(&self) -> &Vec<String> {
+        &self.instrument_ids
     }
 
     fn default_instruments(&self) -> AST {
@@ -643,6 +652,7 @@ impl SynthScript {
             log!("No instruments provided in the URL, using default instruments.");
             self.script_ast = self.default_instruments();
         }
+        self.extract_instrument_ids();
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -664,6 +674,7 @@ impl SynthScript {
             log!("Project instruments file {:?} doesn't exist, using default instruments.", project_instruments_path);
             self.script_ast = self.default_instruments();
         }
+        self.extract_instrument_ids();
     }
 
     pub fn trigger_instrument(&mut self, settings_ring_index: usize, instrument: u32, freq: f64) -> () {
@@ -681,5 +692,53 @@ impl SynthScript {
         }
 
         self.script_context.borrow_mut().commit_to_ring();
+    }
+
+    pub fn extract_instrument_ids(&mut self) {
+        let defined_instruments: Vec<usize> =
+            self.script_ast.iter_functions()
+                .filter_map(|f|
+                    if f.name.starts_with("instrument_") {
+                        f.name.get(11..).and_then(|s| s.parse().ok())
+                    } else {
+                        None
+                    }
+                ).collect();
+        self.instrument_ids = (0 .. NUM_INSTRUMENTS).map(|i| {
+            let function_name = format!("instrument_id_{}", i);
+
+            #[cfg(not(target_arch = "wasm32"))]
+            let id_result = self.script_engine.call_fn(
+                &mut self.script_scope,
+                &self.script_ast,
+                &function_name,
+                ()
+                );
+            // FIXME: Emojis don't seem to show up in the browser,
+            //        use the default number IDs.
+            #[cfg(target_arch = "wasm32")]
+            let id_result: Result<String, Box<rhai::EvalAltResult>> =
+                Err(Box::new(ErrorFunctionNotFound(function_name.clone(), Position::NONE)));
+
+            match id_result {
+                    Ok(id) => id,
+                    Err(e) => {
+                        match *e {
+                            ErrorFunctionNotFound(f, _) if f == function_name => {
+                                if defined_instruments.contains(&i) {
+                                    i.to_string()
+                                } else {
+                                    "".to_string()
+                                }
+                            }
+                            other => {
+                                elog!("Error calling {}:\n\t{:?}", function_name, other);
+                                i.to_string()                                
+                            }
+                        }
+                    },
+                }
+            })
+            .collect();
     }
 }

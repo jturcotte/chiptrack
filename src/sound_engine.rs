@@ -10,6 +10,10 @@ use sixtyfps::Model;
 use sixtyfps::Weak;
 use std::path::PathBuf;
 
+pub const NUM_INSTRUMENTS: usize = 16;
+pub const NUM_STEPS: usize = 16;
+pub const NUM_PATTERNS: usize = 16;
+
 pub struct SoundEngine {
     pub sequencer: Sequencer,
     pub synth: Synth,
@@ -19,8 +23,7 @@ pub struct SoundEngine {
 impl SoundEngine {
     pub fn new(sample_rate: u32, project_name: &str, main_window: Weak<MainWindow>) -> SoundEngine {
         let mut sequencer = Sequencer::new(main_window.clone());
-        let mut synth = Synth::new(sample_rate);
-
+        let mut synth = Synth::new(main_window.clone(), sample_rate);
 
         #[cfg(not(target_arch = "wasm32"))] {
             let song_path = SoundEngine::project_song_path(project_name);
