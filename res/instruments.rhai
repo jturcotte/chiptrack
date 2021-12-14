@@ -1,5 +1,5 @@
-fn instrument_id_0() { "🎹" }
-fn instrument_0(freq) {
+fn instrument_id_1() { "🎹" }
+fn instrument_1(freq) {
     dmg.square1.sweep_time = 0;
     dmg.square1.sweep_dir = dmg::INC;
     dmg.square1.sweep_shift = 0;
@@ -28,8 +28,8 @@ fn instrument_0(freq) {
 
 }
 
-fn instrument_id_1() { "🎸" }
-fn instrument_1(freq) {
+fn instrument_id_2() { "🎸" }
+fn instrument_2(freq) {
     dmg.square1.sweep_time = 0;
     dmg.square1.sweep_dir = dmg::INC;
     dmg.square1.sweep_shift = 0;
@@ -41,8 +41,8 @@ fn instrument_1(freq) {
     dmg.square1.trigger_with_length(freq, 64);
 }
 
-fn instrument_id_2() { "✨" }
-fn instrument_2(freq) {
+fn instrument_id_3() { "✨" }
+fn instrument_3(freq) {
     // 2:bipp e:a:d:1 f:0:d:2 g
     dmg.square1.duty = dmg::DUTY_1_8;
     dmg.square1.env_start = 0xa;
@@ -59,8 +59,8 @@ fn instrument_2(freq) {
     dmg.square1.trigger(freq);
 }
 
-fn instrument_id_3() { "🌊" }
-fn instrument_3(freq) {
+fn instrument_id_4() { "🌊" }
+fn instrument_4(freq) {
     // r:1 e:f:d:0 f:0:d:0 g
     dmg.square1.duty = dmg::DUTY_1_4;
     dmg.square1.env_start = 0xf;
@@ -101,8 +101,8 @@ fn instrument_3(freq) {
     dmg.square1.trigger(freq);
 }
 
-fn instrument_id_4() { "🥁" }
-fn instrument_4(freq) {
+fn instrument_id_5() { "🥁" }
+fn instrument_5(freq) {
     dmg.noise.env_start = 0xf;
     dmg.noise.env_dir = dmg::DEC;
     dmg.noise.env_period = 1;
@@ -115,8 +115,8 @@ fn instrument_4(freq) {
     dmg.noise.trigger();
 }
 
-fn instrument_id_5() { "🛢️" }
-fn instrument_5(freq) {
+fn instrument_id_6() { "🛢️" }
+fn instrument_6(freq) {
     // 1:superdrum e:d:d:2 f:2:d:2 g e
     dmg.square1.duty = dmg::DUTY_2_4;
     dmg.square1.env_start = 0xd;
@@ -128,8 +128,8 @@ fn instrument_5(freq) {
     dmg.square1.trigger(freq);
 }
 
-fn instrument_id_6() { "🔈" }
-fn instrument_6(freq) {
+fn instrument_id_7() { "🔈" }
+fn instrument_7(freq) {
     dmg.wave.playing = false;
     dmg.wave.table = "0123456789abcdeffedcba9876543210";
     dmg.wave.playing = true;

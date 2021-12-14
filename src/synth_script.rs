@@ -684,7 +684,7 @@ impl SynthScript {
         let result: Result<(), _> = self.script_engine.call_fn(
             &mut self.script_scope,
             &self.script_ast,
-            format!("instrument_{}", instrument),
+            format!("instrument_{}", instrument + 1),
             ( freq, )
             );
         if let Err(e) = result {
@@ -704,7 +704,7 @@ impl SynthScript {
                         None
                     }
                 ).collect();
-        self.instrument_ids = (0 .. NUM_INSTRUMENTS).map(|i| {
+        self.instrument_ids = (1 .. NUM_INSTRUMENTS + 1).map(|i| {
             let function_name = format!("instrument_id_{}", i);
 
             #[cfg(not(target_arch = "wasm32"))]
