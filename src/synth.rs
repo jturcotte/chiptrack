@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 use crate::MainWindow;
-use crate::synth_script::SynthScript;
+use crate::synth_script::Channel;
 use crate::synth_script::SetSetting;
+use crate::synth_script::SynthScript;
 use sixtyfps::Model;
 use sixtyfps::SharedString;
 use sixtyfps::Weak;
@@ -115,6 +116,15 @@ impl Synth {
 
     pub fn trigger_instrument(&mut self, instrument: u32, freq: f64) -> () {
         self.script.trigger_instrument(self.settings_ring_index, instrument, freq);
+    }
+
+    /// Can be used to manually mute when instruments have an infinite length and envelope.
+    pub fn mute_instruments(&mut self) {
+        // Set the envelopes to 0.
+        self.dmg.wb(Channel::Square1 as u16 + 2, 0);    
+        self.dmg.wb(Channel::Square2 as u16 + 2, 0);    
+        self.dmg.wb(Channel::Wave as u16 + 2, 0);    
+        self.dmg.wb(Channel::Noise as u16 + 2, 0);    
     }
 
     pub fn ready_buffer_samples(&self) -> usize {

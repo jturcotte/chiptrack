@@ -223,6 +223,7 @@ MainWindow := Window {
     callback remove_last_song_pattern();
     callback clear_song_patterns();
     callback save_project();
+    callback mute_instruments();
     callback global_key_event(string, bool);
 
     property<bool> waveform_is_zero: true;
@@ -283,6 +284,8 @@ MainWindow := Window {
                 // Tab
                 else if (event.text == "\u{9}") { song_mode_button.toggled = !song_mode_button.toggled; }
                 else if (event.text == "\n") { root.play_clicked(!root.playing); }
+                // Escape
+                else if (event.text == "\u{1b}") { root.mute_instruments(); }
             }
             global_key_event(event.text, true);
             accept

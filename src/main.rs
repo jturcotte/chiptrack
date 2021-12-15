@@ -46,6 +46,7 @@ enum SoundMsg {
     RemoveLastSongPattern,
     ClearSongPatterns,
     SaveProject,
+    MuteInstruments,
 }
 
 fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicBool>) {
@@ -231,6 +232,7 @@ pub fn main() {
                                 SoundMsg::RemoveLastSongPattern => engine.sequencer.remove_last_song_pattern(),
                                 SoundMsg::ClearSongPatterns => engine.sequencer.clear_song_patterns(),
                                 SoundMsg::SaveProject => engine.save_project(&project_name),
+                                SoundMsg::MuteInstruments => engine.synth.mute_instruments(),
                             }
                         }
 
@@ -420,7 +422,6 @@ pub fn main() {
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_clear_song_patterns(move || {
-
         Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::ClearSongPatterns).unwrap();
     });
@@ -428,9 +429,15 @@ pub fn main() {
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_save_project(move || {
-
         Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::SaveProject).unwrap();
+    });
+
+    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
+    window.on_mute_instruments(move || {
+        Lazy::force(&*cloned_context);
+        cloned_sound_send.send(SoundMsg::MuteInstruments).unwrap();
     });
 
     // KeyEvent doesn't expose yet whether a press event is due to auto-repeat.
