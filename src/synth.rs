@@ -3,7 +3,7 @@
 
 use crate::MainWindow;
 use crate::synth_script::Channel;
-use crate::synth_script::SetSetting;
+use crate::synth_script::RegSettings;
 use crate::synth_script::SynthScript;
 use sixtyfps::Model;
 use sixtyfps::SharedString;
@@ -15,7 +15,7 @@ use std::rc::Rc;
 pub struct Synth {
     dmg: rboy::Sound,
     script: SynthScript,
-    settings_ring: Rc<RefCell<Vec<Vec<SetSetting>>>>,
+    settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     settings_ring_index: usize,
     buffer: Arc<Mutex<Vec<f32>>>,
     buffer_wave_start: Arc<Mutex<Option<usize>>>,
@@ -54,7 +54,7 @@ impl rboy::AudioPlayer for FakePlayer {
 
 impl Synth {
     pub fn new(main_window: Weak<MainWindow>, sample_rate: u32) -> Synth {
-        let settings_ring = Rc::new(RefCell::new(vec![vec![]; 1048576]));
+        let settings_ring = Rc::new(RefCell::new(vec![RegSettings::new(); 512]));
         let script = SynthScript::new(settings_ring.clone());
 
         let buffer = Arc::new(Mutex::new(Vec::new()));
@@ -96,12 +96,13 @@ impl Synth {
     // to be called 64x per second.
     pub fn advance_frame(&mut self) -> () {
         let mut settings_ring = self.settings_ring.borrow_mut();
+        let dmg = &mut self.dmg;
         let i = self.settings_ring_index;
-        for set in settings_ring[i].iter() {
-            let prev = self.dmg.rb(set.setting.addr);
-            let new = prev & !set.setting.mask | set.value as u8;
-            self.dmg.wb(set.setting.addr, new);    
-        }
+        settings_ring[i].for_each_setting(|addr, set| {
+            let prev = dmg.rb(addr);
+            let new = prev & !set.mask | set.value;
+            dmg.wb(addr, new);    
+        });
         settings_ring[i].clear();
         self.settings_ring_index = (self.settings_ring_index + 1) % settings_ring.len();
 

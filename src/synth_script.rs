@@ -6,46 +6,71 @@ use rhai::{AST, Dynamic, Engine, Scope};
 use rhai::EvalAltResult::ErrorFunctionNotFound;
 use rhai::plugin::*;
 use std::cell::RefCell;
+use std::cell::RefMut;
 use std::ops::BitOr;
+use std::ops::BitOrAssign;
 use std::rc::Rc;
 
 use crate::sound_engine::NUM_INSTRUMENTS;
 
+#[derive(Debug, Clone, Copy)]
+pub enum Channel {
+    Square1 = 0xff10,
+    Square2 = 0xff15,
+    Wave = 0xff1a,
+    Noise = 0xff1f,
+}
+
+trait ScriptChannel {
+    fn get_reg_settings(&mut self) -> RefMut<'_, RegSettings>;
+
+    fn orit(&mut self, addr: u16, with: RegSetter) {
+        self.get_reg_settings().orit(addr, with)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct DmgSquare {
     channel: Channel,
-    nrx0_set_setting: Option<SetSetting>,
-    nrx1_set_setting: Option<SetSetting>,
-    nrx2_set_setting: Option<SetSetting>,
-    nrx3_set_setting: Option<SetSetting>,
-    nrx4_set_setting: Option<SetSetting>,
+    settings_ring: Rc<RefCell<Vec<RegSettings>>>,
+    settings_ring_index: Rc<RefCell<usize>>,
+}
+impl ScriptChannel for DmgSquare {
+    fn get_reg_settings(&mut self) -> RefMut<'_, RegSettings> {
+        RefMut::map(self.settings_ring.borrow_mut(), |s| &mut s[*self.settings_ring_index.borrow()])
+    }
 }
 pub type SharedDmgSquare = Rc<RefCell<DmgSquare>>;
 
+
 #[derive(Debug, Clone)]
 pub struct DmgWave {
-    nrx0_set_setting: Option<SetSetting>,
-    nrx1_set_setting: Option<SetSetting>,
-    nrx2_set_setting: Option<SetSetting>,
-    nrx3_set_setting: Option<SetSetting>,
-    nrx4_set_setting: Option<SetSetting>,
-    wave_table_set_settings: Vec<SetSetting>,
+    settings_ring: Rc<RefCell<Vec<RegSettings>>>,
+    settings_ring_index: Rc<RefCell<usize>>,
+}
+impl ScriptChannel for DmgWave {
+    fn get_reg_settings(&mut self) -> RefMut<'_, RegSettings> {
+        RefMut::map(self.settings_ring.borrow_mut(), |s| &mut s[*self.settings_ring_index.borrow()])
+    }
 }
 pub type SharedDmgWave = Rc<RefCell<DmgWave>>;
 
 #[derive(Debug, Clone)]
 pub struct DmgNoise {
-    nrx1_set_setting: Option<SetSetting>,
-    nrx2_set_setting: Option<SetSetting>,
-    nrx3_set_setting: Option<SetSetting>,
-    nrx4_set_setting: Option<SetSetting>,
+    settings_ring: Rc<RefCell<Vec<RegSettings>>>,
+    settings_ring_index: Rc<RefCell<usize>>,
+}
+impl ScriptChannel for DmgNoise {
+    fn get_reg_settings(&mut self) -> RefMut<'_, RegSettings> {
+        RefMut::map(self.settings_ring.borrow_mut(), |s| &mut s[*self.settings_ring_index.borrow()])
+    }
 }
 pub type SharedDmgNoise = Rc<RefCell<DmgNoise>>;
 
 #[derive(Debug, Clone)]
 pub struct DmgBindings {
-    settings_ring: Rc<RefCell<Vec<Vec<SetSetting>>>>,
-    settings_ring_index: usize,
+    settings_ring: Rc<RefCell<Vec<RegSettings>>>,
+    settings_ring_index: Rc<RefCell<usize>>,
     square1: SharedDmgSquare,
     square2: SharedDmgSquare,
     wave: SharedDmgWave,
@@ -55,34 +80,7 @@ pub type SharedDmgBindings = Rc<RefCell<DmgBindings>>;
 
 impl DmgBindings {
     fn set_settings_ring_index(&mut self, v: usize) {
-        self.settings_ring_index = v;
-    }
-    fn commit_to_ring(&mut self) {
-        let dest = &mut self.settings_ring.borrow_mut()[self.settings_ring_index];
-        let mut square1 = self.square1.borrow_mut();
-        dest.extend(square1.nrx0_set_setting.take());
-        dest.extend(square1.nrx1_set_setting.take());
-        dest.extend(square1.nrx2_set_setting.take());
-        dest.extend(square1.nrx3_set_setting.take());
-        dest.extend(square1.nrx4_set_setting.take());
-        let mut square2 = self.square2.borrow_mut();
-        // dest.extend(square2.nrx0_set_setting.take());
-        dest.extend(square2.nrx1_set_setting.take());
-        dest.extend(square2.nrx2_set_setting.take());
-        dest.extend(square2.nrx3_set_setting.take());
-        dest.extend(square2.nrx4_set_setting.take());
-        let mut wave = self.wave.borrow_mut();
-        dest.extend(wave.nrx0_set_setting.take());
-        dest.extend(wave.nrx1_set_setting.take());
-        dest.extend(wave.nrx2_set_setting.take());
-        dest.extend(wave.nrx3_set_setting.take());
-        dest.extend(wave.nrx4_set_setting.take());
-        dest.extend(wave.wave_table_set_settings.drain(..));
-        let mut noise = self.noise.borrow_mut();
-        dest.extend(noise.nrx1_set_setting.take());
-        dest.extend(noise.nrx2_set_setting.take());
-        dest.extend(noise.nrx3_set_setting.take());
-        dest.extend(noise.nrx4_set_setting.take());
+        *self.settings_ring_index.borrow_mut() = v;
     }
 }
 
@@ -177,12 +175,12 @@ pub mod dmg_api {
 
     #[rhai_fn(global, return_raw)]
     pub fn wait_frames(dmg: &mut SharedDmgBindings, frames: i32) -> Result<(), Box<EvalAltResult>> {
-        let mut this = dmg.borrow_mut();
-        this.commit_to_ring();
+        let this = dmg.borrow_mut();
         let len = this.settings_ring.borrow().len();
         runtime_check!(frames >= 0, "frames must be >= 0, got {}", frames);
         runtime_check!((frames as usize) < len, "frames must be < {}, got {}", len, frames);
-        this.settings_ring_index = (this.settings_ring_index + frames as usize) % len;
+        let mut settings_ring_index = this.settings_ring_index.borrow_mut();
+        *settings_ring_index = (*settings_ring_index + frames as usize) % len;
         Ok(())
     }
 
@@ -191,18 +189,18 @@ pub mod dmg_api {
         runtime_check!(v >= 0, "sweep_time must be >= 0, got {}", v);
         runtime_check!(v < 8, "sweep_time must be < 8, got {}", v);
         let channel = this_rc.borrow().channel as u16;
-        orit(
-            &mut this_rc.borrow_mut().nrx0_set_setting,
-            SetSetting::new(Setting::new(channel + 0, 0x70), v as u8)
+        this_rc.borrow_mut().orit(
+            channel + 0,
+            RegSetter::new(0x70, v as u8)
             );
         Ok(())
     }
     #[rhai_fn(set = "sweep_dir", pure)]
     pub fn set_sweep_dir(this_rc: &mut SharedDmgSquare, v: Direction) {
         let channel = this_rc.borrow().channel as u16;
-        orit(
-            &mut this_rc.borrow_mut().nrx0_set_setting,
-            SetSetting::new(Setting::new(channel + 0, 0x08), match v { Direction::Inc => 0, Direction::Dec => 1 })
+        this_rc.borrow_mut().orit(
+            channel + 0,
+            RegSetter::new(0x08, match v { Direction::Inc => 0, Direction::Dec => 1 })
             );
     }
     #[rhai_fn(set = "sweep_shift", pure, return_raw)]
@@ -210,9 +208,9 @@ pub mod dmg_api {
         runtime_check!(v >= 0, "sweep_shift must be >= 0, got {}", v);
         runtime_check!(v < 8, "sweep_shift must be < 8, got {}", v);
         let channel = this_rc.borrow().channel as u16;
-        orit(
-            &mut this_rc.borrow_mut().nrx0_set_setting,
-            SetSetting::new(Setting::new(channel + 0, 0x07), v as u8)
+        this_rc.borrow_mut().orit(
+            channel + 0,
+            RegSetter::new(0x07, v as u8)
             );
         Ok(())
     }
@@ -220,9 +218,9 @@ pub mod dmg_api {
     #[rhai_fn(set = "duty", pure)]
     pub fn set_duty(this_rc: &mut SharedDmgSquare, v: Duty) {
         let channel = this_rc.borrow().channel as u16;
-        orit(
-            &mut this_rc.borrow_mut().nrx1_set_setting,
-            SetSetting::new(Setting::new(channel + 1, 0xC0), v as u8)
+        this_rc.borrow_mut().orit(
+            channel + 1,
+            RegSetter::new(0xC0, v as u8)
             );
     }
 
@@ -231,18 +229,18 @@ pub mod dmg_api {
         runtime_check!(v >= 0, "env_start must be >= 0, got {}", v);
         runtime_check!(v < 16, "env_start must be < 16, got {}", v);
         let channel = this_rc.borrow().channel as u16;
-        orit(
-            &mut this_rc.borrow_mut().nrx2_set_setting,
-            SetSetting::new(Setting::new(channel + 2, 0xf0), v as u8)
+        this_rc.borrow_mut().orit(
+            channel + 2,
+            RegSetter::new(0xf0, v as u8)
             );
         Ok(())
     }
     #[rhai_fn(set = "env_dir", pure)]
     pub fn set_square_env_dir(this_rc: &mut SharedDmgSquare, v: Direction) {
         let channel = this_rc.borrow().channel as u16;
-        orit(
-            &mut this_rc.borrow_mut().nrx2_set_setting,
-            SetSetting::new(Setting::new(channel + 2, 0x08), v as u8)
+        this_rc.borrow_mut().orit(
+            channel + 2,
+            RegSetter::new(0x08, v as u8)
             );
     }
     #[rhai_fn(set = "env_period", pure, return_raw)]
@@ -250,9 +248,9 @@ pub mod dmg_api {
         runtime_check!(v >= 0, "env_period must be >= 0, got {}", v);
         runtime_check!(v < 8, "env_period must be < 8, got {}", v);
         let channel = this_rc.borrow().channel as u16;
-        orit(
-            &mut this_rc.borrow_mut().nrx2_set_setting,
-            SetSetting::new(Setting::new(channel + 2, 0x07), v as u8)
+        this_rc.borrow_mut().orit(
+            channel + 2,
+            RegSetter::new(0x07, v as u8)
             );
         Ok(())
     }
@@ -262,15 +260,16 @@ pub mod dmg_api {
         runtime_check!(freq >= 64.0, "freq must be >= 64, got {}", freq);
         let gb_freq = to_square_gb_freq(freq);
         let channel = this_rc.borrow().channel as u16;
-        orit(
-            &mut this_rc.borrow_mut().nrx3_set_setting,
+        let mut this = this_rc.borrow_mut();
+        this.orit(
+            channel + 3,
             // Frequency LSB
-            SetSetting::new(Setting::new(channel + 3, 0xff), (gb_freq & 0xff) as u8)
+            RegSetter::new(0xff, (gb_freq & 0xff) as u8)
             );
-        orit(
-            &mut this_rc.borrow_mut().nrx4_set_setting,
+        this.orit(
+            channel + 4,
             // Frequency MSB
-            SetSetting::new(Setting::new(channel + 4, 0x07), (gb_freq >> 8) as u8)
+            RegSetter::new(0x07, (gb_freq >> 8) as u8)
             );
         Ok(())
     }
@@ -280,17 +279,18 @@ pub mod dmg_api {
         runtime_check!(length >= 1, "length must be >= 1, got {}", length);
         runtime_check!(length <= 64, "length must be <= 64, got {}", length);
         let channel = this_rc.borrow().channel as u16;
-        orit(
-            &mut this_rc.borrow_mut().nrx1_set_setting,
+        let mut this = this_rc.borrow_mut();
+        this.orit(
+            channel + 1,
             // Length load
-            SetSetting::new(Setting::new(channel + 1, 0x3f), 64 - length as u8)
+            RegSetter::new(0x3f, 64 - length as u8)
             );
-        orit(
-            &mut this_rc.borrow_mut().nrx4_set_setting,
+        this.orit(
+            channel + 4,
             // Trigger
-            SetSetting::new(Setting::new(channel + 4, 0x80), 1)
+            RegSetter::new(0x80, 1)
                 // Length enable
-                | SetSetting::new(Setting::new(channel + 4, 0x40), 1)
+                | RegSetter::new(0x40, 1)
             );
         Ok(())
     }
@@ -298,28 +298,28 @@ pub mod dmg_api {
     #[rhai_fn(global, name = "trigger", return_raw)]
     pub fn square_trigger(this_rc: &mut SharedDmgSquare) -> Result<(), Box<EvalAltResult>> {
         let channel = this_rc.borrow().channel as u16;
-        orit(
-            &mut this_rc.borrow_mut().nrx4_set_setting,
+        this_rc.borrow_mut().orit(
+            channel + 4,
             // Trigger
-            SetSetting::new(Setting::new(channel + 4, 0x80), 1)
+            RegSetter::new(0x80, 1)
                 // Length enable
-                | SetSetting::new(Setting::new(channel + 4, 0x40), 0)
+                | RegSetter::new(0x40, 0)
             );
         Ok(())
     }
 
     #[rhai_fn(set = "playing", pure)]
     pub fn set_playing(this_rc: &mut SharedDmgWave, v: bool) {
-        orit(
-            &mut this_rc.borrow_mut().nrx0_set_setting,
-            SetSetting::new(Setting::new(Wave as u16 + 0, 0x80), v as u8)
+        this_rc.borrow_mut().orit(
+            Wave as u16 + 0,
+            RegSetter::new(0x80, v as u8)
             );
     }
     #[rhai_fn(set = "volume", pure)]
     pub fn set_volume(this_rc: &mut SharedDmgWave, v: WaveVolume) {
-        orit(
-            &mut this_rc.borrow_mut().nrx2_set_setting,
-            SetSetting::new(Setting::new(Wave as u16 + 2, 0x60), v as u8)
+        this_rc.borrow_mut().orit(
+            Wave as u16 + 2,
+            RegSetter::new(0x60, v as u8)
             );
     }
     #[rhai_fn(set = "table", pure, return_raw)]
@@ -328,14 +328,15 @@ pub mod dmg_api {
         runtime_check!(hex_string.chars().all(|c| c >= '0' && c <= '9' || c >= 'a' && c <= 'f' ), "table must only contain characters [0-9a-f], got {}", hex_string);
 
         // Each hexadecimal character in the hex string is one 4 bits sample.
-        this_rc.borrow_mut().wave_table_set_settings =
-            (0..hex_string.len())
-                .step_by(2)
-                .map(|i| {
-                    let byte = u8::from_str_radix(&hex_string[i..i + 2], 16).unwrap();
-                    SetSetting::new(Setting::new((0xff30 + i / 2) as u16, 0xff), byte)
-                })
-                .collect();
+        let mut this = this_rc.borrow_mut();
+        for i in (0..hex_string.len()).step_by(2) {
+            let byte = u8::from_str_radix(&hex_string[i..i + 2], 16).unwrap();
+            this.orit(
+                (0xff30 + i / 2) as u16,
+                RegSetter::new(0xff, byte)
+                );
+        }
+
         Ok(())
     }
 
@@ -343,15 +344,16 @@ pub mod dmg_api {
     pub fn set_wave_freq(this_rc: &mut SharedDmgWave, freq: f64) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(freq >= 32.0, "freq must be >= 32, got {}", freq);
         let gb_freq = to_wave_gb_freq(freq);
-        orit(
-            &mut this_rc.borrow_mut().nrx3_set_setting,
+        let mut this = this_rc.borrow_mut();
+        this.orit(
+            Wave as u16 + 3,
             // Frequency LSB
-            SetSetting::new(Setting::new(Wave as u16 + 3, 0xff), (gb_freq & 0xff) as u8)
+            RegSetter::new(0xff, (gb_freq & 0xff) as u8)
             );
-        orit(
-            &mut this_rc.borrow_mut().nrx4_set_setting,
+        this.orit(
+            Wave as u16 + 4,
             // Frequency MSB
-            SetSetting::new(Setting::new(Wave as u16 + 4, 0x07), (gb_freq >> 8) as u8)
+            RegSetter::new(0x07, (gb_freq >> 8) as u8)
             );
         Ok(())
     }
@@ -360,28 +362,29 @@ pub mod dmg_api {
     pub fn wave_trigger_with_length(this_rc: &mut SharedDmgWave, length: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(length >= 1, "length must be >= 1, got {}", length);
         runtime_check!(length <= 256, "length must be <= 256, got {}", length);
-        orit(
-            &mut this_rc.borrow_mut().nrx1_set_setting,
+        let mut this = this_rc.borrow_mut();
+        this.orit(
+            Wave as u16 + 1,
             // Length load
-            SetSetting::new(Setting::new(Wave as u16 + 1, 0xff), (256 - length) as u8)
+            RegSetter::new(0xff, (256 - length) as u8)
             );
-        orit(
-            &mut this_rc.borrow_mut().nrx4_set_setting,
+        this.orit(
+            Wave as u16 + 4,
             // Trigger
-            SetSetting::new(Setting::new(Wave as u16 + 4, 0x80), 1)
+            RegSetter::new(0x80, 1)
                 // Length enable
-                | SetSetting::new(Setting::new(Wave as u16 + 4, 0x40), 1)
+                | RegSetter::new(0x40, 1)
             );
         Ok(())
     }
     #[rhai_fn(global, name = "trigger", return_raw)]
     pub fn wave_trigger(this_rc: &mut SharedDmgWave) -> Result<(), Box<EvalAltResult>> {
-        orit(
-            &mut this_rc.borrow_mut().nrx4_set_setting,
+        this_rc.borrow_mut().orit(
+            Wave as u16 + 4,
             // Trigger
-            SetSetting::new(Setting::new(Wave as u16 + 4, 0x80), 1)
+            RegSetter::new(0x80, 1)
                 // Length enable
-                | SetSetting::new(Setting::new(Wave as u16 + 4, 0x40), 0)
+                | RegSetter::new(0x40, 0)
             );
         Ok(())
     }
@@ -391,17 +394,17 @@ pub mod dmg_api {
     pub fn set_noise_env_start(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "env_start must be >= 0, got {}", v);
         runtime_check!(v < 16, "env_start must be < 16, got {}", v);
-        orit(
-            &mut this_rc.borrow_mut().nrx2_set_setting,
-            SetSetting::new(Setting::new(Noise as u16 + 2, 0xf0), v as u8)
+        this_rc.borrow_mut().orit(
+            Noise as u16 + 2,
+            RegSetter::new(0xf0, v as u8)
             );
         Ok(())
     }
     #[rhai_fn(set = "env_dir", pure)]
     pub fn set_noise_env_dir(this_rc: &mut SharedDmgNoise, v: Direction) {
-        orit(
-            &mut this_rc.borrow_mut().nrx2_set_setting,
-            SetSetting::new(Setting::new(Noise as u16 + 2, 0x08), v as u8)
+        this_rc.borrow_mut().orit(
+            Noise as u16 + 2,
+            RegSetter::new(0x08, v as u8)
             );
     }
 
@@ -410,9 +413,9 @@ pub mod dmg_api {
         runtime_check!(v >= 0, "env_period must be >= 0, got {}", v);
         runtime_check!(v < 8, "env_period must be < 8, got {}", v);
 
-        orit(
-            &mut this_rc.borrow_mut().nrx2_set_setting,
-            SetSetting::new(Setting::new(Noise as u16 + 2, 0x07), v as u8)
+        this_rc.borrow_mut().orit(
+            Noise as u16 + 2,
+            RegSetter::new(0x07, v as u8)
             );
         Ok(())
     }
@@ -420,33 +423,33 @@ pub mod dmg_api {
     pub fn set_clock_shift(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "clock_shift must be >= 0, got {}", v);
         runtime_check!(v < 16, "clock_shift must be < 16, got {}", v);
-        orit(
-            &mut this_rc.borrow_mut().nrx3_set_setting,
-            SetSetting::new(Setting::new(Noise as u16 + 3, 0xf0), v as u8)
+        this_rc.borrow_mut().orit(
+            Noise as u16 + 3,
+            RegSetter::new(0xf0, v as u8)
             );
         Ok(())
     }
     #[rhai_fn(set = "counter_width", pure)]
     pub fn set_counter_width(this_rc: &mut SharedDmgNoise, v: CounterWidth) {
-        orit(
-            &mut this_rc.borrow_mut().nrx3_set_setting,
-            SetSetting::new(Setting::new(Noise as u16 + 3, 0x08), v as u8)
+        this_rc.borrow_mut().orit(
+            Noise as u16 + 3,
+            RegSetter::new(0x08, v as u8)
             );
     }
     #[rhai_fn(set = "clock_divisor", pure)]
     pub fn set_clock_divisor(this_rc: &mut SharedDmgNoise, v: Divisor) {
-        orit(
-            &mut this_rc.borrow_mut().nrx3_set_setting,
-            SetSetting::new(Setting::new(Noise as u16 + 3, 0x07), v as u8)
+        this_rc.borrow_mut().orit(
+            Noise as u16 + 3,
+            RegSetter::new(0x07, v as u8)
             );
     }
     #[rhai_fn(set = "clock_divisor", pure, return_raw)]
     pub fn set_clock_divisor_i32(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "clock_divisor must be >= 0, got {}", v);
         runtime_check!(v < 8, "clock_divisor must be < 8, got {}", v);
-        orit(
-            &mut this_rc.borrow_mut().nrx3_set_setting,
-            SetSetting::new(Setting::new(Noise as u16 + 3, 0x07), v as u8)
+        this_rc.borrow_mut().orit(
+            Noise as u16 + 3,
+            RegSetter::new(0x07, v as u8)
             );
         Ok(())
     }
@@ -454,26 +457,27 @@ pub mod dmg_api {
     pub fn noise_trigger_with_length(this_rc: &mut SharedDmgNoise, length: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(length >= 1, "length must be >= 1, got {}", length);
         runtime_check!(length <= 64, "length must be <= 64, got {}", length);
-        orit(
-            &mut this_rc.borrow_mut().nrx1_set_setting,
+        let mut this = this_rc.borrow_mut();
+        this.orit(
+            Noise as u16 + 1,
             // Length load
-            SetSetting::new(Setting::new(Noise as u16 + 1, 0x3f), 64 - length as u8)
+            RegSetter::new(0x3f, 64 - length as u8)
             );
-        orit(
-            &mut this_rc.borrow_mut().nrx4_set_setting,
+        this.orit(
+            Noise as u16 + 4,
             // Trigger
-            SetSetting::new(Setting::new(Noise as u16 + 4, 0x80), 1)
+            RegSetter::new(0x80, 1)
                 // Length enable
-                | SetSetting::new(Setting::new(Noise as u16 + 4, 0x40), 1)
+                | RegSetter::new(0x40, 1)
             );
         Ok(())
     }
     #[rhai_fn(global, name = "trigger")]
     pub fn noise_trigger(this_rc: &mut SharedDmgNoise) {
-        orit(
-            &mut this_rc.borrow_mut().nrx4_set_setting,
+        this_rc.borrow_mut().orit(
+            Noise as u16 + 4,
             // Trigger
-            SetSetting::new(Setting::new(Noise as u16 + 4, 0x80), 1)
+            RegSetter::new(0x80, 1)
             );
     }
 
@@ -486,62 +490,67 @@ pub mod dmg_api {
     pub fn to_wave_gb_freq(freq: f64) -> i32 {
         2048 - (65536.0/freq).round() as i32
     }
-
-    fn orit(dest: &mut Option<SetSetting>, with: SetSetting) {
-        *dest = match dest.take() {
-            None => Some(with),
-            Some(old) => Some(old | with)
-        };
-
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Setting {
-    pub addr: u16,
-    pub mask: u8,
-}
-impl Setting {
-    pub fn new(addr: u16, mask: u8) -> Setting {
-        Setting {
-            addr: addr, mask: mask,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Channel {
-    Square1 = 0xff10,
-    Square2 = 0xff15,
-    Wave = 0xff1a,
-    Noise = 0xff1f,
-}
-
-#[derive(Debug, Clone)]
-pub struct SetSetting {
-    pub setting: Setting,
+pub struct RegSetter {
+    pub mask: u8,
     pub value: u8,
 }
-impl SetSetting {
-    pub fn new(setting: Setting, value: u8) -> SetSetting {
-        let shifted = value << setting.mask.trailing_zeros();
-        assert!(shifted & setting.mask == shifted);
-        SetSetting{setting: setting, value: shifted}
+impl RegSetter {
+    pub fn new(mask: u8, value: u8) -> RegSetter {
+        let shifted = value << mask.trailing_zeros();
+        assert!(shifted & mask == shifted);
+        RegSetter {mask: mask, value: shifted}
     }
+    const EMPTY: RegSetter = RegSetter {mask: 0, value: 0};
 }
-impl BitOr for SetSetting {
+impl BitOr for RegSetter {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self::Output {
-        assert!(self.setting.addr == rhs.setting.addr);
-        SetSetting {
-            setting: Setting {
-                addr: self.setting.addr | rhs.setting.addr,
-                mask: self.setting.mask | rhs.setting.mask,
-            },
+        RegSetter {
+            mask: self.mask | rhs.mask,
             // Any value bit masked by both self and rhs are taken from rhs.
-            value: (self.value & !rhs.setting.mask) | rhs.value,
+            value: (self.value & !rhs.mask) | rhs.value,
         }
+    }
+}
+impl BitOrAssign for RegSetter {
+    fn bitor_assign(&mut self, rhs: Self) {
+        *self = *self | rhs
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RegSettings {
+    // FF10 to FF3F
+    registers: [RegSetter; 48],
+}
+
+impl RegSettings {
+    pub fn new() -> RegSettings {
+        RegSettings { registers: [RegSetter::EMPTY; 48] }
+    }
+
+    pub fn orit(&mut self, addr: u16, with: RegSetter) {
+        let index = addr as usize - 0xff10;
+        let dest = &mut self.registers[index];
+        *dest |= with;
+    }
+
+    pub fn for_each_setting<F>(&self, mut f: F)
+    where
+        F: FnMut(u16, RegSetter),
+    {
+        self.registers.iter()
+            .enumerate()
+            .filter_map(|(a, &r)| if r.mask != 0 { Some((a as u16 + 0xff10, r)) } else { None } )
+            .for_each(|(a, r)| f(a, r))
+    }
+
+    pub fn clear(&mut self) {
+        self.registers = [RegSetter::EMPTY; 48];
     }
 }
 
@@ -556,50 +565,39 @@ pub struct SynthScript {
 impl SynthScript {
     const DEFAULT_INSTRUMENTS: &'static str = include_str!("../res/instruments.rhai");
 
-    pub fn new(settings_ring: Rc<RefCell<Vec<Vec<SetSetting>>>>) -> SynthScript {
+    pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
         let mut engine = Engine::new();
 
         engine.register_type::<SharedDmgBindings>()
               .register_type::<SharedDmgSquare>();
         engine.register_static_module("dmg", exported_module!(dmg_api).into());
 
+        let settings_ring_index = Rc::new(RefCell::new(0));
         let square1 = Rc::new(RefCell::new(
             DmgSquare {
                 channel: Square1,
-                nrx0_set_setting: None,
-                nrx1_set_setting: None,
-                nrx2_set_setting: None,
-                nrx3_set_setting: None,
-                nrx4_set_setting: None,
+                settings_ring: settings_ring.clone(),
+                settings_ring_index: settings_ring_index.clone(),
             }));
         let square2 = Rc::new(RefCell::new(
             DmgSquare {
                 channel: Square2,
-                nrx0_set_setting: None,
-                nrx1_set_setting: None,
-                nrx2_set_setting: None,
-                nrx3_set_setting: None,
-                nrx4_set_setting: None,
+                settings_ring: settings_ring.clone(),
+                settings_ring_index: settings_ring_index.clone(),
             }));
         let wave = Rc::new(RefCell::new(
             DmgWave {
-                nrx0_set_setting: None,
-                nrx1_set_setting: None,
-                nrx2_set_setting: None,
-                nrx3_set_setting: None,
-                nrx4_set_setting: None,
-                wave_table_set_settings: vec![],
+                settings_ring: settings_ring.clone(),
+                settings_ring_index: settings_ring_index.clone(),
             }));
         let noise = Rc::new(RefCell::new(
             DmgNoise {
-                nrx1_set_setting: None,
-                nrx2_set_setting: None,
-                nrx3_set_setting: None,
-                nrx4_set_setting: None,
+                settings_ring: settings_ring.clone(),
+                settings_ring_index: settings_ring_index.clone(),
             }));
         let dmg = Rc::new(RefCell::new(DmgBindings{
             settings_ring: settings_ring.clone(),
-            settings_ring_index: 0,
+            settings_ring_index: settings_ring_index,
             square1: square1,
             square2: square2,
             wave: wave,
@@ -690,8 +688,6 @@ impl SynthScript {
         if let Err(e) = result {
             elog!("{}", e)
         }
-
-        self.script_context.borrow_mut().commit_to_ring();
     }
 
     pub fn extract_instrument_ids(&mut self) {
