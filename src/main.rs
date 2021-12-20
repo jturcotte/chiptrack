@@ -17,7 +17,7 @@ mod utils;
 use crate::sound_engine::SoundEngine;
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
-use sixtyfps::{Model, SharedPixelBuffer, Timer, TimerMode};
+use sixtyfps::{Model, Rgba8Pixel, SharedPixelBuffer, Timer, TimerMode};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::env;
@@ -84,7 +84,9 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
     // So at least avoig eating CPU while no sound is being output.
     if non_zero || was_non_zero {
         if let Some(path) = pb.finish() {
-            if let Some(mut pixmap) = Pixmap::new(width as u32, height as u32) {
+            let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width as usize, height as usize);
+            if let Some(mut pixmap) = PixmapMut::from_bytes(pixel_buffer.make_mut_bytes(), width as u32, height as u32) {
+                pixmap.fill(tiny_skia::Color::TRANSPARENT);
                 let mut paint = Paint::default();
                 paint.blend_mode = BlendMode::Source;
                 // #a0a0a0
@@ -95,7 +97,6 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
                 stroke.width = 0.0;
                 pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
 
-                let pixel_buffer = SharedPixelBuffer::clone_from_slice(pixmap.data(), pixmap.width() as usize, pixmap.height() as usize);
                 let image = sixtyfps::Image::from_rgba8_premultiplied(pixel_buffer);
                 window.set_waveform_image(image);
                 window.set_waveform_is_zero(!non_zero);
