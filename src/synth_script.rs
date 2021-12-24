@@ -87,12 +87,12 @@ trait ScriptChannel {
 }
 
 #[derive(Debug, Clone)]
-pub struct DmgSquare {
+pub struct GbSquare {
     channel: Channel,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     settings_ring_index: Rc<RefCell<usize>>,
 }
-impl DmgSquare {
+impl GbSquare {
     pub fn set_sweep_time(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "sweep_time must be >= 0, got {}", v);
         runtime_check!(v < 8, "sweep_time must be < 8, got {}", v);
@@ -137,7 +137,7 @@ impl DmgSquare {
 
     pub fn set_freq(&mut self, index: usize, freq: f64) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(freq >= 64.0, "freq must be >= 64, got {}", freq);
-        let gb_freq = DmgSquare::to_gb_freq(freq);
+        let gb_freq = GbSquare::to_gb_freq(freq);
         self.orit_at_index(
             index,
             self.channel as u16 + 3,
@@ -186,21 +186,21 @@ impl DmgSquare {
         2048 - (131072.0/freq).round() as i32
     }
 }
-impl ScriptChannel for DmgSquare {
+impl ScriptChannel for GbSquare {
     fn base(&self) -> u16 { self.channel as u16 }
     fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> { self.settings_ring.borrow_mut() }
     fn settings_ring_index(&mut self) -> Ref<'_, usize> { self.settings_ring_index.borrow() }
 }
-pub type SharedDmgSquare = Rc<RefCell<DmgSquare>>;
+pub type SharedGbSquare = Rc<RefCell<GbSquare>>;
 
 
 #[derive(Debug, Clone)]
-pub struct DmgWave {
+pub struct GbWave {
     channel: Channel,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     settings_ring_index: Rc<RefCell<usize>>,
 }
-impl DmgWave {
+impl GbWave {
     pub fn set_playing(&mut self, index: usize, v: bool) -> Result<(), Box<EvalAltResult>> {
         self.orit_at_index(index, Wave as u16 + 0, RegSetter::new(0x80, v as u8));
         Ok(())
@@ -226,7 +226,7 @@ impl DmgWave {
 
     pub fn set_freq(&mut self, index: usize, freq: f64) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(freq >= 32.0, "freq must be >= 32, got {}", freq);
-        let gb_freq = DmgWave::to_gb_freq(freq);
+        let gb_freq = GbWave::to_gb_freq(freq);
         self.orit_at_index(
             index,
             Wave as u16 + 3,
@@ -275,20 +275,20 @@ impl DmgWave {
         2048 - (65536.0/freq).round() as i32
     }
 }
-impl ScriptChannel for DmgWave {
+impl ScriptChannel for GbWave {
     fn base(&self) -> u16 { self.channel as u16 }
     fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> { self.settings_ring.borrow_mut() }
     fn settings_ring_index(&mut self) -> Ref<'_, usize> { self.settings_ring_index.borrow() }
 }
-pub type SharedDmgWave = Rc<RefCell<DmgWave>>;
+pub type SharedGbWave = Rc<RefCell<GbWave>>;
 
 #[derive(Debug, Clone)]
-pub struct DmgNoise {
+pub struct GbNoise {
     channel: Channel,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     settings_ring_index: Rc<RefCell<usize>>,
 }
-impl DmgNoise {
+impl GbNoise {
     pub fn set_env_start(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "env_start must be >= 0, got {}", v);
         runtime_check!(v < 16, "env_start must be < 16, got {}", v);
@@ -359,25 +359,25 @@ impl DmgNoise {
         Ok(())
     }
 }    
-impl ScriptChannel for DmgNoise {
+impl ScriptChannel for GbNoise {
     fn base(&self) -> u16 { self.channel as u16 }
     fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> { self.settings_ring.borrow_mut() }
     fn settings_ring_index(&mut self) -> Ref<'_, usize> { self.settings_ring_index.borrow() }
 }
-pub type SharedDmgNoise = Rc<RefCell<DmgNoise>>;
+pub type SharedGbNoise = Rc<RefCell<GbNoise>>;
 
 #[derive(Debug, Clone)]
-pub struct DmgBindings {
+pub struct GbBindings {
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     settings_ring_index: Rc<RefCell<usize>>,
-    square1: SharedDmgSquare,
-    square2: SharedDmgSquare,
-    wave: SharedDmgWave,
-    noise: SharedDmgNoise,
+    square1: SharedGbSquare,
+    square2: SharedGbSquare,
+    wave: SharedGbWave,
+    noise: SharedGbNoise,
 }
-pub type SharedDmgBindings = Rc<RefCell<DmgBindings>>;
+pub type SharedGbBindings = Rc<RefCell<GbBindings>>;
 
-impl DmgBindings {
+impl GbBindings {
     fn set_settings_ring_index(&mut self, v: usize) {
         *self.settings_ring_index.borrow_mut() = v;
     }
@@ -423,7 +423,7 @@ pub enum Divisor {
 }
 
 #[export_module]
-pub mod dmg_api {
+pub mod gb_api {
 
     pub const DEC: Direction = Direction::Dec;
     pub const INC: Direction = Direction::Inc;
@@ -455,34 +455,34 @@ pub mod dmg_api {
 
     #[rhai_fn(global)]
     pub fn to_square_gb_freq(freq: f64) -> i32 {
-        DmgSquare::to_gb_freq(freq)
+        GbSquare::to_gb_freq(freq)
     }
 
     #[rhai_fn(global)]
     pub fn to_wave_gb_freq(freq: f64) -> i32 {
-        DmgSquare::to_gb_freq(freq)
+        GbSquare::to_gb_freq(freq)
     }
 
     #[rhai_fn(get = "square1", pure)]
-    pub fn get_square1(this_rc: &mut SharedDmgBindings) -> SharedDmgSquare {
+    pub fn get_square1(this_rc: &mut SharedGbBindings) -> SharedGbSquare {
         this_rc.borrow().square1.clone()
     }
     #[rhai_fn(get = "square2", pure)]
-    pub fn get_square2(this_rc: &mut SharedDmgBindings) -> SharedDmgSquare {
+    pub fn get_square2(this_rc: &mut SharedGbBindings) -> SharedGbSquare {
         this_rc.borrow().square2.clone()
     }
     #[rhai_fn(get = "wave", pure)]
-    pub fn get_wave(this_rc: &mut SharedDmgBindings) -> SharedDmgWave {
+    pub fn get_wave(this_rc: &mut SharedGbBindings) -> SharedGbWave {
         this_rc.borrow().wave.clone()
     }
     #[rhai_fn(get = "noise", pure)]
-    pub fn get_noise(this_rc: &mut SharedDmgBindings) -> SharedDmgNoise {
+    pub fn get_noise(this_rc: &mut SharedGbBindings) -> SharedGbNoise {
         this_rc.borrow().noise.clone()
     }
 
     #[rhai_fn(global, return_raw)]
-    pub fn wait_frames(dmg: &mut SharedDmgBindings, frames: i32) -> Result<(), Box<EvalAltResult>> {
-        let this = dmg.borrow_mut();
+    pub fn wait_frames(gb: &mut SharedGbBindings, frames: i32) -> Result<(), Box<EvalAltResult>> {
+        let this = gb.borrow_mut();
         let len = this.settings_ring.borrow().len();
         runtime_check!(frames >= 0, "frames must be >= 0, got {}", frames);
         runtime_check!((frames as usize) < len, "frames must be < {}, got {}", len, frames);
@@ -492,240 +492,240 @@ pub mod dmg_api {
     }
 
     #[rhai_fn(set = "sweep_time", pure, return_raw)]
-    pub fn set_sweep_time(this_rc: &mut SharedDmgSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_sweep_time(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_sweep_time)
     }
     #[rhai_fn(set = "sweep_time", pure, return_raw)]
-    pub fn set_multi_sweep_time(this_rc: &mut SharedDmgSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_sweep_time(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_sweep_time)
     }
 
     #[rhai_fn(set = "sweep_dir", pure, return_raw)]
-    pub fn set_sweep_dir(this_rc: &mut SharedDmgSquare, v: Direction) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_sweep_dir(this_rc: &mut SharedGbSquare, v: Direction) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_sweep_dir)
     }
     #[rhai_fn(set = "sweep_dir", pure, return_raw)]
-    pub fn set_multi_sweep_dir(this_rc: &mut SharedDmgSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_sweep_dir(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, Direction, set_sweep_dir)
     }
 
     #[rhai_fn(set = "sweep_shift", pure, return_raw)]
-    pub fn set_sweep_shift(this_rc: &mut SharedDmgSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_sweep_shift(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_sweep_shift)
     }
     #[rhai_fn(set = "sweep_shift", pure, return_raw)]
-    pub fn set_multi_sweep_shift(this_rc: &mut SharedDmgSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_sweep_shift(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_sweep_shift)
     }
 
     #[rhai_fn(set = "duty", pure, return_raw)]
-    pub fn set_duty(this_rc: &mut SharedDmgSquare, v: Duty) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_duty(this_rc: &mut SharedGbSquare, v: Duty) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_duty)
     }
     #[rhai_fn(set = "duty", pure, return_raw)]
-    pub fn set_multi_duty(this_rc: &mut SharedDmgSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_duty(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, Duty, set_duty)
     }
 
     #[rhai_fn(set = "env_start", pure, return_raw)]
-    pub fn set_square_env_start(this_rc: &mut SharedDmgSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_env_start(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_env_start)
     }
     #[rhai_fn(set = "env_start", pure, return_raw)]
-    pub fn set_multi_square_env_start(this_rc: &mut SharedDmgSquare, values: Vec<Dynamic>) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_square_env_start(this_rc: &mut SharedGbSquare, values: Vec<Dynamic>) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_env_start)
     }
 
     #[rhai_fn(set = "env_dir", pure, return_raw)]
-    pub fn set_square_env_dir(this_rc: &mut SharedDmgSquare, v: Direction) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_env_dir(this_rc: &mut SharedGbSquare, v: Direction) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_env_dir)
     }
     #[rhai_fn(set = "env_dir", pure, return_raw)]
-    pub fn set_multi_square_env_dir(this_rc: &mut SharedDmgSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_square_env_dir(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, Direction, set_env_dir)
     }
 
     #[rhai_fn(set = "env_period", pure, return_raw)]
-    pub fn set_square_env_period(this_rc: &mut SharedDmgSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_env_period(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_env_period)
     }
     #[rhai_fn(set = "env_period", pure, return_raw)]
-    pub fn set_multi_square_env_period(this_rc: &mut SharedDmgSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_square_env_period(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_env_period)
     }
 
     #[rhai_fn(set = "freq", pure, return_raw)]
-    pub fn set_square_freq(this_rc: &mut SharedDmgSquare, v: f64) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_freq(this_rc: &mut SharedGbSquare, v: f64) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_freq)
     }
     #[rhai_fn(set = "freq", pure, return_raw)]
-    pub fn set_multi_square_freq(this_rc: &mut SharedDmgSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_square_freq(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, f64, set_freq)
     }
 
     #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_square_initialize(this_rc: &mut SharedDmgSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_initialize(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_initialize)
     }
     #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_square_initialize_bool(this_rc: &mut SharedDmgSquare, b: bool) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_initialize_bool(this_rc: &mut SharedGbSquare, b: bool) -> Result<(), Box<EvalAltResult>> {
         let v = b as i32;
         set!(this_rc, v, set_initialize)
     }
     #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_multi_square_initialize(this_rc: &mut SharedDmgSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_square_initialize(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_initialize)
     }
 
     #[rhai_fn(global, name = "trigger_with_length", return_raw)]
-    pub fn square_trigger_with_length(this_rc: &mut SharedDmgSquare, length: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn square_trigger_with_length(this_rc: &mut SharedGbSquare, length: i32) -> Result<(), Box<EvalAltResult>> {
         this_rc.borrow_mut().trigger_with_length(length)
     }
 
     #[rhai_fn(global, name = "trigger", return_raw)]
-    pub fn square_trigger(this_rc: &mut SharedDmgSquare) -> Result<(), Box<EvalAltResult>> {
+    pub fn square_trigger(this_rc: &mut SharedGbSquare) -> Result<(), Box<EvalAltResult>> {
         this_rc.borrow_mut().trigger()
     }
 
     #[rhai_fn(set = "playing", pure, return_raw)]
-    pub fn set_playing(this_rc: &mut SharedDmgWave, v: bool) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_playing(this_rc: &mut SharedGbWave, v: bool) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_playing)
     }
     #[rhai_fn(set = "playing", pure, return_raw)]
-    pub fn set_multi_playing(this_rc: &mut SharedDmgWave, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_playing(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, bool, set_playing)
     }
 
     #[rhai_fn(set = "volume", pure, return_raw)]
-    pub fn set_volume(this_rc: &mut SharedDmgWave, v: WaveVolume) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_volume(this_rc: &mut SharedGbWave, v: WaveVolume) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_volume)
     }
     #[rhai_fn(set = "volume", pure, return_raw)]
-    pub fn set_multi_volume(this_rc: &mut SharedDmgWave, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_volume(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, WaveVolume, set_volume)
     }
 
     #[rhai_fn(set = "table", pure, return_raw)]
-    pub fn set_table(this_rc: &mut SharedDmgWave, v: String) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_table(this_rc: &mut SharedGbWave, v: String) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_table)
     }
     #[rhai_fn(set = "table", pure, return_raw)]
-    pub fn set_multi_table(this_rc: &mut SharedDmgWave, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_table(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, String, set_table)
     }
 
     #[rhai_fn(set = "freq", pure, return_raw)]
-    pub fn set_wave_freq(this_rc: &mut SharedDmgWave, v: f64) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_wave_freq(this_rc: &mut SharedGbWave, v: f64) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_freq)
     }
     #[rhai_fn(set = "freq", pure, return_raw)]
-    pub fn set_multi_wave_freq(this_rc: &mut SharedDmgWave, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_wave_freq(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, f64, set_freq)
     }
 
     #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_wave_initialize(this_rc: &mut SharedDmgWave, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_wave_initialize(this_rc: &mut SharedGbWave, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_initialize)
     }
     #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_wave_initialize_bool(this_rc: &mut SharedDmgWave, b: bool) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_wave_initialize_bool(this_rc: &mut SharedGbWave, b: bool) -> Result<(), Box<EvalAltResult>> {
         let v = b as i32;
         set!(this_rc, v, set_initialize)
     }
     #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_multi_wave_initialize(this_rc: &mut SharedDmgWave, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_wave_initialize(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_initialize)
     }
 
     #[rhai_fn(global, name = "trigger_with_length", return_raw)]
-    pub fn wave_trigger_with_length(this_rc: &mut SharedDmgWave, length: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn wave_trigger_with_length(this_rc: &mut SharedGbWave, length: i32) -> Result<(), Box<EvalAltResult>> {
         this_rc.borrow_mut().trigger_with_length(length)
     }
     #[rhai_fn(global, name = "trigger", return_raw)]
-    pub fn wave_trigger(this_rc: &mut SharedDmgWave) -> Result<(), Box<EvalAltResult>> {
+    pub fn wave_trigger(this_rc: &mut SharedGbWave) -> Result<(), Box<EvalAltResult>> {
         this_rc.borrow_mut().trigger()
     }
 
 
     #[rhai_fn(set = "env_start", pure, return_raw)]
-    pub fn set_noise_env_start(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_noise_env_start(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_env_start)
     }
     #[rhai_fn(set = "env_start", pure, return_raw)]
-    pub fn set_multi_noise_env_start(this_rc: &mut SharedDmgNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_noise_env_start(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_env_start)
     }
 
     #[rhai_fn(set = "env_dir", pure, return_raw)]
-    pub fn set_noise_env_dir(this_rc: &mut SharedDmgNoise, v: Direction) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_noise_env_dir(this_rc: &mut SharedGbNoise, v: Direction) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_env_dir)
     }
     #[rhai_fn(set = "env_dir", pure, return_raw)]
-    pub fn set_multi_noise_env_dir(this_rc: &mut SharedDmgNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_noise_env_dir(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, Direction, set_env_dir)
     }
 
     #[rhai_fn(set = "env_period", pure, return_raw)]
-    pub fn set_noise_env_period(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_noise_env_period(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_env_period)
     }
     #[rhai_fn(set = "env_period", pure, return_raw)]
-    pub fn set_multi_noise_env_period(this_rc: &mut SharedDmgNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_noise_env_period(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_env_period)
     }
 
     #[rhai_fn(set = "clock_shift", pure, return_raw)]
-    pub fn set_clock_shift(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_clock_shift(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_clock_shift)
     }
     #[rhai_fn(set = "clock_shift", pure, return_raw)]
-    pub fn set_multi_clock_shift(this_rc: &mut SharedDmgNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_clock_shift(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_clock_shift)
     }
 
     #[rhai_fn(set = "counter_width", pure, return_raw)]
-    pub fn set_counter_width(this_rc: &mut SharedDmgNoise, v: CounterWidth) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_counter_width(this_rc: &mut SharedGbNoise, v: CounterWidth) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_counter_width)
     }
     #[rhai_fn(set = "counter_width", pure, return_raw)]
-    pub fn set_multi_counter_width(this_rc: &mut SharedDmgNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_counter_width(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, CounterWidth, set_counter_width)
     }
 
     #[rhai_fn(set = "clock_divisor", pure, return_raw)]
-    pub fn set_clock_divisor(this_rc: &mut SharedDmgNoise, v: Divisor) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_clock_divisor(this_rc: &mut SharedGbNoise, v: Divisor) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_clock_divisor)
     }
     #[rhai_fn(set = "clock_divisor", pure, return_raw)]
-    pub fn set_multi_clock_divisor(this_rc: &mut SharedDmgNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_clock_divisor(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, Divisor, set_clock_divisor)
     }
     #[rhai_fn(set = "clock_divisor", pure, return_raw)]
-    pub fn set_clock_divisor_i32(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_clock_divisor_i32(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_clock_divisor_i32)
     }
 
     // FIXME: Should it be i32 or should it be bool?
     #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_noise_initialize(this_rc: &mut SharedDmgNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_noise_initialize(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_initialize)
     }
     #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_noise_initialize_bool(this_rc: &mut SharedDmgNoise, b: bool) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_noise_initialize_bool(this_rc: &mut SharedGbNoise, b: bool) -> Result<(), Box<EvalAltResult>> {
         let v = b as i32;
         set!(this_rc, v, set_initialize)
     }
     #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_multi_noise_initialize(this_rc: &mut SharedDmgNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_noise_initialize(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_initialize)
     }
 
     #[rhai_fn(global, name = "trigger_with_length", return_raw)]
-    pub fn noise_trigger_with_length(this_rc: &mut SharedDmgNoise, length: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn noise_trigger_with_length(this_rc: &mut SharedGbNoise, length: i32) -> Result<(), Box<EvalAltResult>> {
         this_rc.borrow_mut().trigger_with_length(length)
     }
     #[rhai_fn(global, name = "trigger", return_raw)]
-    pub fn noise_trigger(this_rc: &mut SharedDmgNoise) -> Result<(), Box<EvalAltResult>> {
+    pub fn noise_trigger(this_rc: &mut SharedGbNoise) -> Result<(), Box<EvalAltResult>> {
         this_rc.borrow_mut().trigger()
     }
 }
@@ -796,7 +796,7 @@ pub struct SynthScript {
     script_engine: Engine,
     script_ast: AST,
     script_scope: Scope<'static>,
-    script_context: SharedDmgBindings,
+    script_context: SharedGbBindings,
     instrument_ids: Vec<String>,
 }
 
@@ -806,36 +806,36 @@ impl SynthScript {
     pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
         let mut engine = Engine::new();
 
-        engine.register_type::<SharedDmgBindings>()
-              .register_type::<SharedDmgSquare>();
-        engine.register_static_module("dmg", exported_module!(dmg_api).into());
+        engine.register_type::<SharedGbBindings>()
+              .register_type::<SharedGbSquare>();
+        engine.register_static_module("gb", exported_module!(gb_api).into());
 
         let settings_ring_index = Rc::new(RefCell::new(0));
         let square1 = Rc::new(RefCell::new(
-            DmgSquare {
+            GbSquare {
                 channel: Square1,
                 settings_ring: settings_ring.clone(),
                 settings_ring_index: settings_ring_index.clone(),
             }));
         let square2 = Rc::new(RefCell::new(
-            DmgSquare {
+            GbSquare {
                 channel: Square2,
                 settings_ring: settings_ring.clone(),
                 settings_ring_index: settings_ring_index.clone(),
             }));
         let wave = Rc::new(RefCell::new(
-            DmgWave {
+            GbWave {
                 channel: Wave,
                 settings_ring: settings_ring.clone(),
                 settings_ring_index: settings_ring_index.clone(),
             }));
         let noise = Rc::new(RefCell::new(
-            DmgNoise {
+            GbNoise {
                 channel: Noise,
                 settings_ring: settings_ring.clone(),
                 settings_ring_index: settings_ring_index.clone(),
             }));
-        let dmg = Rc::new(RefCell::new(DmgBindings{
+        let gb = Rc::new(RefCell::new(GbBindings{
             settings_ring: settings_ring.clone(),
             settings_ring_index: settings_ring_index,
             square1: square1,
@@ -845,12 +845,12 @@ impl SynthScript {
             }));
 
         let mut scope = Scope::new();
-        scope.push("dmg", dmg.clone());
+        scope.push("gb", gb.clone());
 
         SynthScript {
             script_engine: engine,
             script_ast: Default::default(),
-            script_context: dmg,
+            script_context: gb,
             script_scope: scope,
             instrument_ids: Vec::new(),
         }
