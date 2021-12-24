@@ -801,7 +801,7 @@ pub struct SynthScript {
 }
 
 impl SynthScript {
-    const DEFAULT_INSTRUMENTS: &'static str = include_str!("../res/instruments.rhai");
+    const DEFAULT_INSTRUMENTS: &'static str = include_str!("../res/default-instruments.rhai");
 
     pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
         let mut engine = Engine::new();
