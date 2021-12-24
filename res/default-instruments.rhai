@@ -2,13 +2,13 @@ fn instrument_id_1() { "🎹" }
 fn instrument_1(freq) {
     gb.square1.freq = freq;
     gb.square1.sweep_time = 0;
-    gb.square1.sweep_dir = gb::INC;
+    gb.square1.sweep_dir = gb::SWEEP_INC;
     gb.square1.sweep_shift = 0;
 
     gb.square1.duty = gb::DUTY_2_4;
     let t =                          [0,   1,   1,   3,   2,   1];
     gb.square1.env_start = t.frames([0xf, 0xd, 0xd, 0x6, 0x1, 0x0]);
-    gb.square1.env_dir = gb::INC;
+    gb.square1.env_dir = gb::ENV_INC;
     gb.square1.env_period = 0;
     gb.square1.initialize = true;
 }
@@ -17,12 +17,12 @@ fn instrument_id_2() { "🎸" }
 fn instrument_2(freq) {
     gb.square1.freq = freq;
     gb.square1.sweep_time = 0;
-    gb.square1.sweep_dir = gb::INC;
+    gb.square1.sweep_dir = gb::SWEEP_INC;
     gb.square1.sweep_shift = 0;
 
     gb.square1.duty = gb::DUTY_1_4;
     gb.square1.env_start = 0xf;
-    gb.square1.env_dir = gb::DEC;
+    gb.square1.env_dir = gb::ENV_DEC;
     gb.square1.env_period = 0;
     gb.square1.trigger_with_length(64);
 }
@@ -32,12 +32,12 @@ fn instrument_3(freq) {
     gb.square1.freq = freq;
     // 2:bipp e:a:d:1 f:0:d:2 g
     gb.square1.duty = gb::DUTY_1_8;
-    gb.square1.env_dir = gb::DEC;
+    gb.square1.env_dir = gb::ENV_DEC;
     let t =                           [0,   2];
     gb.square1.env_start =  t.frames([0xa, 0]);
     gb.square1.env_period = t.frames([1,   0]);
     gb.square1.sweep_time = 0;
-    gb.square1.sweep_dir = gb::DEC;
+    gb.square1.sweep_dir = gb::SWEEP_DEC;
     gb.square1.sweep_shift = 2;
     gb.square1.trigger();
     gb.wait_frames(2);
@@ -61,10 +61,10 @@ fn instrument_4(freq) {
         gb::DUTY_1_8]);
 
     gb.square1.env_start = [0, 16].frames([0xf, 0x0]);
-    gb.square1.env_dir = gb::DEC;
+    gb.square1.env_dir = gb::ENV_DEC;
     gb.square1.env_period = 0;
     gb.square1.sweep_time = 0;
-    gb.square1.sweep_dir = gb::DEC;
+    gb.square1.sweep_dir = gb::SWEEP_DEC;
     gb.square1.sweep_shift = 0;
     gb.square1.trigger();
 }
@@ -72,7 +72,7 @@ fn instrument_4(freq) {
 fn instrument_id_5() { "🥁" }
 fn instrument_5(freq) {
     gb.noise.env_start = 0xf;
-    gb.noise.env_dir = gb::DEC;
+    gb.noise.env_dir = gb::ENV_DEC;
     gb.noise.env_period = 1;
     // Use the frequency as input for now just so that different
     // keys produce different sounds.
@@ -89,10 +89,10 @@ fn instrument_6(freq) {
     // 1:superdrum e:d:d:2 f:2:d:2 g e
     gb.square1.duty = gb::DUTY_2_4;
     gb.square1.env_start = 0xd;
-    gb.square1.env_dir = gb::DEC;
+    gb.square1.env_dir = gb::ENV_DEC;
     gb.square1.env_period = 2;
     gb.square1.sweep_time = 2;
-    gb.square1.sweep_dir = gb::DEC;
+    gb.square1.sweep_dir = gb::SWEEP_DEC;
     gb.square1.sweep_shift = 2;
     gb.square1.trigger();
 }

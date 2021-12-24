@@ -100,8 +100,8 @@ impl GbSquare {
         Ok(())
     }
 
-    pub fn set_sweep_dir(&mut self, index: usize, v: Direction) -> Result<(), Box<EvalAltResult>> {
-        self.orit_at_index(index, self.channel as u16 + 0, RegSetter::new(0x08, match v { Direction::Inc => 0, Direction::Dec => 1 }));
+    pub fn set_sweep_dir(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+        self.orit_at_index(index, self.channel as u16 + 0, RegSetter::new(0x08, v as u8));
         Ok(())
     }
 
@@ -112,7 +112,7 @@ impl GbSquare {
         Ok(())
     }
 
-    pub fn set_duty(&mut self, index: usize, v: Duty) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_duty(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
         self.orit_at_index(index, self.channel as u16 + 1, RegSetter::new(0xC0, v as u8));
         Ok(())
     }
@@ -124,7 +124,7 @@ impl GbSquare {
         Ok(())
     }
 
-    pub fn set_env_dir(&mut self, index: usize, v: Direction) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_env_dir(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
         self.orit_at_index(index, self.channel as u16 + 2, RegSetter::new(0x08, v as u8));
         Ok(())
     }
@@ -206,7 +206,7 @@ impl GbWave {
         Ok(())
     }
 
-    pub fn set_volume(&mut self, index: usize, v: WaveVolume) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_volume(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
         self.orit_at_index(index, Wave as u16 + 2, RegSetter::new(0x60, v as u8));
         Ok(())
     }
@@ -296,7 +296,7 @@ impl GbNoise {
         Ok(())
     }
 
-    pub fn set_env_dir(&mut self, index: usize, v: Direction) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_env_dir(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
         self.orit_at_index(index, Noise as u16 + 2, RegSetter::new(0x08, v as u8));
         Ok(())
     }
@@ -315,19 +315,12 @@ impl GbNoise {
         Ok(())
     }
 
-    pub fn set_counter_width(&mut self, index: usize, v: CounterWidth) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_counter_width(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
         self.orit_at_index(index, Noise as u16 + 3, RegSetter::new(0x08, v as u8));
         Ok(())
     }
 
-    pub fn set_clock_divisor(&mut self, index: usize, v: Divisor) -> Result<(), Box<EvalAltResult>> {
-        self.orit_at_index(index, Noise as u16 + 3, RegSetter::new(0x07, v as u8));
-        Ok(())
-    }
-
-    pub fn set_clock_divisor_i32(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(v >= 0, "clock_divisor must be >= 0, got {}", v);
-        runtime_check!(v < 8, "clock_divisor must be < 8, got {}", v);
+    pub fn set_clock_divisor(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
         self.orit_at_index(index, Noise as u16 + 3, RegSetter::new(0x07, v as u8));
         Ok(())
     }
@@ -383,68 +376,31 @@ impl GbBindings {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum Direction {
-    Dec = 0,
-    Inc = 1,
-}
-
-#[derive(Debug, Clone)]
-pub enum Duty {
-    Duty1_8 = 0,
-    Duty1_4 = 1,
-    Duty2_4 = 2,
-    Duty3_4 = 3,
-}
-
-#[derive(Debug, Clone)]
-pub enum WaveVolume {
-    Volume0 = 0,
-    Volume100 = 1,
-    Volume50 = 2,
-    Volume25 = 3,
-}
-
-#[derive(Debug, Clone)]
-pub enum CounterWidth {
-    Width15 = 0,
-    Width7 = 1,
-}
-#[derive(Debug, Clone)]
-pub enum Divisor {
-    Divisor8 = 0,
-    Divisor16 = 1,
-    Divisor32 = 2,
-    Divisor48 = 3,
-    Divisor64 = 4,
-    Divisor80 = 5,
-    Divisor96 = 6,
-    Divisor112 = 7,
-}
-
 #[export_module]
 pub mod gb_api {
 
-    pub const DEC: Direction = Direction::Dec;
-    pub const INC: Direction = Direction::Inc;
-    pub const DUTY_1_8: Duty = Duty::Duty1_8;
-    pub const DUTY_1_4: Duty = Duty::Duty1_4;
-    pub const DUTY_2_4: Duty = Duty::Duty2_4;
-    pub const DUTY_3_4: Duty = Duty::Duty3_4;
-    pub const VOLUME_0: WaveVolume = WaveVolume::Volume0;
-    pub const VOLUME_100: WaveVolume = WaveVolume::Volume100;
-    pub const VOLUME_50: WaveVolume = WaveVolume::Volume50;
-    pub const VOLUME_25: WaveVolume = WaveVolume::Volume25;
-    pub const WIDTH_15: CounterWidth = CounterWidth::Width15;
-    pub const WIDTH_7: CounterWidth = CounterWidth::Width7;
-    pub const DIVISOR_8: Divisor = Divisor::Divisor8;
-    pub const DIVISOR_16: Divisor = Divisor::Divisor16;
-    pub const DIVISOR_32: Divisor = Divisor::Divisor32;
-    pub const DIVISOR_48: Divisor = Divisor::Divisor48;
-    pub const DIVISOR_64: Divisor = Divisor::Divisor64;
-    pub const DIVISOR_80: Divisor = Divisor::Divisor80;
-    pub const DIVISOR_96: Divisor = Divisor::Divisor96;
-    pub const DIVISOR_112: Divisor = Divisor::Divisor112;
+    pub const SWEEP_INC: i32 = 0;
+    pub const SWEEP_DEC: i32 = 1;
+    pub const ENV_DEC: i32 = 0;
+    pub const ENV_INC: i32 = 1;
+    pub const DUTY_1_8: i32 = 0;
+    pub const DUTY_1_4: i32 = 1;
+    pub const DUTY_2_4: i32 = 2;
+    pub const DUTY_3_4: i32 = 3;
+    pub const VOLUME_0: i32 = 0;
+    pub const VOLUME_100: i32 = 1;
+    pub const VOLUME_50: i32 = 2;
+    pub const VOLUME_25: i32 = 3;
+    pub const WIDTH_15: i32 = 0;
+    pub const WIDTH_7: i32 = 1;
+    pub const DIVISOR_8: i32 = 0;
+    pub const DIVISOR_16: i32 = 1;
+    pub const DIVISOR_32: i32 = 2;
+    pub const DIVISOR_48: i32 = 3;
+    pub const DIVISOR_64: i32 = 4;
+    pub const DIVISOR_80: i32 = 5;
+    pub const DIVISOR_96: i32 = 6;
+    pub const DIVISOR_112: i32 = 7;
 
 
     /// Just a clearer wrapper for [[t1, t2, ...], [v1, v2, ...]], which is what multi setters expect.
@@ -501,12 +457,12 @@ pub mod gb_api {
     }
 
     #[rhai_fn(set = "sweep_dir", pure, return_raw)]
-    pub fn set_sweep_dir(this_rc: &mut SharedGbSquare, v: Direction) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_sweep_dir(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_sweep_dir)
     }
     #[rhai_fn(set = "sweep_dir", pure, return_raw)]
     pub fn set_multi_sweep_dir(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, Direction, set_sweep_dir)
+        set_multi!(this_rc, values, i32, set_sweep_dir)
     }
 
     #[rhai_fn(set = "sweep_shift", pure, return_raw)]
@@ -519,12 +475,12 @@ pub mod gb_api {
     }
 
     #[rhai_fn(set = "duty", pure, return_raw)]
-    pub fn set_duty(this_rc: &mut SharedGbSquare, v: Duty) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_duty(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_duty)
     }
     #[rhai_fn(set = "duty", pure, return_raw)]
     pub fn set_multi_duty(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, Duty, set_duty)
+        set_multi!(this_rc, values, i32, set_duty)
     }
 
     #[rhai_fn(set = "env_start", pure, return_raw)]
@@ -537,12 +493,12 @@ pub mod gb_api {
     }
 
     #[rhai_fn(set = "env_dir", pure, return_raw)]
-    pub fn set_square_env_dir(this_rc: &mut SharedGbSquare, v: Direction) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_env_dir(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_env_dir)
     }
     #[rhai_fn(set = "env_dir", pure, return_raw)]
     pub fn set_multi_square_env_dir(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, Direction, set_env_dir)
+        set_multi!(this_rc, values, i32, set_env_dir)
     }
 
     #[rhai_fn(set = "env_period", pure, return_raw)]
@@ -597,12 +553,12 @@ pub mod gb_api {
     }
 
     #[rhai_fn(set = "volume", pure, return_raw)]
-    pub fn set_volume(this_rc: &mut SharedGbWave, v: WaveVolume) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_volume(this_rc: &mut SharedGbWave, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_volume)
     }
     #[rhai_fn(set = "volume", pure, return_raw)]
     pub fn set_multi_volume(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, WaveVolume, set_volume)
+        set_multi!(this_rc, values, i32, set_volume)
     }
 
     #[rhai_fn(set = "table", pure, return_raw)]
@@ -657,12 +613,12 @@ pub mod gb_api {
     }
 
     #[rhai_fn(set = "env_dir", pure, return_raw)]
-    pub fn set_noise_env_dir(this_rc: &mut SharedGbNoise, v: Direction) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_noise_env_dir(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_env_dir)
     }
     #[rhai_fn(set = "env_dir", pure, return_raw)]
     pub fn set_multi_noise_env_dir(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, Direction, set_env_dir)
+        set_multi!(this_rc, values, i32, set_env_dir)
     }
 
     #[rhai_fn(set = "env_period", pure, return_raw)]
@@ -684,25 +640,21 @@ pub mod gb_api {
     }
 
     #[rhai_fn(set = "counter_width", pure, return_raw)]
-    pub fn set_counter_width(this_rc: &mut SharedGbNoise, v: CounterWidth) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_counter_width(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_counter_width)
     }
     #[rhai_fn(set = "counter_width", pure, return_raw)]
     pub fn set_multi_counter_width(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, CounterWidth, set_counter_width)
+        set_multi!(this_rc, values, i32, set_counter_width)
     }
 
     #[rhai_fn(set = "clock_divisor", pure, return_raw)]
-    pub fn set_clock_divisor(this_rc: &mut SharedGbNoise, v: Divisor) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_clock_divisor(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_clock_divisor)
     }
     #[rhai_fn(set = "clock_divisor", pure, return_raw)]
     pub fn set_multi_clock_divisor(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, Divisor, set_clock_divisor)
-    }
-    #[rhai_fn(set = "clock_divisor", pure, return_raw)]
-    pub fn set_clock_divisor_i32(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_clock_divisor_i32)
+        set_multi!(this_rc, values, i32, set_clock_divisor)
     }
 
     // FIXME: Should it be i32 or should it be bool?
