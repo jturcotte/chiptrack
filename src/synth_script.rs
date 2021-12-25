@@ -379,28 +379,28 @@ impl GbBindings {
 #[export_module]
 pub mod gb_api {
 
-    pub const SWEEP_INC: i32 = 0;
-    pub const SWEEP_DEC: i32 = 1;
+    pub const SWE_INC: i32 = 0;
+    pub const SWE_DEC: i32 = 1;
     pub const ENV_DEC: i32 = 0;
     pub const ENV_INC: i32 = 1;
-    pub const DUTY_1_8: i32 = 0;
-    pub const DUTY_1_4: i32 = 1;
-    pub const DUTY_2_4: i32 = 2;
-    pub const DUTY_3_4: i32 = 3;
-    pub const VOLUME_0: i32 = 0;
-    pub const VOLUME_100: i32 = 1;
-    pub const VOLUME_50: i32 = 2;
-    pub const VOLUME_25: i32 = 3;
-    pub const WIDTH_15: i32 = 0;
-    pub const WIDTH_7: i32 = 1;
-    pub const DIVISOR_8: i32 = 0;
-    pub const DIVISOR_16: i32 = 1;
-    pub const DIVISOR_32: i32 = 2;
-    pub const DIVISOR_48: i32 = 3;
-    pub const DIVISOR_64: i32 = 4;
-    pub const DIVISOR_80: i32 = 5;
-    pub const DIVISOR_96: i32 = 6;
-    pub const DIVISOR_112: i32 = 7;
+    pub const DUT_1_8: i32 = 0;
+    pub const DUT_1_4: i32 = 1;
+    pub const DUT_2_4: i32 = 2;
+    pub const DUT_3_4: i32 = 3;
+    pub const VOL_0: i32 = 0;
+    pub const VOL_100: i32 = 1;
+    pub const VOL_50: i32 = 2;
+    pub const VOL_25: i32 = 3;
+    pub const WID_15: i32 = 0;
+    pub const WID_7: i32 = 1;
+    pub const DIV_8: i32 = 0;
+    pub const DIV_16: i32 = 1;
+    pub const DIV_32: i32 = 2;
+    pub const DIV_48: i32 = 3;
+    pub const DIV_64: i32 = 4;
+    pub const DIV_80: i32 = 5;
+    pub const DIV_96: i32 = 6;
+    pub const DIV_112: i32 = 7;
 
 
     /// Just a clearer wrapper for [[t1, t2, ...], [v1, v2, ...]], which is what multi setters expect.
