@@ -188,12 +188,47 @@ fn instrument_7(note, freq) {
     gb.square1.trigger();
 }
 
-fn instrument_id_8() { "🛆" }
-fn instrument_8(note, freq) {
+fn instrument_id_9() { "🛆" }
+fn instrument_9(note, freq) {
     gb.wave.freq = freq;
     gb.wave.playing = false;
     gb.wave.table = "0123456789abcdeffedcba9876543210";
     gb.wave.playing = true;
-    gb.wave.volume = gb::VOL_100;
-    gb.wave.trigger_with_length(64);
+    let t = [0, 4, 1, 1];
+    gb.wave.volume = t.frames([gb::VOL_100, gb::VOL_50, gb::VOL_25, gb::VOL_0]);
+    gb.wave.trigger();
+}
+
+fn instrument_id_10() { "💊" }
+fn instrument_10(note, freq) {
+    gb.wave.playing = false;
+    gb.wave.table = "11235678999876679adffec985421131";
+    gb.wave.playing = true;
+    gb.wave.freq = freq;
+    let t = [0, 4, 1, 1];
+    gb.wave.volume = t.frames([gb::VOL_100, gb::VOL_50, gb::VOL_25, gb::VOL_0]);
+    gb.wave.trigger();
+}
+
+fn instrument_id_11() { "🦷" }
+fn instrument_11(note, freq) {
+    gb.wave.playing = false;
+    gb.wave.table = "dedcba98765432100000000011111111";
+    gb.wave.playing = true;
+    gb.wave.freq = freq;
+    let t = [0, 4, 1, 1];
+    gb.wave.volume = t.frames([gb::VOL_100, gb::VOL_50, gb::VOL_25, gb::VOL_0]);
+    gb.wave.trigger();
+}
+
+fn instrument_id_12() { "⚡" }
+fn instrument_12(note, freq) {
+    gb.wave.playing = false;
+    gb.wave.table = "f0f0f0f0f0f0f0f0ff00ff00ff00ff00";
+    gb.wave.playing = true;
+    gb.wave.freq = freq;
+    gb.wave.trigger();                // C#1 gate=11
+    let t = [0, 4, 1, 1];
+    gb.wave.volume = t.frames([gb::VOL_100, gb::VOL_50, gb::VOL_25, gb::VOL_0]);
+    gb.wave.trigger();
 }
