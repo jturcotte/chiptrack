@@ -1,5 +1,5 @@
 fn instrument_id_1() { "🎹" }
-fn instrument_1(freq) {
+fn instrument_1(note, freq) {
     gb.square1.freq = freq;
     gb.square1.sweep_time = 0;
     gb.square1.sweep_dir = gb::SWE_INC;
@@ -14,7 +14,7 @@ fn instrument_1(freq) {
 }
 
 fn instrument_id_2() { "🎸" }
-fn instrument_2(freq) {
+fn instrument_2(note, freq) {
     gb.square1.freq = freq;
     gb.square1.sweep_time = 0;
     gb.square1.sweep_dir = gb::SWE_INC;
@@ -28,7 +28,7 @@ fn instrument_2(freq) {
 }
 
 fn instrument_id_3() { "✨" }
-fn instrument_3(freq) {
+fn instrument_3(note, freq) {
     gb.square1.freq = freq;
     // 2:bipp e:a:d:1 f:0:d:2 g
     gb.square1.duty = gb::DUT_1_8;
@@ -45,7 +45,7 @@ fn instrument_3(freq) {
 }
 
 fn instrument_id_4() { "🌊" }
-fn instrument_4(freq) {
+fn instrument_4(note, freq) {
     gb.square1.freq = freq;
 
     let t = [0, 2, 2, 2, 2, 2, 2, 2, 2];
@@ -69,8 +69,8 @@ fn instrument_4(freq) {
     gb.square1.trigger();
 }
 
-fn instrument_id_5() { "🥁" }
-fn instrument_5(freq) {
+fn instrument_id_5() { "🥁\n1" }
+fn instrument_5(note, freq) {
     gb.noise.env_start = 0xf;
     gb.noise.env_dir = gb::ENV_DEC;
     gb.noise.env_period = 1;
@@ -83,8 +83,99 @@ fn instrument_5(freq) {
     gb.noise.trigger();
 }
 
-fn instrument_id_6() { "🛢️" }
-fn instrument_6(freq) {
+fn instrument_id_6() { "🥁\n2" }
+fn instrument_6(note, freq) {
+    switch note % 12 {
+        0 => {
+            gb.noise.env_start = 7;
+            gb.noise.env_dir = gb::ENV_DEC;
+            gb.noise.env_period = 1;
+            gb.noise.clock_shift = 1;
+            gb.noise.counter_width = gb::WID_15;
+            gb.noise.clock_divisor = gb::DIV_8;
+            gb.noise.trigger();
+
+        },
+        1 => {
+            gb.noise.env_start = 10;
+            gb.noise.env_dir = gb::ENV_DEC;
+            gb.noise.env_period = 1;
+
+            let t =                           [0,         1,         1,         1];
+            gb.noise.clock_shift =   t.frames([7,         6,         5,         5]);
+            gb.noise.counter_width = t.frames([gb::WID_7, gb::WID_7, gb::WID_7, gb::WID_15]);
+            gb.noise.clock_divisor = gb::DIV_16;
+            gb.noise.trigger();
+        },
+        2 => {
+            gb.noise.env_start = 7;
+            gb.noise.env_dir = gb::ENV_DEC;
+            gb.noise.env_period = 2;
+            gb.noise.clock_shift = 1;
+            let t =                           [0,          1,          1,          1,          1];
+            gb.noise.counter_width = t.frames([gb::WID_15, gb::WID_15, gb::WID_15, gb::WID_15, gb::WID_15]);
+            gb.noise.clock_divisor = t.frames([gb::DIV_16, gb::DIV_32, gb::DIV_48, gb::DIV_64, gb::DIV_80]);
+            gb.noise.trigger();
+        },
+        4 => {
+            gb.noise.env_start = 10;
+            gb.noise.env_dir = gb::ENV_DEC;
+            gb.noise.env_period = 1;
+            let t =                           [0,          1,          1,          1,          1,           1];
+            gb.noise.clock_shift =   t.frames([5,          5,          5,          5,          5,           6]);
+            gb.noise.counter_width = t.frames([gb::WID_7,  gb::WID_7,  gb::WID_7,  gb::WID_7,  gb::WID_7,   gb::WID_15]);
+            gb.noise.clock_divisor = t.frames([gb::DIV_16, gb::DIV_48, gb::DIV_48, gb::DIV_80, gb::DIV_112, gb::DIV_8]);
+            gb.noise.trigger();
+        },
+        5 => {
+            gb.noise.env_start = 10;
+            gb.noise.env_dir = gb::ENV_DEC;
+            gb.noise.env_period = 2;
+            let t =                           [0,          1,          1,          1,          1,          1,          1,          1];
+            gb.noise.clock_shift =   t.frames([5,          7,          6,          5,          5,          5,          4,          5]);
+            gb.noise.counter_width = t.frames([gb::WID_7,  gb::WID_7,  gb::WID_7,  gb::WID_15, gb::WID_15, gb::WID_15, gb::WID_15, gb::WID_15]);
+            gb.noise.clock_divisor = t.frames([gb::DIV_16, gb::DIV_16, gb::DIV_16, gb::DIV_8,  gb::DIV_8,  gb::DIV_16, gb::DIV_16, gb::DIV_16]);
+            gb.noise.trigger();
+        },
+        7 => {
+            gb.noise.counter_width = gb::WID_15;
+            gb.noise.env_dir = gb::ENV_DEC;
+
+            let t =                                 [0,  1,  1,  1,  4,  1,  1,  1];
+            gb.noise.clock_shift =         t.frames([0,  0,  0,  0,  0,  0,  0,  0]);
+            gb.noise.clock_divisor =       t.frames([4,  2,  6,  3,  4,  2,  1,  1]);
+            gb.noise.env_start =           t.frames([9,  8,  3,  3,  6,  4,  2,  0]);
+            gb.noise.env_period =          t.frames([0,  0,  0,  4,  0,  0,  0,  3]);
+            gb.noise.initialize =          t.frames([1,  1,  1,  1,  1,  1,  1,  1]);
+        },
+        9 => {
+            gb.noise.counter_width = gb::WID_15;
+            gb.noise.env_dir = gb::ENV_DEC;
+
+            let t =                                 [  0,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1];
+            gb.noise.clock_shift =         t.frames([  0,  5,  6,  7,  9,  7,  6,  0,  0,  0,  0]);
+            gb.noise.clock_divisor =       t.frames([  2,  1,  1,  1,  1,  1,  0,  4,  2,  1,  1]);
+            gb.noise.env_start =           t.frames([ 13, 13, 11,  7,  5,  3,  2,  6,  4,  2,  0]);
+            gb.noise.env_period =          t.frames([  0,  0,  0,  0,  0,  0,  1,  0,  0,  0,  3]);
+            gb.noise.initialize =          t.frames([  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1]);
+        },
+        11 => {
+            gb.noise.counter_width = gb::WID_15;
+            gb.noise.env_dir = gb::ENV_DEC;
+
+            let t =                                 [  0,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1];
+            gb.noise.clock_shift =         t.frames([  6,  5,  4,  4,  2,  1,  0,  0,  0,  0,  0]);
+            gb.noise.clock_divisor =       t.frames([  0,  2,  2,  1,  2,  1,  4,  4,  2,  1,  1]);
+            gb.noise.env_start =           t.frames([ 13, 13, 13,  8,  1,  2,  3,  6,  4,  2,  0]);
+            gb.noise.env_period =          t.frames([  0,  0,  0,  0,  0,  0,  3,  0,  0,  0,  3]);
+            gb.noise.initialize =          t.frames([  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1]);
+
+        }
+    }
+}
+
+fn instrument_id_7() { "🛢️" }
+fn instrument_7(note, freq) {
     gb.square1.freq = freq;
     // 1:superdrum e:d:d:2 f:2:d:2 g e
     gb.square1.duty = gb::DUT_2_4;
@@ -97,8 +188,8 @@ fn instrument_6(freq) {
     gb.square1.trigger();
 }
 
-fn instrument_id_7() { "🔈" }
-fn instrument_7(freq) {
+fn instrument_id_8() { "🛆" }
+fn instrument_8(note, freq) {
     gb.wave.freq = freq;
     gb.wave.playing = false;
     gb.wave.table = "0123456789abcdeffedcba9876543210";

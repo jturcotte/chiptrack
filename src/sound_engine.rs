@@ -52,7 +52,7 @@ impl SoundEngine {
         let note_events = self.sequencer.advance_frame();
         for (instrument, typ, note) in note_events {
             if typ == NoteEvent::Press {
-                self.synth.trigger_instrument(instrument, Self::note_to_freq(note));
+                self.synth.trigger_instrument(instrument, note);
             }
             let selected_instrument = self.sequencer.song.selected_instrument;
             self.main_window.clone().upgrade_in_event_loop(move |handle| {
@@ -91,7 +91,7 @@ impl SoundEngine {
     }
 
     pub fn press_note(&mut self, note: u32) -> () {
-        self.synth.trigger_instrument(self.sequencer.song.selected_instrument, Self::note_to_freq(note));
+        self.synth.trigger_instrument(self.sequencer.song.selected_instrument, note);
         self.sequencer.record_trigger(note);
     }
 
@@ -115,12 +115,6 @@ impl SoundEngine {
         let mut path = PathBuf::new();
         path.push(project_name.to_owned() + "-instruments.rhai");
         path
-    }
-
-    fn note_to_freq(note: u32) -> f64 {
-        let a = 440.0; // Frequency of A
-        let key_freq = (a / 32.0) * 2.0_f64.powf((note as f64 - 9.0) / 12.0);
-        key_freq
     }
 }
 

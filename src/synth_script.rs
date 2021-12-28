@@ -101,6 +101,7 @@ impl GbSquare {
     }
 
     pub fn set_sweep_dir(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v == 0 || v == 1, "sweep_dir must be 0 or 1, got {}", v);
         self.orit_at_index(index, self.channel as u16 + 0, RegSetter::new(0x08, v as u8));
         Ok(())
     }
@@ -113,6 +114,8 @@ impl GbSquare {
     }
 
     pub fn set_duty(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "duty must be >= 0, got {}", v);
+        runtime_check!(v < 4, "duty must be < 4, got {}", v);
         self.orit_at_index(index, self.channel as u16 + 1, RegSetter::new(0xC0, v as u8));
         Ok(())
     }
@@ -125,6 +128,7 @@ impl GbSquare {
     }
 
     pub fn set_env_dir(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v == 0 || v == 1, "env_dir must be 0 or 1, got {}", v);
         self.orit_at_index(index, self.channel as u16 + 2, RegSetter::new(0x08, v as u8));
         Ok(())
     }
@@ -207,6 +211,8 @@ impl GbWave {
     }
 
     pub fn set_volume(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "volume must be >= 0, got {}", v);
+        runtime_check!(v < 4, "volume must be < 4, got {}", v);
         self.orit_at_index(index, Wave as u16 + 2, RegSetter::new(0x60, v as u8));
         Ok(())
     }
@@ -297,6 +303,7 @@ impl GbNoise {
     }
 
     pub fn set_env_dir(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v == 0 || v == 1, "env_dir must be 0 or 1, got {}", v);
         self.orit_at_index(index, Noise as u16 + 2, RegSetter::new(0x08, v as u8));
         Ok(())
     }
@@ -310,17 +317,20 @@ impl GbNoise {
 
     pub fn set_clock_shift(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "clock_shift must be >= 0, got {}", v);
-        runtime_check!(v < 16, "clock_shift must be < 16, got {}", v);
+        runtime_check!(v < 14, "clock_shift must be < 14, got {}", v);
         self.orit_at_index(index, Noise as u16 + 3, RegSetter::new(0xf0, v as u8));
         Ok(())
     }
 
     pub fn set_counter_width(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v == 0 || v == 1, "counter_width must be 0 or 1, got {}", v);
         self.orit_at_index(index, Noise as u16 + 3, RegSetter::new(0x08, v as u8));
         Ok(())
     }
 
     pub fn set_clock_divisor(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(v >= 0, "clock_divisor must be >= 0, got {}", v);
+        runtime_check!(v < 8, "clock_divisor must be < 8, got {}", v);
         self.orit_at_index(index, Noise as u16 + 3, RegSetter::new(0x07, v as u8));
         Ok(())
     }
@@ -758,6 +768,7 @@ impl SynthScript {
     pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
         let mut engine = Engine::new();
 
+        engine.set_max_expr_depths(1024, 1024);
         engine.register_type::<SharedGbBindings>()
               .register_type::<SharedGbSquare>();
         engine.register_static_module("gb", exported_module!(gb_api).into());
@@ -867,7 +878,7 @@ impl SynthScript {
         self.extract_instrument_ids();
     }
 
-    pub fn trigger_instrument(&mut self, settings_ring_index: usize, instrument: u32, freq: f64) -> () {
+    pub fn trigger_instrument(&mut self, settings_ring_index: usize, instrument: u32, note: u32) -> () {
         // The script themselves are modifying this state, so reset it.
         self.script_context.borrow_mut().set_settings_ring_index(settings_ring_index);
 
@@ -875,7 +886,7 @@ impl SynthScript {
             &mut self.script_scope,
             &self.script_ast,
             format!("instrument_{}", instrument + 1),
-            ( freq, )
+            ( note as i32, Self::note_to_freq(note), )
             );
         if let Err(e) = result {
             elog!("{}", e)
@@ -928,5 +939,11 @@ impl SynthScript {
                 }
             })
             .collect();
+    }
+
+    fn note_to_freq(note: u32) -> f64 {
+        let a = 440.0; // Frequency of A
+        let key_freq = (a / 32.0) * 2.0_f64.powf((note as f64 - 9.0) / 12.0);
+        key_freq
     }
 }

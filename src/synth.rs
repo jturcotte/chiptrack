@@ -99,9 +99,10 @@ impl Synth {
         let dmg = &mut self.dmg;
         let i = self.settings_ring_index;
         settings_ring[i].for_each_setting(|addr, set| {
-            let prev = dmg.rb(addr);
-            let new = prev & !set.mask | set.value;
-            dmg.wb(addr, new);    
+            // Trying to read the memory wouldn't give us the value we wrote last,
+            // so overwrite any state previously set in bits outside of RegSetter.mask
+            // with zeros.
+            dmg.wb(addr, set.value);    
         });
         settings_ring[i].clear();
         self.settings_ring_index = (self.settings_ring_index + 1) % settings_ring.len();
@@ -115,8 +116,8 @@ impl Synth {
         self.dmg.do_cycle(rboy::CLOCKS_PER_SECOND / 64)
     }
 
-    pub fn trigger_instrument(&mut self, instrument: u32, freq: f64) -> () {
-        self.script.trigger_instrument(self.settings_ring_index, instrument, freq);
+    pub fn trigger_instrument(&mut self, instrument: u32, note: u32) -> () {
+        self.script.trigger_instrument(self.settings_ring_index, instrument, note);
     }
 
     /// Can be used to manually mute when instruments have an infinite length and envelope.
