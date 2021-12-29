@@ -1,4 +1,4 @@
-fn instrument_id_1() { "🎹" }
+fn instrument_id_1() { "□" }
 fn instrument_1(note, freq) {
     gb.square1.freq = freq;
     gb.square1.sweep_time = 0;
@@ -13,7 +13,7 @@ fn instrument_1(note, freq) {
     gb.square1.initialize = true;
 }
 
-fn instrument_id_2() { "🎸" }
+fn instrument_id_2() { "◰" }
 fn instrument_2(note, freq) {
     gb.square1.freq = freq;
     gb.square1.sweep_time = 0;
@@ -27,7 +27,7 @@ fn instrument_2(note, freq) {
     gb.square1.trigger_with_length(64);
 }
 
-fn instrument_id_3() { "✨" }
+fn instrument_id_3() { "🞍" }
 fn instrument_3(note, freq) {
     gb.square1.freq = freq;
     // 2:bipp e:a:d:1 f:0:d:2 g
@@ -44,7 +44,7 @@ fn instrument_3(note, freq) {
     gb.square1.trigger();
 }
 
-fn instrument_id_4() { "🌊" }
+fn instrument_id_4() { "▦" }
 fn instrument_4(note, freq) {
     gb.square1.freq = freq;
 
@@ -69,7 +69,7 @@ fn instrument_4(note, freq) {
     gb.square1.trigger();
 }
 
-fn instrument_id_5() { "🥁\n1" }
+fn instrument_id_5() { "🟕" }
 fn instrument_5(note, freq) {
     gb.noise.env_start = 0xf;
     gb.noise.env_dir = gb::ENV_DEC;
@@ -83,7 +83,7 @@ fn instrument_5(note, freq) {
     gb.noise.trigger();
 }
 
-fn instrument_id_6() { "🥁\n2" }
+fn instrument_id_6() { "🟗" }
 fn instrument_6(note, freq) {
     switch note % 12 {
         0 => {
@@ -174,7 +174,7 @@ fn instrument_6(note, freq) {
     }
 }
 
-fn instrument_id_7() { "🛢️" }
+fn instrument_id_7() { "◎" }
 fn instrument_7(note, freq) {
     gb.square1.freq = freq;
     // 1:superdrum e:d:d:2 f:2:d:2 g e
@@ -199,7 +199,7 @@ fn instrument_9(note, freq) {
     gb.wave.trigger();
 }
 
-fn instrument_id_10() { "💊" }
+fn instrument_id_10() { "◉" }
 fn instrument_10(note, freq) {
     gb.wave.playing = false;
     gb.wave.table = "11235678999876679adffec985421131";
@@ -210,7 +210,7 @@ fn instrument_10(note, freq) {
     gb.wave.trigger();
 }
 
-fn instrument_id_11() { "🦷" }
+fn instrument_id_11() { "▻" }
 fn instrument_11(note, freq) {
     gb.wave.playing = false;
     gb.wave.table = "dedcba98765432100000000011111111";
@@ -221,7 +221,7 @@ fn instrument_11(note, freq) {
     gb.wave.trigger();
 }
 
-fn instrument_id_12() { "⚡" }
+fn instrument_id_12() { "🞠" }
 fn instrument_12(note, freq) {
     gb.wave.playing = false;
     gb.wave.table = "f0f0f0f0f0f0f0f0ff00ff00ff00ff00";
