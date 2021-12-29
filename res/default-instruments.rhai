@@ -1,3 +1,12 @@
+fn three_semitones_steps(timeline, start) {
+    let next = start;
+    timeline.frames(timeline.map(|w, i| {
+        let n = next;
+        next = n * 0.840896415253715;
+        n
+    }))
+}
+
 fn instrument_id_1() { "□" }
 fn instrument_1(note, freq) {
     gb.square1.freq = freq;
@@ -231,4 +240,16 @@ fn instrument_12(note, freq) {
     let t = [0, 4, 1, 1];
     gb.wave.volume = t.frames([gb::VOL_100, gb::VOL_50, gb::VOL_25, gb::VOL_0]);
     gb.wave.trigger();
+}
+
+fn instrument_id_13() { "◺" }
+fn instrument_13(note, freq) {
+    gb.wave.playing = false;
+    gb.wave.table = "0234679acdffffeeeeffffdca9764310";
+    gb.wave.playing = true;
+    let t = [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+    gb.wave.freq = three_semitones_steps(t, freq);                  // A-5 +11.0 ct gb_freq=0x04a
+    gb.wave.volume = gb::VOL_100;
+    gb.wave.trigger();
+    gb.wave.volume = [9, 1, 1].frames([gb::VOL_50, gb::VOL_25, gb::VOL_0]);
 }
