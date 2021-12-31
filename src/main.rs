@@ -446,26 +446,27 @@ pub fn main() {
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_global_key_event(move |text, pressed| {
-        let code = text.as_str().chars().next().unwrap();
-        if pressed {
-            if !already_pressed.borrow().contains(&code) {
-                already_pressed.borrow_mut().insert(code.to_owned());
+        if let Some(code) = text.as_str().chars().next() {
+            if pressed {
+                if !already_pressed.borrow().contains(&code) {
+                    already_pressed.borrow_mut().insert(code.to_owned());
+                    match code {
+                        '\u{7}' => {
+                            Lazy::force(&*cloned_context);
+                            cloned_sound_send.send(SoundMsg::SetErasing(true)).unwrap();
+                        },
+                        _ => (),
+                    }
+                }
+            } else {
                 match code {
-                    '\u{7}' => {
-                        Lazy::force(&*cloned_context);
-                        cloned_sound_send.send(SoundMsg::SetErasing(true)).unwrap();
-                    },
+                    '\u{7}' => {                    
+                        cloned_sound_send.send(SoundMsg::SetErasing(false)).unwrap();
+                    }
                     _ => (),
-                }
-            }
-        } else {
-            match code {
-                '\u{7}' => {                    
-                    cloned_sound_send.send(SoundMsg::SetErasing(false)).unwrap();
-                }
-                _ => (),
-            };
-            already_pressed.borrow_mut().remove(&code);
+                };
+                already_pressed.borrow_mut().remove(&code);
+            }            
         }
     });
 
