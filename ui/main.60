@@ -462,7 +462,7 @@ MainWindow := Window {
 
     property<bool> show_settings: false;
     if show_settings:
-        settings_dialog := OverlayDialog {
+        OverlayDialog {
             accepted => {
                 SettingsGlobal.settings.sync_enabled = sync_control.current_value != "Off";
                 SettingsGlobal.settings_changed(SettingsGlobal.settings);
