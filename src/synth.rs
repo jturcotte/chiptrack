@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::MainWindow;
+use crate::Settings;
 use crate::synth_script::Channel;
 use crate::synth_script::RegSettings;
 use crate::synth_script::SynthScript;
@@ -12,35 +13,111 @@ use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+// The pass-through channel is otherwise too loud compared to mixed content.
+const SYNC_GAIN: f32 = 1.0 / 3.0;
+
+enum PulseState {
+    Zero,
+    Up(u32, u32),
+    Down(u32, u32),
+}
+
+struct SyncPulse {
+    enabled: bool,
+    state: PulseState,
+    period: u32,
+    loops: u32,
+}
+
+pub struct OutputData {
+    pub buffer: Vec<f32>,
+    pub buffer_wave_start: Option<usize>,
+    pub gain: f32,
+    sync_pulse: SyncPulse,
+}
+
+struct FakePlayer {
+    sample_rate: u32,
+    state: Arc<Mutex<OutputData>>,
+}
+
 pub struct Synth {
     dmg: rboy::Sound,
     script: SynthScript,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     settings_ring_index: usize,
-    buffer: Arc<Mutex<Vec<f32>>>,
-    buffer_wave_start: Arc<Mutex<Option<usize>>>,
+    output_data: Arc<Mutex<OutputData>>,
     main_window: Weak<MainWindow>,
 }
 
-struct FakePlayer {
-    sample_rate: u32,
-    buffer: Arc<Mutex<Vec<f32>>>,
-    buffer_wave_start: Arc<Mutex<Option<usize>>>,
+impl SyncPulse {
+    fn new(enabled: bool, sample_rate: u32, tone_freq: u32, loops: u32) -> SyncPulse {
+        let period = sample_rate / tone_freq;
+        SyncPulse {
+            enabled: enabled,
+            state: PulseState::Up(period, 2),
+            period: period,
+            loops: loops,
+        }
+    }
+
+    fn pulse(&mut self) {
+        if self.enabled {
+            self.state = PulseState::Up(self.period, self.loops);
+        }
+    }
+}
+
+impl Iterator for SyncPulse {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        if !self.enabled {
+            None
+        } else {
+            match self.state {
+                PulseState::Zero => {
+                    Some(0.0)
+                },
+                PulseState::Up(p, l) => {
+                    self.state = if p == 0 { PulseState::Down(self.period, l) } else { PulseState::Up(p - 1, l) };
+                    Some(1.0)
+                },
+                PulseState::Down(p, l) => {
+                    self.state = if p == 0 {
+                        if l == 0 {
+                            PulseState::Zero
+                        } else {
+                            PulseState::Up(self.period, l - 1)
+                        }
+                    } else {
+                        PulseState::Down(p - 1, l)
+                    };
+                    Some(-1.0)
+                },
+            }
+        }
+    }
 }
 
 impl rboy::AudioPlayer for FakePlayer {
     fn play(&mut self, left_channel: &[f32], right_channel: &[f32], buffer_wave_start: Option<usize>) {
         let mut left_iter = left_channel.iter();
         let mut right_iter = right_channel.iter();
-        let mut vec = self.buffer.lock().unwrap();
-        let mut wave_start = self.buffer_wave_start.lock().unwrap();
-        *wave_start = wave_start.or(buffer_wave_start.map(|s| s * 2 + vec.len()));
+        let mut state = self.state.lock().unwrap();
+        let gain = state.gain;
+        state.buffer_wave_start = state.buffer_wave_start.or(buffer_wave_start.map(|s| s * 2 + state.buffer.len()));
 
-        vec.reserve(left_channel.len() * 2);
+        state.buffer.reserve(left_channel.len() * 2);
         while let Some(left) = left_iter.next() {
-            let right = right_iter.next().unwrap();
-            vec.push(*left);
-            vec.push(*right);
+            if let Some(pulse_sample) = state.sync_pulse.next() {
+                let right = (left + right_iter.next().unwrap()) / 2.0;
+                state.buffer.push(pulse_sample);
+                state.buffer.push(right * gain);
+            } else {
+                state.buffer.push(*left * gain);
+                state.buffer.push(*right_iter.next().unwrap() * gain);                
+            }
         }
     }
     fn samples_rate(&self) -> u32 {
@@ -53,17 +130,22 @@ impl rboy::AudioPlayer for FakePlayer {
 }
 
 impl Synth {
-    pub fn new(main_window: Weak<MainWindow>, sample_rate: u32) -> Synth {
+    pub fn new(main_window: Weak<MainWindow>, sample_rate: u32, settings: Settings) -> Synth {
         let settings_ring = Rc::new(RefCell::new(vec![RegSettings::new(); 512]));
         let script = SynthScript::new(settings_ring.clone());
 
-        let buffer = Arc::new(Mutex::new(Vec::new()));
-        let buffer_wave_start = Arc::new(Mutex::new(None));
+        let gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
+
+        let output_data = Arc::new(Mutex::new(OutputData {
+            buffer: Vec::new(),
+            buffer_wave_start: None,
+            gain: gain,
+            sync_pulse: SyncPulse::new(settings.sync_enabled, sample_rate, 300, 2),
+        }));
 
         let player = Box::new(FakePlayer{
             sample_rate: sample_rate,
-            buffer: buffer.clone(),
-            buffer_wave_start: buffer_wave_start.clone(),
+            state: output_data.clone(),
         });
         let mut dmg = rboy::Sound::new(player);
         // Already power it on.
@@ -74,27 +156,26 @@ impl Synth {
             script: script,
             settings_ring: settings_ring,
             settings_ring_index: 0,
-            buffer: buffer,
-            buffer_wave_start: buffer_wave_start,
+            output_data: output_data,
             main_window: main_window,
         }
     }
 
-    pub fn buffer(&self) -> Arc<Mutex<Vec<f32>>> {
-        self.buffer.clone()
+    pub fn output_data(&self) -> Arc<Mutex<OutputData>> {
+        self.output_data.clone()
     }
-    pub fn buffer_wave_start(&self) -> Arc<Mutex<Option<usize>>> {
-        self.buffer_wave_start.clone()
-    }
-    pub fn reset_buffer_wave_start(&mut self) {
-        *self.buffer_wave_start.lock().unwrap() = None;
+
+    pub fn apply_settings(&mut self, settings: Settings) {
+        let mut output_data = self.output_data.lock().unwrap();
+        output_data.gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
+        output_data.sync_pulse.enabled = settings.sync_enabled;
     }
 
     // The Gameboy APU has 512 frames per second where various registers are read,
     // but all registers are eventually read at least once every 8 of those frames.
     // So clock our frame generation at 64hz, thus this function is expected
     // to be called 64x per second.
-    pub fn advance_frame(&mut self) -> () {
+    pub fn advance_frame(&mut self, step_change: Option<u32>) -> () {
         let mut settings_ring = self.settings_ring.borrow_mut();
         let dmg = &mut self.dmg;
         let i = self.settings_ring_index;
@@ -110,6 +191,18 @@ impl Synth {
         // Just enable all channels for now
         self.dmg.wb(0xff24, 0xff);    
         self.dmg.wb(0xff25, 0xff);    
+
+        // The sequencer step changed, check if we need to send a pulse to sync downstream devices.
+        if let Some(next_step) = step_change {
+            // Pocket Operator and Volca devices use 2 ppqm.
+            let ppqm = 2;
+            if next_step % ppqm == 0 {
+                self.output_data.lock().unwrap().sync_pulse.pulse();
+            }
+        }
+
+        // Reset the indicator of the start of the next note wave.
+        self.output_data.lock().unwrap().buffer_wave_start = None;
 
         // Generate one frame of mixed output.
         // For 44100hz audio, this will put 44100/64 audio samples in self.buffer.
@@ -127,10 +220,6 @@ impl Synth {
         self.dmg.wb(Channel::Square2 as u16 + 2, 0);    
         self.dmg.wb(Channel::Wave as u16 + 2, 0);    
         self.dmg.wb(Channel::Noise as u16 + 2, 0);    
-    }
-
-    pub fn ready_buffer_samples(&self) -> usize {
-        self.buffer.lock().unwrap().len()
     }
 
     fn update_instrument_ids(&self) {

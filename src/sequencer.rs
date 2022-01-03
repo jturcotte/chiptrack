@@ -267,11 +267,11 @@ impl Sequencer {
         // Already remove the current step.
         self.set_step_toggled(self.current_step, self.selected_pattern, false, None);
     }
-    pub fn advance_frame(&mut self) -> Vec<(u32, NoteEvent, u32)> {
+    pub fn advance_frame(&mut self) -> (Option<u32>, Vec<(u32, NoteEvent, u32)>) {
         let mut note_events: Vec<(u32, NoteEvent, u32)> = Vec::new();
 
         if !self.playing {
-            return note_events;
+            return (None, note_events);
         }
 
         // FIXME: Reset or remove overflow check
@@ -297,8 +297,10 @@ impl Sequencer {
                 }
             }
             self.previous_frame_note_events = note_events.clone();
+            (Some(self.current_step as u32), note_events)
+        } else {
+            (None, note_events)
         }
-        return note_events;
     }
 
     pub fn record_trigger(&mut self, note: u32) {

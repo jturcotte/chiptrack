@@ -47,9 +47,10 @@ enum SoundMsg {
     ClearSongPatterns,
     SaveProject,
     MuteInstruments,
+    ApplySettings(Settings),
 }
 
-fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicBool>) {
+fn update_waveform(window: &MainWindow, samples: Vec<f32>, gain: f32, consumed: Arc<AtomicBool>) {
     let was_non_zero = !window.get_waveform_is_zero();
     let res_divider = 2.;
 
@@ -63,7 +64,8 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
     pb.move_to(0.0, height / 2.0);
     {
         for (i, source) in samples.iter().enumerate() {
-            if i % 2 != 0 {
+            // Plot only the right channel as the left one might be used as a sync channel.
+            if i % 2 == 0 {
                 continue;
             }
             if *source != 0.0 {
@@ -76,7 +78,7 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
             // channels a bit.
             pb.line_to(
                 i as f32 * width / (samples.len() / 2) as f32,
-                (source * 2.0 + 1.0) * height / 2.0);
+                (source / gain * 2.0 + 1.0) * height / 2.0);
         }
     }
     // Painting this takes a lot of CPU since we need to paint, clone
@@ -169,6 +171,7 @@ pub fn main() {
     watcher.watch(".", RecursiveMode::NonRecursive).unwrap();
 
     let window_weak = window.as_weak();
+    let initial_settings = window.global::<SettingsGlobal>().get_settings();
     let context = Rc::new(Lazy::new(|| {
         let host = cpal::default_host();
         let device = host.default_output_device().unwrap();
@@ -201,7 +204,10 @@ pub fn main() {
                 move |dest: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     SOUND_ENGINE.with(|maybe_engine_cell| {
                         let mut maybe_engine = maybe_engine_cell.borrow_mut();
-                        let engine = maybe_engine.get_or_insert_with(|| SoundEngine::new(sample_rate, &project_name, window_weak.clone()));
+                        if let None = *maybe_engine {
+                            *maybe_engine = Some(SoundEngine::new(sample_rate, &project_name, window_weak.clone(), initial_settings.clone()));
+                        }
+                        let engine = maybe_engine.as_mut().unwrap();
 
                         while let Ok(msg) = notify_recv.try_recv() {
                             let instruments_path = SoundEngine::project_instruments_path(&project_name);
@@ -233,36 +239,37 @@ pub fn main() {
                                 SoundMsg::ClearSongPatterns => engine.sequencer.clear_song_patterns(),
                                 SoundMsg::SaveProject => engine.save_project(&project_name),
                                 SoundMsg::MuteInstruments => engine.synth.mute_instruments(),
+                                SoundMsg::ApplySettings(settings) => engine.apply_settings(settings),
                             }
                         }
 
                         let len = dest.len();
                         let mut di = 0;
                         while di < len {
-                            let synth_buffer = engine.synth.buffer();
-                            if engine.synth.ready_buffer_samples() < (len - di) {
-                                // Reset the indicator of the start of the next note wave.
-                                engine.synth.reset_buffer_wave_start();
+                            let synth_output_mutex = engine.synth.output_data();
+                            let mut synth_output = synth_output_mutex.lock().unwrap();
+                            if synth_output.buffer.len() < (len - di) {
+                                drop(synth_output);
                                 engine.advance_frame();
+                                synth_output = synth_output_mutex.lock().unwrap();
 
                                 if last_waveform_consumed.load(Ordering::Relaxed) {
                                     let num_samples = sample_rate as usize / 64 * 2 / 3;
-                                    let wave_start = engine.synth.buffer_wave_start().lock().unwrap().unwrap_or(0);
+                                    let wave_start = synth_output.buffer_wave_start.unwrap_or(0);
 
-                                    let source = synth_buffer.lock().unwrap();
-                                    let end = source.len().min(wave_start + num_samples * 2);
-                                    let copy = source[wave_start..end].to_vec();
+                                    let end = synth_output.buffer.len().min(wave_start + num_samples * 2);
+                                    let copy = synth_output.buffer[wave_start..end].to_vec();
+                                    let gain = synth_output.gain;
                                     last_waveform_consumed.store(false, Ordering::Relaxed);
                                     let consumed_clone = last_waveform_consumed.clone();
                                     window_weak.clone().upgrade_in_event_loop(move |handle| {
-                                        update_waveform(&handle, copy, consumed_clone)
+                                        update_waveform(&handle, copy, gain, consumed_clone)
                                     });
                                 }
                             }
 
-                            let mut source = synth_buffer.lock().unwrap();
-                            let src_len = std::cmp::min(len-di, source.len());
-                            let part = source.drain(..src_len);
+                            let src_len = std::cmp::min(len-di, synth_output.buffer.len());
+                            let part = synth_output.buffer.drain(..src_len);
                             dest[di..di+src_len].copy_from_slice(part.as_slice());
 
                             di += src_len;
@@ -468,6 +475,14 @@ pub fn main() {
                 already_pressed.borrow_mut().remove(&code);
             }            
         }
+    });
+
+    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
+    window.global::<SettingsGlobal>().on_settings_changed(move |settings| {
+        println!("SET {:?}", settings);
+        Lazy::force(&*cloned_context);
+        cloned_sound_send.send(SoundMsg::ApplySettings(settings)).unwrap();
     });
 
     window.run();

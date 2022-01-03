@@ -6,6 +6,7 @@ use crate::sequencer::Sequencer;
 use crate::synth::Synth;
 use crate::utils;
 use crate::MainWindow;
+use crate::Settings;
 use sixtyfps::Model;
 use sixtyfps::Weak;
 use std::path::PathBuf;
@@ -21,9 +22,9 @@ pub struct SoundEngine {
 }
 
 impl SoundEngine {
-    pub fn new(sample_rate: u32, project_name: &str, main_window: Weak<MainWindow>) -> SoundEngine {
+    pub fn new(sample_rate: u32, project_name: &str, main_window: Weak<MainWindow>, settings: Settings) -> SoundEngine {
         let mut sequencer = Sequencer::new(main_window.clone());
-        let mut synth = Synth::new(main_window.clone(), sample_rate);
+        let mut synth = Synth::new(main_window.clone(), sample_rate, settings);
 
         #[cfg(not(target_arch = "wasm32"))] {
             let song_path = SoundEngine::project_song_path(project_name);
@@ -48,8 +49,12 @@ impl SoundEngine {
             }
     }
 
+    pub fn apply_settings(&mut self, settings: Settings) {
+        self.synth.apply_settings(settings);
+    }
+
     pub fn advance_frame(&mut self) -> () {
-        let note_events = self.sequencer.advance_frame();
+        let (step_change, note_events) = self.sequencer.advance_frame();
         for (instrument, typ, note) in note_events {
             if typ == NoteEvent::Press {
                 self.synth.trigger_instrument(instrument, note);
@@ -73,7 +78,7 @@ impl SoundEngine {
                 instruments_model.set_row_data(instrument as usize, row_data);
             });
         }
-        self.synth.advance_frame();
+        self.synth.advance_frame(step_change);
     }
 
     pub fn select_instrument(&mut self, instrument: u32) -> () {

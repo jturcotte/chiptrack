@@ -1,7 +1,17 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-import { Button, CheckBox, SpinBox, Slider, GroupBox, LineEdit, StandardListView, ComboBox, VerticalBox, HorizontalBox, GridBox } from "sixtyfps_widgets.60";
+import { Button, ComboBox, GridBox, HorizontalBox, VerticalBox
+} from "sixtyfps_widgets.60";
+import { OverlayDialog } from "overlay_dialog.60";
+
+struct Settings := {
+    sync_enabled: bool,
+}
+export global SettingsGlobal := {
+    property<Settings> settings: { sync_enabled: false, };
+    callback settings_changed(Settings);
+}
 
 struct SongPatternData := {
     number: int,
@@ -27,7 +37,6 @@ struct NoteData := {
     is_black: bool,
     active: bool,
 }
-
 
 SongPattern := Rectangle {
     callback clicked();
@@ -234,8 +243,8 @@ MainWindow := Window {
     preferred_width: 800px;
     preferred_height: 480px;
 
-    forward-focus: KeyHandler;
-    KeyHandler := FocusScope {
+    forward_focus: key_handler;
+    key_handler := FocusScope {
         key-pressed(event) => {
             if (event.modifiers.control) {
                 if (event.text == "s") { save_project(); }
@@ -323,11 +332,17 @@ MainWindow := Window {
                         }
                     }
 
-                    play_button := Button {
-                        colspan: 2;
-                        text: root.playing ? "Stop" : "Play";
+                    song_mode_button := Button {
+                        property<bool> toggled: false;
+                        text: toggled ? "Song" : "Notes";
                         clicked => {
-                            root.play_clicked(!root.playing);
+                            toggled = !toggled;
+                        }
+                    }
+                    settings_button := Button {
+                        text: "Settings";
+                        clicked => {
+                            root.show_settings = true;
                         }
                     }
                 
@@ -344,16 +359,15 @@ MainWindow := Window {
                                 clicked => { root.step_clicked(idx); }
                             }
                     }
-                    song_mode_button := Button {
-                        property<bool> toggled: false;
-                        text: toggled ? "Song" : "Notes";
+                    play_button := Button {
+                        text: root.playing ? "⏹" : "▶";
                         clicked => {
-                            toggled = !toggled;
+                            root.play_clicked(!root.playing);
                         }
                     }
                     record_button := Button {
                         property<bool> toggled: true;
-                        text: toggled ? "Rec" : "No\nRec";
+                        text: toggled ? "⬤" : "◯";
                         clicked => {
                             toggled = !toggled;
                             root.record_clicked(toggled);
@@ -445,4 +459,33 @@ MainWindow := Window {
             }
         }
     }
+
+    property<bool> show_settings: false;
+    if show_settings:
+        settings_dialog := OverlayDialog {
+            accepted => {
+                SettingsGlobal.settings.sync_enabled = sync_control.current_value != "Off";
+                SettingsGlobal.settings_changed(SettingsGlobal.settings);
+                show_settings = false;
+            }
+            GridBox {
+                spacing: 24px;
+                Row {
+                    Text {
+                        text: "Settings";
+                        font_size: 24px;
+                    }
+                }
+                Row {
+                    Text {
+                        vertical_alignment: center;
+                        text: "Sync Mode";
+                    }
+                    sync_control := ComboBox {
+                        model: ["Off", "PO SY1 (master, left channel is 2 PPQN)"];
+                        current_value: SettingsGlobal.settings.sync_enabled ? "PO SY1 (master, left channel is 2 PPQN)" : "Off";
+                    }
+                }
+            }
+        }
 }
