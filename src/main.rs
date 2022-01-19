@@ -501,5 +501,15 @@ pub fn main() {
         cloned_sound_send.send(SoundMsg::ApplySettings(settings)).unwrap();
     });
 
+
+    // For WASM we need to wait for the user to trigger the creation of the sound
+    // device through an input event. For other platforms, artificially force the
+    // lazy context immediately.
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let cloned_context = context.clone();
+        Lazy::force(&*cloned_context);        
+    }
+
     window.run();
 }
