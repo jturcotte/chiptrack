@@ -48,6 +48,18 @@ checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 
 [[package]]
 name = "alsa"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb213f6b3e4b1480a60931ca2035794aa67b73103d254715b1db7b70dcb3c934"
+dependencies = [
+ "alsa-sys",
+ "bitflags",
+ "libc",
+ "nix 0.15.0",
+]
+
+[[package]]
+name = "alsa"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75c4da790adcb2ce5e758c064b4f3ec17a30349f9961d3e5e6c9688b052a9e18"
@@ -55,7 +67,7 @@ dependencies = [
  "alsa-sys",
  "bitflags",
  "libc",
- "nix",
+ "nix 0.20.2",
 ]
 
 [[package]]
@@ -280,6 +292,8 @@ dependencies = [
  "base64-url",
  "console_error_panic_hook",
  "cpal",
+ "midir",
+ "midly",
  "miniz_oxide 0.5.1",
  "notify",
  "once_cell",
@@ -447,6 +461,16 @@ dependencies = [
 
 [[package]]
 name = "core-foundation"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25bfd746d203017f7d5cbd31ee5d8e17f94b6521c7af77ece6c9e4b2d4b16c67"
+dependencies = [
+ "core-foundation-sys 0.2.3",
+ "libc",
+]
+
+[[package]]
+name = "core-foundation"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57d24c7a13c43e870e37c1556b74555437870a04514f7685f5b354e090567171"
@@ -462,6 +486,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6888e10551bb93e424d8df1d07f1a8b4fceb0001a3a4b048bfc47554946f47b3"
 dependencies = [
  "core-foundation-sys 0.8.3",
+ "libc",
+]
+
+[[package]]
+name = "core-foundation-sys"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "065a5d7ffdcbc8fa145d6f0746f3555025b9097a9e9cda59f7467abae670c78d"
+dependencies = [
  "libc",
 ]
 
@@ -559,6 +592,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "coremidi"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99f92de5534f182bad5f91cad85611ab222cb6e237a0555e06c65a24936c3173"
+dependencies = [
+ "core-foundation 0.2.3",
+ "core-foundation-sys 0.2.3",
+ "coremidi-sys",
+ "time",
+]
+
+[[package]]
+name = "coremidi-sys"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07f05827cebb30dcd539ff1ac9bf6764f574a15fa147f8572f99d7617142f95e"
+dependencies = [
+ "core-foundation-sys 0.2.3",
+]
+
+[[package]]
 name = "countme"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -570,7 +624,7 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98f45f0a21f617cd2c788889ef710b63f075c949259593ea09c826f1e47a2418"
 dependencies = [
- "alsa",
+ "alsa 0.5.0",
  "core-foundation-sys 0.8.3",
  "coreaudio-rs",
  "jni",
@@ -580,7 +634,7 @@ dependencies = [
  "mach",
  "ndk 0.3.0",
  "ndk-glue 0.3.0",
- "nix",
+ "nix 0.20.2",
  "oboe",
  "parking_lot",
  "stdweb",
@@ -1624,6 +1678,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3e378b66a060d48947b590737b30a1be76706c8dd7b8ba0f2fe3989c68a853f"
 
 [[package]]
+name = "memalloc"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df39d232f5c40b0891c10216992c2f250c054105cb1e56f0fc9032db6203ecc1"
+
+[[package]]
 name = "memchr"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1645,6 +1705,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59accc507f1338036a0477ef61afdae33cde60840f4dfe481319ce3ad116ddf9"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "midir"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25df1e7836ca65078a121efed77049084a434838562b9892d0401bdfb59244cc"
+dependencies = [
+ "alsa 0.4.3",
+ "bitflags",
+ "coremidi",
+ "js-sys",
+ "libc",
+ "memalloc",
+ "nix 0.15.0",
+ "wasm-bindgen",
+ "web-sys",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "midly"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5f3c664ced7caa98ccb7ed4c67cd0bd6a6bd8ecedf8b49f38544a4a8e50f0ae"
+dependencies = [
+ "rayon",
 ]
 
 [[package]]
@@ -1833,6 +1920,19 @@ dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "nix"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b2e0b4f3320ed72aaedb9a5ac838690a8047c7b275da22711fddff4f8a14229"
+dependencies = [
+ "bitflags",
+ "cc",
+ "cfg-if 0.1.10",
+ "libc",
+ "void",
 ]
 
 [[package]]
@@ -2963,6 +3063,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "time"
+version = "0.1.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca8a50ef2360fbd1eeb0ecd46795a87a19024eb4b53c5dc916ca1fd95fe62438"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "tiny-skia"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3144,6 +3254,12 @@ name = "version_check"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fecdca9a5291cc2b8dcf7dc02453fee791a280f3743cb0905f8822ae463b3fe"
+
+[[package]]
+name = "void"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "vtable"

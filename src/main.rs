@@ -1,20 +1,21 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-use cpal::{Sample, SampleFormat};
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-
 mod log;
+mod midi;
 mod sequencer;
 mod sound_engine;
 mod synth;
 mod synth_script;
 mod utils;
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+use crate::midi::Midi;
 use crate::sound_engine::SoundEngine;
+use cpal::{Sample, SampleFormat};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
 use sixtyfps::{Model, Rgba8Pixel, SharedPixelBuffer, Timer, TimerMode};
@@ -154,6 +155,7 @@ pub fn main() {
     struct Context {
         key_release_timer: Timer,
         _stream: cpal::Stream,
+        _midi: Option<Midi>,
     }
 
     let window = MainWindow::new();
@@ -172,6 +174,7 @@ pub fn main() {
 
     let window_weak = window.as_weak();
     let initial_settings = window.global::<SettingsGlobal>().get_settings();
+    let cloned_sound_send = sound_send.clone();
     let context = Rc::new(Lazy::new(|| {
         let host = cpal::default_host();
         let device = host.default_output_device().unwrap();
@@ -288,9 +291,22 @@ pub fn main() {
         }
 
         stream.play().unwrap();
+
+        #[cfg(not(target_arch = "wasm32"))]
+            let midi = Some(Midi::new(move |key| cloned_sound_send.send(SoundMsg::PressNote(key)).unwrap()));
+        #[cfg(target_arch = "wasm32")]
+            // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
+            // us when that initialization is done and that we can start querying the list of midi
+            // devices. It's also annoying for users that don't care about MIDI to get a permission
+            // request, so I'll need this to be enabled explicitly for the Web version.
+            // The aldio latency is still so bad with the web version though,
+            // so I'm not sure if that's really worth it.
+            let midi = None;
+
         Context {
             key_release_timer: Default::default(),
             _stream: stream,
+            _midi: midi,
         }
     }));
 
