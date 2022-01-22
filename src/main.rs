@@ -474,7 +474,8 @@ pub fn main() {
                 if !already_pressed.borrow().contains(&code) {
                     already_pressed.borrow_mut().insert(code.to_owned());
                     match code {
-                        '\u{7}' => {
+                        // Keys.Backspace
+                        '\u{8}' => {
                             Lazy::force(&*cloned_context);
                             cloned_sound_send.send(SoundMsg::SetErasing(true)).unwrap();
                         },
@@ -483,7 +484,8 @@ pub fn main() {
                 }
             } else {
                 match code {
-                    '\u{7}' => {                    
+                    // Keys.Backspace
+                    '\u{8}' => {                    
                         cloned_sound_send.send(SoundMsg::SetErasing(false)).unwrap();
                     }
                     _ => (),

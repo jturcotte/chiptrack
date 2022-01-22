@@ -32,11 +32,11 @@ midir = "0.7"
 midly = "0.5"
 
 [dependencies.sixtyfps]
-version = "0.1.5"
+version = "0.1"
 # path = "../sixtyfps/api/sixtyfps-rs"
 
 [build-dependencies.sixtyfps-build]
-version = "0.1.5"
+version = "0.1"
 # path = "../sixtyfps/api/sixtyfps-rs/sixtyfps-build"
 
 [dependencies.rboy]

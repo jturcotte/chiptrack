@@ -282,19 +282,13 @@ MainWindow := Window {
                 else if (event.text == "8") { root.select_instrument(7); }
                 else if (event.text == "9") { root.select_instrument(8); }
                 else if (event.text == "0") { root.select_instrument(9); }
-                // Left
-                else if (event.text == "\u{e}") { root.manually_advance_step(false); }
-                // Left
-                else if (event.text == "\u{f}") { root.manually_advance_step(true); }
-                // Home
-                else if (event.text == "\u{2}") { root.octave_increased(-1); }
-                // End
-                else if (event.text == "\u{3}") { root.octave_increased(1); }
-                // Tab
-                else if (event.text == "\u{9}") { song_mode_button.toggled = !song_mode_button.toggled; }
-                else if (event.text == "\n") { root.play_clicked(!root.playing); }
-                // Escape
-                else if (event.text == "\u{1b}") { root.mute_instruments(); }
+                else if (event.text == Keys.LeftArrow) { root.manually_advance_step(false); }
+                else if (event.text == Keys.RightArrow) { root.manually_advance_step(true); }
+                else if (event.text == Keys.PageDown) { root.octave_increased(-1); }
+                else if (event.text == Keys.PageUp) { root.octave_increased(1); }
+                else if (event.text == Keys.Tab) { song_mode_button.toggled = !song_mode_button.toggled; }
+                else if (event.text == Keys.Return) { root.play_clicked(!root.playing); }
+                else if (event.text == Keys.Escape) { root.mute_instruments(); }
             }
             global_key_event(event.text, true);
             accept
