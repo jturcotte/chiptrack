@@ -1,9 +1,9 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-use crate::sixtyfps_generated_MainWindow::SongPatternData;
+use crate::utils::MidiNote;
 use crate::MainWindow;
-use crate::utils;
+use crate::SongPatternData;
 use serde::{Serialize, Deserialize};
 use sixtyfps::Model;
 use sixtyfps::VecModel;
@@ -179,7 +179,7 @@ impl Sequencer {
             for (i, step) in steps.iter().enumerate() {
                 let mut row_data = model.row_data(i);
                 row_data.empty = !step.enabled;
-                row_data.note_name = utils::midi_note_name(step.note);
+                row_data.note_name = MidiNote(step.note as i32).name();
                 model.set_row_data(i, row_data);
             }
         });
@@ -247,7 +247,7 @@ impl Sequencer {
             let mut step_row_data = steps.row_data(step_num);
             step_row_data.empty = !toggled;
             if let Some(note) = set_note {
-                step_row_data.note_name = utils::midi_note_name(note);
+                step_row_data.note_name = MidiNote(note as i32).name();
             }
             steps.set_row_data(step_num, step_row_data);
         });

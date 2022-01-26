@@ -33,9 +33,21 @@ struct InstrumentData := {
 }
 struct NoteData := {
     note_number: int,
-    scale_pos: int,
+    key_pos: int,
     is_black: bool,
     active: bool,
+}
+struct ChannelTraceNote := {
+    tick_number: int,
+    octave: int,
+    key_pos: int,
+    is_black: bool,
+    volume: float,
+    color: color,
+}
+struct ChannelActiveNote := {
+    trace: ChannelTraceNote,
+    note_name: string,
 }
 
 SongPattern := Rectangle {
@@ -171,6 +183,42 @@ InstrumentButton := Rectangle {
     }
 }
 
+OctaveIndicator := Rectangle {
+    border_width: 1px;
+    border_color: black;
+    background: white;
+    Rectangle {
+        background: black;
+        y: 1 * parent.height / 7px * 1px - height / 2;
+        height: parent.height / 7 * 0.8;
+        width: 60%;
+    }
+    Rectangle {
+        background: black;
+        y: 2 * parent.height / 7px * 1px - height / 2;
+        height: parent.height / 7 * 0.8;
+        width: 60%;
+    }
+    Rectangle {
+        background: black;
+        y: 3 * parent.height / 7px * 1px - height / 2;
+        height: parent.height / 7 * 0.8;
+        width: 60%;
+    }
+    Rectangle {
+        background: black;
+        y: 5 * parent.height / 7px * 1px - height / 2;
+        height: parent.height / 7 * 0.8;
+        width: 60%;
+    }
+    Rectangle {
+        background: black;
+        y: 6 * parent.height / 7px * 1px - height / 2;
+        height: parent.height / 7 * 0.8;
+        width: 60%;
+    }
+}
+
 MainWindow := Window {
     property<[SongPatternData]> sequencer_song_patterns: [
         {number: 0},
@@ -201,19 +249,30 @@ MainWindow := Window {
         ];
     property<int> first_note: 60;
     property<[NoteData]> notes: [
-        {note_number: first_note, scale_pos: 0, is_black: false, active: false},
-        {note_number: first_note + 2, scale_pos: 1, is_black: false, active: false},
-        {note_number: first_note + 4, scale_pos: 2, is_black: false, active: false},
-        {note_number: first_note + 5, scale_pos: 3, is_black: false, active: false},
-        {note_number: first_note + 7, scale_pos: 4, is_black: false, active: false},
-        {note_number: first_note + 9, scale_pos: 5, is_black: false, active: false},
-        {note_number: first_note + 11, scale_pos: 6, is_black: false, active: false},
-        {note_number: first_note + 12, scale_pos: 7, is_black: false, active: false},
-        {note_number: first_note + 1, scale_pos: 0, is_black: true, active: false},
-        {note_number: first_note + 3, scale_pos: 1, is_black: true, active: false},
-        {note_number: first_note + 6, scale_pos: 3, is_black: true, active: false},
-        {note_number: first_note + 8, scale_pos: 4, is_black: true, active: false},
-        {note_number: first_note + 10, scale_pos: 5, is_black: true, active: false},
+        {note_number: first_note, key_pos: 0, is_black: false, active: false},
+        {note_number: first_note + 2, key_pos: 1, is_black: false, active: false},
+        {note_number: first_note + 4, key_pos: 2, is_black: false, active: false},
+        {note_number: first_note + 5, key_pos: 3, is_black: false, active: false},
+        {note_number: first_note + 7, key_pos: 4, is_black: false, active: false},
+        {note_number: first_note + 9, key_pos: 5, is_black: false, active: false},
+        {note_number: first_note + 11, key_pos: 6, is_black: false, active: false},
+        {note_number: first_note + 12, key_pos: 7, is_black: false, active: false},
+        {note_number: first_note + 1, key_pos: 0, is_black: true, active: false},
+        {note_number: first_note + 3, key_pos: 1, is_black: true, active: false},
+        {note_number: first_note + 6, key_pos: 3, is_black: true, active: false},
+        {note_number: first_note + 8, key_pos: 4, is_black: true, active: false},
+        {note_number: first_note + 10, key_pos: 5, is_black: true, active: false},
+    ];
+    property<int> current_tick_number: 123;
+    property<[ChannelTraceNote]> synth_trace_notes: [
+        { tick_number: 123, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), },
+        { tick_number: 123, octave: 3, key_pos: 3, is_black: true, volume: 1.0, color: Colors.rgb(255,0,0), },
+        { tick_number: 122, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), },
+        { tick_number: 121, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), },
+    ];
+    property<[ChannelActiveNote]> synth_active_notes: [
+        { trace: { tick_number: 123, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), }, note_name: "C", },
+        { trace: { tick_number: 123, octave: 3, key_pos: 3, is_black: true, volume: 1.0, color: Colors.rgb(255,0,0), }, note_name: "F#", },
     ];
     property<bool> playing: false;
     property in_song_mode <=> song_mode_button.toggled;
@@ -377,8 +436,8 @@ MainWindow := Window {
                             note_name: idx == 0 ? get_midi_note_name(note.note_number) : "";
                             is_black: note.is_black;
                             x: note.is_black
-                                ? (note.scale_pos + 1) * floor(parent.width / 8px) * 1px - width / 2
-                                : note.scale_pos * floor(parent.width / 8px) * 1px;
+                                ? (note.key_pos + 1) * floor(parent.width / 8px) * 1px - width / 2
+                                : note.key_pos * floor(parent.width / 8px) * 1px;
                             width: is_black
                                 ? parent.width / 8 * 0.8
                                 : floor(parent.width / 8px) * 1px + 1px;
@@ -390,6 +449,75 @@ MainWindow := Window {
                 }
                 if (in_song_mode):
                 VerticalLayout {
+                    visualization := Rectangle {
+                        property<length> noise_area_height: parent.height * 0.05;
+                        property<int> visible_octaves: 4;
+                        property<length> note_height: (height - noise_area_height) / (7 * visible_octaves);
+
+                        HorizontalLayout {
+                            Rectangle {
+                                z: 1;
+                                width: 5%;
+                                for i in visualization.visible_octaves:
+                                    OctaveIndicator {
+                                        width: 100%;
+                                        height: visualization.note_height * 7;
+                                        y: parent.height - visualization.noise_area_height - height * (i + 1);
+                                    }
+                                for note[idx] in synth_active_notes:
+                                    Rectangle {
+                                        border-radius: width;
+                                        width: height;
+                                        height: visualization.note_height * 4;
+                                        x: (note.trace.is_black ? parent.width * 0.6 : parent.width) - width / 2;
+                                        y: parent.height
+                                            - (note.trace.octave == 0 && note.trace.key_pos == 0
+                                                ? visualization.noise_area_height / 2
+                                                : visualization.noise_area_height
+                                                    + ((note.trace.octave - 2) * 7 + note.trace.key_pos + (note.trace.is_black ? 1.5 : 1)) * visualization.note_height
+                                                )
+                                            + visualization.note_height / 2 - height / 2;
+                                        background: white;
+                                        border-color: note.trace.color;
+                                        border-width: 2px;
+                                        Text {
+                                            width: 100%;
+                                            height: 100%;
+                                            text: note.note_name;
+                                            font_size: min(width, height) / 2.5;
+                                            color: note.trace.color;
+                                            horizontal_alignment: center;
+                                            vertical_alignment: center;
+                                        }
+                                    }
+                            }
+                            trace_container := Rectangle{
+                                property<length> tick_width: width / (6 * 16 * 2);
+                                Rectangle {
+                                    // FIXME: current_tick_number is updated 64x per second, so this will cause jitter
+                                    //        of the scroll animation when we scroll 2 ticks over a frame.
+                                    //        Ideally we should animate this to scroll 64 ticks over a whole
+                                    //        second instead, but I don't know any way to do this with the
+                                    //        current API.
+                                    x: current_tick_number * trace_container.tick_width;
+
+                                    for note[idx] in synth_trace_notes:
+                                        Rectangle {
+                                            width: trace_container.tick_width;
+                                            height: visualization.note_height * (note.is_black ? 0.8 : 1.0);
+                                            x: -note.tick_number * width;
+                                            y: parent.height
+                                                - (note.octave == 0 && note.key_pos == 0
+                                                    ? visualization.noise_area_height / 2
+                                                    : visualization.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + (note.is_black ? 1.5 : 1)) * visualization.note_height
+                                                    );
+                                            background: note.color;
+                                            opacity: note.volume;
+                                        }
+                                }
+                            }
+                        }
+                    }
                     HorizontalLayout {
                         spacing: 2px;
                         for pattern[idx] in sequencer_patterns:

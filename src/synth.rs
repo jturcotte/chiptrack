@@ -1,13 +1,18 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+use crate::ChannelActiveNote;
+use crate::ChannelTraceNote;
 use crate::MainWindow;
 use crate::Settings;
 use crate::synth_script::Channel;
 use crate::synth_script::RegSettings;
 use crate::synth_script::SynthScript;
+use crate::utils::MidiNote;
+use sixtyfps::Color;
 use sixtyfps::Model;
 use sixtyfps::SharedString;
+use sixtyfps::VecModel;
 use sixtyfps::Weak;
 use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
@@ -45,7 +50,7 @@ pub struct Synth {
     dmg: rboy::Sound,
     script: SynthScript,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
-    settings_ring_index: usize,
+    frame_number: usize,
     output_data: Arc<Mutex<OutputData>>,
     main_window: Weak<MainWindow>,
 }
@@ -155,7 +160,7 @@ impl Synth {
             dmg: dmg,
             script: script,
             settings_ring: settings_ring,
-            settings_ring_index: 0,
+            frame_number: 0,
             output_data: output_data,
             main_window: main_window,
         }
@@ -175,22 +180,23 @@ impl Synth {
     // but all registers are eventually read at least once every 8 of those frames.
     // So clock our frame generation at 64hz, thus this function is expected
     // to be called 64x per second.
-    pub fn advance_frame(&mut self, step_change: Option<u32>) -> () {
-        let mut settings_ring = self.settings_ring.borrow_mut();
-        let dmg = &mut self.dmg;
-        let i = self.settings_ring_index;
-        settings_ring[i].for_each_setting(|addr, set| {
-            // Trying to read the memory wouldn't give us the value we wrote last,
-            // so overwrite any state previously set in bits outside of RegSetter.mask
-            // with zeros.
-            dmg.wb(addr, set.value);    
-        });
-        settings_ring[i].clear();
-        self.settings_ring_index = (self.settings_ring_index + 1) % settings_ring.len();
+    pub fn advance_frame(&mut self, step_change: Option<u32>) {
+        {
+            let i = self.settings_ring_index();
+            let mut settings_ring = self.settings_ring.borrow_mut();
+            let dmg = &mut self.dmg;
+            settings_ring[i].for_each_setting(|addr, set| {
+                // Trying to read the memory wouldn't give us the value we wrote last,
+                // so overwrite any state previously set in bits outside of RegSetter.mask
+                // with zeros.
+                dmg.wb(addr, set.value);    
+            });
+            settings_ring[i].clear();
+        }
 
         // Just enable all channels for now
-        self.dmg.wb(0xff24, 0xff);    
-        self.dmg.wb(0xff25, 0xff);    
+        self.dmg.wb(0xff24, 0xff);
+        self.dmg.wb(0xff25, 0xff);
 
         // The sequencer step changed, check if we need to send a pulse to sync downstream devices.
         if let Some(next_step) = step_change {
@@ -206,11 +212,14 @@ impl Synth {
 
         // Generate one frame of mixed output.
         // For 44100hz audio, this will put 44100/64 audio samples in self.buffer.
-        self.dmg.do_cycle(rboy::CLOCKS_PER_SECOND / 64)
+        self.dmg.do_cycle(rboy::CLOCKS_PER_SECOND / 64);
+
+        self.update_ui_channel_states();
+        self.frame_number += 1;
     }
 
     pub fn trigger_instrument(&mut self, instrument: u32, note: u32) -> () {
-        self.script.trigger_instrument(self.settings_ring_index, instrument, note);
+        self.script.trigger_instrument(self.settings_ring_index(), instrument, note);
     }
 
     /// Can be used to manually mute when instruments have an infinite length and envelope.
@@ -244,4 +253,77 @@ impl Synth {
         self.update_instrument_ids();
     }
 
+    fn settings_ring_index(&self) -> usize {
+        self.frame_number % self.settings_ring.borrow().len()
+    }
+
+    fn update_ui_channel_states(&self) {
+        let frame_number = self.frame_number as i32;
+        let mut states = self.dmg.chan_states();
+        // Let square channels be rendered on top of the wave channel.
+        states.reverse();
+        let colors = [
+            Color::from_rgb_u8(192, 0, 0),
+            Color::from_rgb_u8(0, 192, 0),
+            Color::from_rgb_u8(64, 0, 192),
+            Color::from_rgb_u8(0, 64, 192),
+            ];
+
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let trace_model = handle.get_synth_trace_notes();
+            let trace_vec_model = trace_model.as_any().downcast_ref::<VecModel<ChannelTraceNote>>().unwrap();
+            let active_model = handle.get_synth_active_notes();
+            let active_vec_model = active_model.as_any().downcast_ref::<VecModel<ChannelActiveNote>>().unwrap();
+
+            while trace_vec_model.row_count() > 0 {
+                // FIXME: Provide the oldest tick number to the UI or get it from it
+                if frame_number - trace_vec_model.row_data(0).tick_number >= 6 * 16 * 2 {
+                    trace_vec_model.remove(0);
+                } else {
+                    break;
+                }
+            }
+            for _ in 0..active_vec_model.row_count() {
+                // FIXME: Keep notes that are still active instead of re-adding?
+                active_vec_model.remove(0);
+            }
+
+            for (&color, &(freq, vol)) in colors.iter().zip(states.iter()) {
+                if vol > 0 {
+                    let (trace, active) = if let Some((note, _cents)) = freq.map(MidiNote::from_freq) {
+                        let trace = ChannelTraceNote {
+                            tick_number: frame_number,
+                            octave: note.octave(),
+                            key_pos: note.key_pos(),
+                            is_black: note.is_black(),
+                            volume: vol as f32 / 15.0,
+                            color: color,
+                        };
+                        let active = ChannelActiveNote {
+                            trace: trace.clone(),
+                            note_name: note.name(),
+                        };
+                        (trace, active)
+                    } else {
+                        let trace = ChannelTraceNote {
+                            tick_number: frame_number,
+                            octave: 0,
+                            key_pos: 0,
+                            is_black: false,
+                            volume: vol as f32 / 15.0,
+                            color: color,
+                        };
+                        let active = ChannelActiveNote {
+                            trace: trace.clone(),
+                            note_name: "*".into(),
+                        };
+                        (trace, active)
+                    };
+                    trace_vec_model.push(trace);
+                    active_vec_model.push(active);
+                }
+            }
+            handle.set_current_tick_number(frame_number);
+        });
+    }
 }

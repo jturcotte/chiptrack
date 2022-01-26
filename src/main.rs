@@ -14,6 +14,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::midi::Midi;
 use crate::sound_engine::SoundEngine;
+use crate::utils::MidiNote;
 use cpal::{Sample, SampleFormat};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
@@ -131,17 +132,11 @@ pub fn main() {
     }
     let note_model = Rc::new(sixtyfps::VecModel::default());
     let start: i32 = 60;
+    let start_octave: i32 = MidiNote(start).octave();
     let notes: Vec<NoteData> = (start..(start+13)).map(|i| {
-        let semitone = (i - start) % 12;
-        let octav = (i - start) / 12;
-        let major_scale = [0, 2, 4, 5, 7, 9, 11];
-        let r = major_scale.binary_search(&semitone);
-        let (scale_pos, is_black) = match r {
-            Ok(p) => (p, false),
-            Err(p) => (p - 1, true),
-        };
-        let pos = scale_pos as i32 + octav * 7;
-        NoteData{note_number: i, scale_pos: pos, is_black: is_black, active: false}
+        let note = MidiNote(i);
+        let pos = note.key_pos() + (note.octave() - start_octave) * 7;
+        NoteData{note_number: i, key_pos: pos, is_black: note.is_black(), active: false}
     }).collect();
     for n in notes.iter().filter(|n| !n.is_black) {
         note_model.push(n.clone());
@@ -310,8 +305,8 @@ pub fn main() {
         }
     }));
 
-    window.on_get_midi_note_name(move |note| {
-        utils::midi_note_name(note as u32)
+    window.on_get_midi_note_name(|note| {
+        MidiNote(note).name()
     });
 
     window.on_mod(|x, y| {
