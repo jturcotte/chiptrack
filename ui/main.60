@@ -357,19 +357,213 @@ MainWindow := Window {
             accept
         }
 
-        HorizontalLayout {
-            Rectangle {
-                property<length> song_mode_y: root.height * -0.4;
-                property<length> not_song_mode_y: root.height * 0.0;
-                y: in_song_mode ? song_mode_y : not_song_mode_y;
-                animate y {
-                    duration: 125ms;
-                }
-                if (y != song_mode_y):
-                GridBox {
-                    height: 40%;
-                    y: root.height * 0.0;
-                    Row {
+        HorizontalBox {
+            controls_scroll_area := Rectangle {
+                VerticalBox {
+                    property<length> not_song_mode_y: 0;
+                    property<length> song_mode_y: controls_scroll_area.height * -0.4 - spacing;
+                    y: in_song_mode ? song_mode_y : not_song_mode_y;
+                    animate y { duration: 125ms; }
+                    padding: 0;
+
+                    if (y == song_mode_y): Rectangle { height: 40%; }
+                    if (y != song_mode_y):
+                    GridBox {
+                        height: (controls_scroll_area.height - parent.spacing) * 0.4;
+                        padding: 0;
+
+                        Row {
+                            HorizontalLayout {
+                                spacing: 2px;
+
+                                for pattern[idx] in sequencer_patterns:
+                                SequencerPattern {
+                                    number: idx;
+                                    highlighted: pattern.active;
+                                    empty: pattern.empty;
+                                    clicked => { root.pattern_clicked(idx); }
+                                }
+                            }
+                        }
+                        Row {
+                            HorizontalLayout {
+                                spacing: 2px;
+
+                                for step[idx] in sequencer_steps:
+                                SequencerStep {
+                                    highlighted: step.active;
+                                    empty: step.empty;
+                                    name: step.note_name;
+                                    beat: mod(idx, 4) == 0;
+                                    clicked => { root.step_clicked(idx); }
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalBox {
+                        height: (controls_scroll_area.height - parent.spacing) * 0.6;
+                        padding: 0;
+
+                        Rectangle {
+                            property<float> piano_opacity: !in_song_mode ? 1.0 : 0.0;
+                            animate piano_opacity { duration: 125ms; }
+                            if (piano_opacity != 0.0):
+                            Rectangle {
+                                opacity: parent.piano_opacity;
+                                for note[idx] in notes:
+                                PianoKey {
+                                    note_name: idx == 0 ? get_midi_note_name(note.note_number) : "";
+                                    is_black: note.is_black;
+                                    x: note.is_black
+                                        ? (note.key_pos + 1) * floor(parent.width / 8px) * 1px - width / 2
+                                        : note.key_pos * floor(parent.width / 8px) * 1px;
+                                    width: is_black
+                                        ? parent.width / 8 * 0.8
+                                        : floor(parent.width / 8px) * 1px + 1px;
+
+                                    height: is_black ? 60% : 100%;
+                                    highlighted: note.active;
+                                    clicked => { root.note_pressed(note.note_number); }
+                                }
+                            }
+                            if (piano_opacity != 1.0):
+                            VerticalLayout {
+                                opacity: 1.0 - parent.piano_opacity;
+                                visualization := Rectangle {
+                                    property<int> visible_octaves: 4;
+                                    property<length> note_height: height / (7 * visible_octaves + 2);
+                                    // One note spacer, and the real note
+                                    property<length> noise_area_height: note_height * 2;
+
+                                    background: #f8f8f8;
+                                    border_width: 1px;
+                                    border_color: #e8e8e8;
+
+                                    HorizontalLayout {
+                                        Rectangle {
+                                            z: 1;
+                                            width: 5%;
+
+                                            for i in visualization.visible_octaves:
+                                            OctaveIndicator {
+                                                width: 100%;
+                                                height: visualization.note_height * 7;
+                                                y: parent.height - visualization.noise_area_height - height * (i + 1);
+                                            }
+
+                                            for note[idx] in synth_active_notes:
+                                            Rectangle {
+                                                border-radius: width;
+                                                width: height;
+                                                height: visualization.note_height * 3;
+                                                x: (note.trace.is_black ? parent.width * 0.6 : parent.width) - width / 2;
+                                                y: parent.height
+                                                    - (note.trace.octave == 0 && note.trace.key_pos == 0
+                                                        ? visualization.note_height
+                                                        : visualization.noise_area_height
+                                                            + ((note.trace.octave - 2) * 7 + note.trace.key_pos + (note.trace.is_black ? 1.5 : 1)) * visualization.note_height
+                                                        )
+                                                    + visualization.note_height / 2 - height / 2;
+                                                background: white;
+                                                border-color: note.trace.color;
+                                                border-width: 2px;
+                                                Text {
+                                                    width: 100%;
+                                                    height: 100%;
+                                                    text: note.note_name;
+                                                    font_size: min(width, height) / 2.5;
+                                                    color: note.trace.color;
+                                                    horizontal_alignment: center;
+                                                    vertical_alignment: center;
+                                                }
+                                            }
+                                        }
+                                        trace_container := Rectangle {
+                                            property<length> tick_width: width / (6 * 16 * 2);
+                                            Rectangle {
+                                                // FIXME: current_tick_number is updated 64x per second, so this will cause jitter
+                                                //        of the scroll animation when we scroll 2 ticks over a frame.
+                                                //        Ideally we should animate this to scroll 64 ticks over a whole
+                                                //        second instead, but I don't know any way to do this with the
+                                                //        current API.
+                                                x: current_tick_number * trace_container.tick_width;
+
+                                                for note[idx] in synth_trace_notes:
+                                                Rectangle {
+                                                    width: trace_container.tick_width;
+                                                    height: visualization.note_height * (note.is_black ? 0.8 : 1.0);
+                                                    x: -note.tick_number * width;
+                                                    y: parent.height
+                                                        - (note.octave == 0 && note.key_pos == 0
+                                                            ? visualization.note_height
+                                                            : visualization.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + (note.is_black ? 1.5 : 1)) * visualization.note_height
+                                                            );
+                                                    background: note.color;
+                                                    opacity: note.volume;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        VerticalBox {
+                            padding: 0;
+                            Rectangle {
+                                background: white;
+                                waveform := Image {
+                                    width: 100%;
+                                    height: 100%;
+                                    image-rendering: pixelated;
+                                }
+                                Rectangle {
+                                    border_color: black;
+                                    border_width: 1px;
+                                    border_radius: height/16;
+                                }
+                                // This wouldn't be necessary if instruments_grid defined its
+                                // height as a percentage, but I couldn't find a way to make one depend
+                                // on grid_size.
+                                vertical-stretch: 1 - instruments_grid.vertical_stretch;
+
+                            }
+                            instruments_grid := Rectangle {
+                                property<length> spacing: 5px;
+                                property<int> grid_size: 4;
+                                property<length> item_size: (width - (spacing * (grid_size - 1))) / grid_size;
+                                vertical-stretch: (grid_size / (grid_size + 1));
+                                width: height;
+                                for instrument[idx] in instruments:
+                                InstrumentButton {
+                                    id: instrument.id;
+                                    highlighted: instrument.selected;
+                                    active: instrument.active;
+                                    clicked => { root.select_instrument(idx); }
+                                    x: mod(idx, 4) * (width + parent.spacing);
+                                    y: floor(idx / 4) * (height + parent.spacing);
+                                    height: parent.item_size;
+                                }
+                            }
+                        }
+                    }
+
+                    if (y == not_song_mode_y): Rectangle { height: 40%; }
+                    if (y != not_song_mode_y):                
+                    VerticalBox {
+                        height: (controls_scroll_area.height - parent.spacing) * 0.4;
+                        padding: 0;
+
+                        HorizontalLayout {
+                            spacing: 2px;
+
+                            for pattern[idx] in sequencer_song_patterns:
+                            SongPattern {
+                                number: pattern.number;
+                                highlighted: pattern.active;
+                                // width: (parent.width - (parent.spacing * 15)) / 16;
+                            }
+                        }
                         HorizontalLayout {
                             spacing: 2px;
 
@@ -378,213 +572,28 @@ MainWindow := Window {
                                 number: idx;
                                 highlighted: pattern.active;
                                 empty: pattern.empty;
-                                clicked => { root.pattern_clicked(idx); }
+                                clicked => { root.append_song_pattern(idx); }
                             }
                         }
-                    }
-                    Row {
-                        HorizontalLayout {
-                            spacing: 2px;
+                        HorizontalBox {
+                            height: 25%;
+                            padding: 0;
 
-                            for step[idx] in sequencer_steps:
-                            SequencerStep {
-                                highlighted: step.active;
-                                empty: step.empty;
-                                name: step.note_name;
-                                beat: mod(idx, 4) == 0;
-                                clicked => { root.step_clicked(idx); }
+                            Button {
+                                text: "⌫";
+                                clicked => { root.remove_last_song_pattern(); }
                             }
-                        }
-                    }
-                }
-                HorizontalBox {
-                    height: 60%;
-                    y: root.height * 0.4;
-                    Rectangle {
-                        property<float> piano_opacity: !in_song_mode ? 1.0 : 0.0;
-                        animate piano_opacity {
-                            duration: 125ms;
-                        }
-                        if (piano_opacity != 0.0):
-                        Rectangle {
-                            opacity: parent.piano_opacity;
-                            for note[idx] in notes:
-                            PianoKey {
-                                note_name: idx == 0 ? get_midi_note_name(note.note_number) : "";
-                                is_black: note.is_black;
-                                x: note.is_black
-                                    ? (note.key_pos + 1) * floor(parent.width / 8px) * 1px - width / 2
-                                    : note.key_pos * floor(parent.width / 8px) * 1px;
-                                width: is_black
-                                    ? parent.width / 8 * 0.8
-                                    : floor(parent.width / 8px) * 1px + 1px;
-
-                                height: is_black ? 60% : 100%;
-                                highlighted: note.active;
-                                clicked => { root.note_pressed(note.note_number); }
+                            Button {
+                                text: "Clear";
+                                clicked => { root.clear_song_patterns(); }
                             }
-                        }
-                        if (piano_opacity != 1.0):
-                        VerticalLayout {
-                            opacity: 1.0 - parent.piano_opacity;
-                            visualization := Rectangle {
-                                property<int> visible_octaves: 4;
-                                property<length> note_height: height / (7 * visible_octaves + 2);
-                                // One note spacer, and the real note
-                                property<length> noise_area_height: note_height * 2;
-
-                                background: #f8f8f8;
-                                border_width: 1px;
-                                border_color: #e8e8e8;
-
-                                HorizontalLayout {
-                                    Rectangle {
-                                        z: 1;
-                                        width: 5%;
-
-                                        for i in visualization.visible_octaves:
-                                        OctaveIndicator {
-                                            width: 100%;
-                                            height: visualization.note_height * 7;
-                                            y: parent.height - visualization.noise_area_height - height * (i + 1);
-                                        }
-
-                                        for note[idx] in synth_active_notes:
-                                        Rectangle {
-                                            border-radius: width;
-                                            width: height;
-                                            height: visualization.note_height * 4;
-                                            x: (note.trace.is_black ? parent.width * 0.6 : parent.width) - width / 2;
-                                            y: parent.height
-                                                - (note.trace.octave == 0 && note.trace.key_pos == 0
-                                                    ? visualization.note_height
-                                                    : visualization.noise_area_height
-                                                        + ((note.trace.octave - 2) * 7 + note.trace.key_pos + (note.trace.is_black ? 1.5 : 1)) * visualization.note_height
-                                                    )
-                                                + visualization.note_height / 2 - height / 2;
-                                            background: white;
-                                            border-color: note.trace.color;
-                                            border-width: 2px;
-                                            Text {
-                                                width: 100%;
-                                                height: 100%;
-                                                text: note.note_name;
-                                                font_size: min(width, height) / 2.5;
-                                                color: note.trace.color;
-                                                horizontal_alignment: center;
-                                                vertical_alignment: center;
-                                            }
-                                        }
-                                    }
-                                    trace_container := Rectangle {
-                                        property<length> tick_width: width / (6 * 16 * 2);
-                                        Rectangle {
-                                            // FIXME: current_tick_number is updated 64x per second, so this will cause jitter
-                                            //        of the scroll animation when we scroll 2 ticks over a frame.
-                                            //        Ideally we should animate this to scroll 64 ticks over a whole
-                                            //        second instead, but I don't know any way to do this with the
-                                            //        current API.
-                                            x: current_tick_number * trace_container.tick_width;
-
-                                            for note[idx] in synth_trace_notes:
-                                            Rectangle {
-                                                width: trace_container.tick_width;
-                                                height: visualization.note_height * (note.is_black ? 0.8 : 1.0);
-                                                x: -note.tick_number * width;
-                                                y: parent.height
-                                                    - (note.octave == 0 && note.key_pos == 0
-                                                        ? visualization.note_height
-                                                        : visualization.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + (note.is_black ? 1.5 : 1)) * visualization.note_height
-                                                        );
-                                                background: note.color;
-                                                opacity: note.volume;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    VerticalBox {
-                        padding: 0px;
-                        Rectangle {
-                            background: white;
-                            waveform := Image {
-                                width: 100%;
-                                height: 100%;
-                                image-rendering: pixelated;
-                            }
-                            Rectangle {
-                                border_color: black;
-                                border_width: 1px;
-                                border_radius: height/16;
-                            }
-                            // This wouldn't be necessary if instruments_grid defined its
-                            // height as a percentage, but I couldn't find a way to make one depend
-                            // on grid_size.
-                            vertical-stretch: 1 - instruments_grid.vertical_stretch;
-
-                        }
-                        instruments_grid := Rectangle {
-                            property<length> spacing: 5px;
-                            property<int> grid_size: 4;
-                            property<length> item_size: (width - (spacing * (grid_size - 1))) / grid_size;
-                            vertical-stretch: (grid_size / (grid_size + 1));
-                            width: height;
-                            for instrument[idx] in instruments:
-                            InstrumentButton {
-                                id: instrument.id;
-                                highlighted: instrument.selected;
-                                active: instrument.active;
-                                clicked => { root.select_instrument(idx); }
-                                x: mod(idx, 4) * (width + parent.spacing);
-                                y: floor(idx / 4) * (height + parent.spacing);
-                                height: parent.item_size;
-                            }
-                        }
-                    }
-                }
-                if (y != not_song_mode_y):                
-                VerticalBox {
-                    height: 40%;
-                    y: root.height * 1.0;
-                    HorizontalLayout {
-                        spacing: 2px;
-
-                        for pattern[idx] in sequencer_song_patterns:
-                        SongPattern {
-                            number: pattern.number;
-                            highlighted: pattern.active;
-                            // width: (parent.width - (parent.spacing * 15)) / 16;
-                        }
-                    }
-                    HorizontalLayout {
-                        spacing: 2px;
-
-                        for pattern[idx] in sequencer_patterns:
-                        SequencerPattern {
-                            number: idx;
-                            highlighted: pattern.active;
-                            empty: pattern.empty;
-                            clicked => { root.append_song_pattern(idx); }
-                        }
-                    }
-                    HorizontalLayout {
-                        height: 25%;
-                        Button {
-                            text: "⌫";
-                            clicked => { root.remove_last_song_pattern(); }
-                        }
-                        Button {
-                            text: "Clear";
-                            clicked => { root.clear_song_patterns(); }
                         }
                     }
                 }
             }
             VerticalBox {
                 width: min_width;
-                padding_left: 0;
+                padding: 0;
 
                 settings_button := Button {
                     text: "⚙";
