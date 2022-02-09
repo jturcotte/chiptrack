@@ -1,7 +1,7 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-use sixtyfps::SharedString;
+use slint::SharedString;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy)]

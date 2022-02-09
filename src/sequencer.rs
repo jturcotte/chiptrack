@@ -5,9 +5,9 @@ use crate::utils::MidiNote;
 use crate::MainWindow;
 use crate::SongPatternData;
 use serde::{Serialize, Deserialize};
-use sixtyfps::Model;
-use sixtyfps::VecModel;
-use sixtyfps::Weak;
+use slint::Model;
+use slint::VecModel;
+use slint::Weak;
 use std::fs::File;
 use std::path::Path;
 

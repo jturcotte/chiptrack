@@ -19,7 +19,7 @@ use cpal::{Sample, SampleFormat};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
-use sixtyfps::{Model, Rgba8Pixel, SharedPixelBuffer, Timer, TimerMode};
+use slint::{Model, Rgba8Pixel, SharedPixelBuffer, Timer, TimerMode};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::env;
@@ -30,7 +30,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tiny_skia::*;
 
-sixtyfps::include_modules!();
+slint::include_modules!();
 
 thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine>> = RefCell::new(None);}
 
@@ -102,7 +102,7 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, gain: f32, consumed: 
                 stroke.width = 0.0;
                 pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
 
-                let image = sixtyfps::Image::from_rgba8_premultiplied(pixel_buffer);
+                let image = slint::Image::from_rgba8_premultiplied(pixel_buffer);
                 window.set_waveform_image(image);
                 window.set_waveform_is_zero(!non_zero);
             }
@@ -121,16 +121,16 @@ pub fn main() {
 
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.
-    let sequencer_song_model = Rc::new(sixtyfps::VecModel::default());
-    let sequencer_pattern_model = Rc::new(sixtyfps::VecModel::default());
+    let sequencer_song_model = Rc::new(slint::VecModel::default());
+    let sequencer_pattern_model = Rc::new(slint::VecModel::default());
     for i in 0..16 {
         sequencer_pattern_model.push(PatternData{empty: true, active: i == 0});
     }
-    let sequencer_step_model = Rc::new(sixtyfps::VecModel::default());
+    let sequencer_step_model = Rc::new(slint::VecModel::default());
     for _ in 0..16 {
         sequencer_step_model.push(StepData{empty: true, active: false, note_name: "".into()});
     }
-    let note_model = Rc::new(sixtyfps::VecModel::default());
+    let note_model = Rc::new(slint::VecModel::default());
     let start: i32 = 60;
     let start_octave: i32 = MidiNote(start).octave();
     let notes: Vec<NoteData> = (start..(start+13)).map(|i| {
@@ -154,10 +154,10 @@ pub fn main() {
     }
 
     let window = MainWindow::new();
-    window.set_sequencer_song_patterns(sixtyfps::ModelHandle::new(sequencer_song_model.clone()));
-    window.set_sequencer_patterns(sixtyfps::ModelHandle::new(sequencer_pattern_model.clone()));
-    window.set_sequencer_steps(sixtyfps::ModelHandle::new(sequencer_step_model.clone()));
-    window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
+    window.set_sequencer_song_patterns(slint::ModelHandle::new(sequencer_song_model.clone()));
+    window.set_sequencer_patterns(slint::ModelHandle::new(sequencer_pattern_model.clone()));
+    window.set_sequencer_steps(slint::ModelHandle::new(sequencer_step_model.clone()));
+    window.set_notes(slint::ModelHandle::new(note_model.clone()));
 
     let (sound_send, sound_recv) = mpsc::channel();
     let (notify_send, notify_recv) = mpsc::channel();

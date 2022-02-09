@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { Button, ComboBox, GridBox, HorizontalBox, VerticalBox
-} from "sixtyfps_widgets.60";
+} from "slint_widgets.60";
 import { OverlayDialog } from "overlay_dialog.60";
 
 struct Settings := {

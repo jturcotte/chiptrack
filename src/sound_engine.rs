@@ -7,8 +7,8 @@ use crate::synth::Synth;
 use crate::utils;
 use crate::MainWindow;
 use crate::Settings;
-use sixtyfps::Model;
-use sixtyfps::Weak;
+use slint::Model;
+use slint::Weak;
 use std::path::PathBuf;
 
 pub const NUM_INSTRUMENTS: usize = 16;

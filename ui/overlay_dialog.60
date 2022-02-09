@@ -1,7 +1,7 @@
 // Copyright © 2022 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-import { Button, VerticalBox, HorizontalBox } from "sixtyfps_widgets.60";
+import { Button, VerticalBox, HorizontalBox } from "slint_widgets.60";
 
 OverlayDialog := Rectangle {
     callback accepted();

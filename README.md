@@ -4,7 +4,7 @@ chiptrack is a cross-platform sequencer that internally uses a Game Boy emulator
 
 It uses:
 
-- [SixtyFPS](https://github.com/sixtyfpsui/sixtyfps) for the UI.
+- [Slint](https://github.com/slint-ui/slint) for the UI.
 - [RBoy](https://github.com/mvdnes/rboy) for the sound synthesizer
 - [CPAL](https://github.com/RustAudio/cpal) for the audio output
 - [Rhai](https://github.com/rhaiscript/rhai) for the [instruments scripting](res/instruments.rhai)
@@ -21,7 +21,7 @@ It uses:
 # OR
 # sudo yum install alsa-lib-devel
 git submodule update --init
-SIXTYFPS_NO_QT=1 cargo run --release
+SLINT_NO_QT=1 cargo run --release
 ```
 
 ## License
