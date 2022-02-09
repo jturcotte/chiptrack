@@ -31,13 +31,11 @@ base64-url = "1.4.10"
 midir = "0.7"
 midly = "0.5"
 
-[dependencies.sixtyfps]
-version = "0.1"
-# path = "../sixtyfps/api/sixtyfps-rs"
+[dependencies.slint]
+version = "0.2"
 
-[build-dependencies.sixtyfps-build]
-version = "0.1"
-# path = "../sixtyfps/api/sixtyfps-rs/sixtyfps-build"
+[build-dependencies.slint-build]
+version = "0.2"
 
 [dependencies.rboy]
 path = "rboy"
