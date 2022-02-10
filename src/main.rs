@@ -19,7 +19,7 @@ use cpal::{Sample, SampleFormat};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
-use sixtyfps::{Model, Rgba8Pixel, SharedPixelBuffer, Timer, TimerMode};
+use slint::{Model, Rgba8Pixel, SharedPixelBuffer, Timer, TimerMode};
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::env;
@@ -30,7 +30,7 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tiny_skia::*;
 
-sixtyfps::include_modules!();
+slint::include_modules!();
 
 thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine>> = RefCell::new(None);}
 
@@ -89,7 +89,7 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, gain: f32, consumed: 
     // So at least avoig eating CPU while no sound is being output.
     if non_zero || was_non_zero {
         if let Some(path) = pb.finish() {
-            let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width as usize, height as usize);
+            let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width as u32, height as u32);
             if let Some(mut pixmap) = PixmapMut::from_bytes(pixel_buffer.make_mut_bytes(), width as u32, height as u32) {
                 pixmap.fill(tiny_skia::Color::TRANSPARENT);
                 let mut paint = Paint::default();
@@ -102,7 +102,7 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, gain: f32, consumed: 
                 stroke.width = 0.0;
                 pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
 
-                let image = sixtyfps::Image::from_rgba8_premultiplied(pixel_buffer);
+                let image = slint::Image::from_rgba8_premultiplied(pixel_buffer);
                 window.set_waveform_image(image);
                 window.set_waveform_is_zero(!non_zero);
             }
@@ -121,16 +121,16 @@ pub fn main() {
 
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.
-    let sequencer_song_model = Rc::new(sixtyfps::VecModel::default());
-    let sequencer_pattern_model = Rc::new(sixtyfps::VecModel::default());
+    let sequencer_song_model = Rc::new(slint::VecModel::default());
+    let sequencer_pattern_model = Rc::new(slint::VecModel::default());
     for i in 0..16 {
         sequencer_pattern_model.push(PatternData{empty: true, active: i == 0});
     }
-    let sequencer_step_model = Rc::new(sixtyfps::VecModel::default());
+    let sequencer_step_model = Rc::new(slint::VecModel::default());
     for _ in 0..16 {
         sequencer_step_model.push(StepData{empty: true, active: false, note_name: "".into()});
     }
-    let note_model = Rc::new(sixtyfps::VecModel::default());
+    let note_model = Rc::new(slint::VecModel::default());
     let start: i32 = 60;
     let start_octave: i32 = MidiNote(start).octave();
     let notes: Vec<NoteData> = (start..(start+13)).map(|i| {
@@ -154,10 +154,10 @@ pub fn main() {
     }
 
     let window = MainWindow::new();
-    window.set_sequencer_song_patterns(sixtyfps::ModelHandle::new(sequencer_song_model.clone()));
-    window.set_sequencer_patterns(sixtyfps::ModelHandle::new(sequencer_pattern_model.clone()));
-    window.set_sequencer_steps(sixtyfps::ModelHandle::new(sequencer_step_model.clone()));
-    window.set_notes(sixtyfps::ModelHandle::new(note_model.clone()));
+    window.set_sequencer_song_patterns(slint::ModelRc::from(sequencer_song_model.clone()));
+    window.set_sequencer_patterns(slint::ModelRc::from(sequencer_pattern_model.clone()));
+    window.set_sequencer_steps(slint::ModelRc::from(sequencer_step_model.clone()));
+    window.set_notes(slint::ModelRc::from(note_model.clone()));
 
     let (sound_send, sound_recv) = mpsc::channel();
     let (notify_send, notify_recv) = mpsc::channel();
@@ -328,7 +328,7 @@ pub fn main() {
 
         let model = window_weak.clone().upgrade().unwrap().get_notes();
         for row in 0..model.row_count() {
-            let mut row_data = model.row_data(row);
+            let mut row_data = model.row_data(row).unwrap();
             if row_data.note_number == note {
                 row_data.active = true;
                 model.set_row_data(row, row_data);
@@ -345,7 +345,7 @@ pub fn main() {
                 let handle = window_weak.upgrade().unwrap();
                 let notes_model = handle.get_notes();
                 for row in 0..notes_model.row_count() {
-                    let mut row_data = notes_model.row_data(row);
+                    let mut row_data = notes_model.row_data(row).unwrap();
                     if row_data.active {
                         row_data.active = false;
                         notes_model.set_row_data(row, row_data);
@@ -354,7 +354,7 @@ pub fn main() {
 
                 let instruments_model = handle.get_instruments();
                 for row in 0..instruments_model.row_count() {
-                    let mut row_data = instruments_model.row_data(row);
+                    let mut row_data = instruments_model.row_data(row).unwrap();
                     if row_data.active {
                         row_data.active = false;
                         instruments_model.set_row_data(row, row_data);
@@ -376,7 +376,7 @@ pub fn main() {
         window.set_first_note(first_note + octave_delta * 12);
         let model = window.get_notes();
         for row in 0..model.row_count() {
-            let mut row_data = model.row_data(row);
+            let mut row_data = model.row_data(row).unwrap();
             row_data.note_number += octave_delta * 12;
             // The note_number changed and thus the sequencer release events
             // won't see that note anymore, so release it already while we're here here.
@@ -480,13 +480,13 @@ pub fn main() {
             } else {
                 match code {
                     // Keys.Backspace
-                    '\u{8}' => {                    
+                    '\u{8}' => {
                         cloned_sound_send.send(SoundMsg::SetErasing(false)).unwrap();
                     }
                     _ => (),
                 };
                 already_pressed.borrow_mut().remove(&code);
-            }            
+            }
         }
     });
 
@@ -505,7 +505,7 @@ pub fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let cloned_context = context.clone();
-        Lazy::force(&*cloned_context);        
+        Lazy::force(&*cloned_context);
     }
 
     window.run();

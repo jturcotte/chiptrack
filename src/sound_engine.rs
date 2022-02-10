@@ -7,8 +7,8 @@ use crate::synth::Synth;
 use crate::utils;
 use crate::MainWindow;
 use crate::Settings;
-use sixtyfps::Model;
-use sixtyfps::Weak;
+use slint::Model;
+use slint::Weak;
 use std::path::PathBuf;
 
 pub const NUM_INSTRUMENTS: usize = 16;
@@ -65,7 +65,7 @@ impl SoundEngine {
                 if instrument == selected_instrument {
                     let notes_model = handle.get_notes();
                     for row in 0..notes_model.row_count() {
-                        let mut row_data = notes_model.row_data(row);
+                        let mut row_data = notes_model.row_data(row).unwrap();
                         if row_data.note_number as u32 == note {
                             row_data.active = pressed;
                             notes_model.set_row_data(row, row_data);
@@ -73,7 +73,7 @@ impl SoundEngine {
                     }
                 }
                 let instruments_model = handle.get_instruments();
-                let mut row_data = instruments_model.row_data(instrument as usize);
+                let mut row_data = instruments_model.row_data(instrument as usize).unwrap();
                 row_data.active = pressed;
                 instruments_model.set_row_data(instrument as usize, row_data);
             });
@@ -88,7 +88,7 @@ impl SoundEngine {
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_notes();
             for row in 0..model.row_count() {
-                let mut row_data = model.row_data(row);
+                let mut row_data = model.row_data(row).unwrap();
                 row_data.active = false;
                 model.set_row_data(row, row_data);
             }

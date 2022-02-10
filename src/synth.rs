@@ -9,11 +9,11 @@ use crate::synth_script::Channel;
 use crate::synth_script::RegSettings;
 use crate::synth_script::SynthScript;
 use crate::utils::MidiNote;
-use sixtyfps::Color;
-use sixtyfps::Model;
-use sixtyfps::SharedString;
-use sixtyfps::VecModel;
-use sixtyfps::Weak;
+use slint::Color;
+use slint::Model;
+use slint::SharedString;
+use slint::VecModel;
+use slint::Weak;
 use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -121,7 +121,7 @@ impl rboy::AudioPlayer for FakePlayer {
                 state.buffer.push(right * gain);
             } else {
                 state.buffer.push(*left * gain);
-                state.buffer.push(*right_iter.next().unwrap() * gain);                
+                state.buffer.push(*right_iter.next().unwrap() * gain);
             }
         }
     }
@@ -189,7 +189,7 @@ impl Synth {
                 // Trying to read the memory wouldn't give us the value we wrote last,
                 // so overwrite any state previously set in bits outside of RegSetter.mask
                 // with zeros.
-                dmg.wb(addr, set.value);    
+                dmg.wb(addr, set.value);
             });
             settings_ring[i].clear();
         }
@@ -225,10 +225,10 @@ impl Synth {
     /// Can be used to manually mute when instruments have an infinite length and envelope.
     pub fn mute_instruments(&mut self) {
         // Set the envelopes to 0.
-        self.dmg.wb(Channel::Square1 as u16 + 2, 0);    
-        self.dmg.wb(Channel::Square2 as u16 + 2, 0);    
-        self.dmg.wb(Channel::Wave as u16 + 2, 0);    
-        self.dmg.wb(Channel::Noise as u16 + 2, 0);    
+        self.dmg.wb(Channel::Square1 as u16 + 2, 0);
+        self.dmg.wb(Channel::Square2 as u16 + 2, 0);
+        self.dmg.wb(Channel::Wave as u16 + 2, 0);
+        self.dmg.wb(Channel::Noise as u16 + 2, 0);
     }
 
     fn update_instrument_ids(&self) {
@@ -236,7 +236,7 @@ impl Synth {
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_instruments();
             for (i, id) in ids.iter().enumerate() {
-                let mut row_data = model.row_data(i);
+                let mut row_data = model.row_data(i).unwrap();
                 row_data.id = SharedString::from(id);
                 model.set_row_data(i, row_data);
             }
@@ -277,7 +277,7 @@ impl Synth {
 
             while trace_vec_model.row_count() > 0 {
                 // FIXME: Provide the oldest tick number to the UI or get it from it
-                if frame_number - trace_vec_model.row_data(0).tick_number >= 6 * 16 * 2 {
+                if frame_number - trace_vec_model.row_data(0).unwrap().tick_number >= 6 * 16 * 2 {
                     trace_vec_model.remove(0);
                 } else {
                     break;

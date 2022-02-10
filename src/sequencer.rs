@@ -5,9 +5,9 @@ use crate::utils::MidiNote;
 use crate::MainWindow;
 use crate::SongPatternData;
 use serde::{Serialize, Deserialize};
-use sixtyfps::Model;
-use sixtyfps::VecModel;
-use sixtyfps::Weak;
+use slint::Model;
+use slint::VecModel;
+use slint::Weak;
 use std::fs::File;
 use std::path::Path;
 
@@ -82,12 +82,12 @@ impl Sequencer {
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_song_patterns();
             if let Some(current) = old {
-                let mut pattern_row_data = model.row_data(current);
+                let mut pattern_row_data = model.row_data(current).unwrap();
                 pattern_row_data.active = false;
                 model.set_row_data(current, pattern_row_data);
             }
             if let Some(current) = new {
-                let mut pattern_row_data = model.row_data(current);
+                let mut pattern_row_data = model.row_data(current).unwrap();
                 pattern_row_data.active = true;
                 model.set_row_data(current, pattern_row_data);
             }
@@ -104,11 +104,11 @@ impl Sequencer {
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_patterns();
-            let mut pattern_row_data = model.row_data(old);
+            let mut pattern_row_data = model.row_data(old).unwrap();
             pattern_row_data.active = false;
             model.set_row_data(old, pattern_row_data);
 
-            let mut pattern_row_data = model.row_data(new);
+            let mut pattern_row_data = model.row_data(new).unwrap();
             pattern_row_data.active = true;
             model.set_row_data(new, pattern_row_data);
         });
@@ -120,11 +120,11 @@ impl Sequencer {
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_steps();
-            let mut row_data = model.row_data(old_step);
+            let mut row_data = model.row_data(old_step).unwrap();
             row_data.active = false;
             model.set_row_data(old_step, row_data);
 
-            let mut row_data = model.row_data(step as usize);
+            let mut row_data = model.row_data(step as usize).unwrap();
             row_data.active = true;
             model.set_row_data(step as usize, row_data);
         });
@@ -137,11 +137,11 @@ impl Sequencer {
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_instruments();
-            let mut row_data = model.row_data(old_instrument);
+            let mut row_data = model.row_data(old_instrument).unwrap();
             row_data.selected = false;
             model.set_row_data(old_instrument, row_data);
 
-            let mut row_data = model.row_data(instrument as usize);
+            let mut row_data = model.row_data(instrument as usize).unwrap();
             row_data.selected = true;
             model.set_row_data(instrument as usize, row_data);
         });
@@ -161,23 +161,23 @@ impl Sequencer {
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let patterns = handle.get_sequencer_patterns();
             for p in non_empty_patterns {
-                let mut pattern_row_data = patterns.row_data(p);
+                let mut pattern_row_data = patterns.row_data(p).unwrap();
                 pattern_row_data.empty = false;
-                patterns.set_row_data(p, pattern_row_data);                
+                patterns.set_row_data(p, pattern_row_data);
             }
         });
 
     }
 
     fn update_steps(&mut self) -> () {
-        let steps: Vec<InstrumentStep> = 
+        let steps: Vec<InstrumentStep> =
             (0..NUM_STEPS)
                 .map(|i| self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][i])
                 .collect();
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_steps();
             for (i, step) in steps.iter().enumerate() {
-                let mut row_data = model.row_data(i);
+                let mut row_data = model.row_data(i).unwrap();
                 row_data.empty = !step.enabled;
                 row_data.note_name = MidiNote(step.note as i32).name();
                 model.set_row_data(i, row_data);
@@ -239,12 +239,12 @@ impl Sequencer {
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
 
             let patterns = handle.get_sequencer_patterns();
-            let mut pattern_row_data = patterns.row_data(selected_pattern);
+            let mut pattern_row_data = patterns.row_data(selected_pattern).unwrap();
             pattern_row_data.empty = pattern_empty;
             patterns.set_row_data(selected_pattern, pattern_row_data);
 
             let steps = handle.get_sequencer_steps();
-            let mut step_row_data = steps.row_data(step_num);
+            let mut step_row_data = steps.row_data(step_num).unwrap();
             step_row_data.empty = !toggled;
             if let Some(note) = set_note {
                 step_row_data.note_name = MidiNote(note as i32).name();
@@ -436,7 +436,7 @@ impl Sequencer {
                     elog!("Couldn't load project song from file {:?}, starting from scratch.\n\tError: {:?}", project_song_path, e);
                     self.set_song(Default::default());
                 },
-            }            
+            }
         } else {
             log!("Project song file {:?} doesn't exist, starting from scratch.", project_song_path);
             self.set_song(Default::default());
