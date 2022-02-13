@@ -1,3 +1,3 @@
 fn main() {
-    slint_build::compile("ui/main.60").unwrap();
+    slint_build::compile("ui/main.slint").unwrap();
 }
