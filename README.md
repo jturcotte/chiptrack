@@ -7,7 +7,7 @@ It uses:
 - [Slint](https://github.com/slint-ui/slint) for the UI.
 - [RBoy](https://github.com/mvdnes/rboy) for the sound synthesizer
 - [CPAL](https://github.com/RustAudio/cpal) for the audio output
-- [Rhai](https://github.com/rhaiscript/rhai) for the [instruments scripting](res/instruments.rhai)
+- [Rhai](https://github.com/rhaiscript/rhai) for the [instruments scripting](res/default-instruments.rhai)
 
 ![image](https://user-images.githubusercontent.com/839935/145720892-27b514ab-c255-40ff-933d-da44df1650d8.png)
 
