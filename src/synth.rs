@@ -232,7 +232,7 @@ impl Synth {
     }
 
     fn update_instrument_ids(&self) {
-        let ids = self.script.instrument_ids().clone();
+        let ids = self.script.instrument_ids();
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_instruments();
             for (i, id) in ids.iter().enumerate() {

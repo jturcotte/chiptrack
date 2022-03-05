@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 use crate::synth_script::Channel::*;
-use rhai::{AST, Array, Dynamic, Engine, Scope};
-use rhai::EvalAltResult::ErrorFunctionNotFound;
+use rhai::{AST, Array, Dynamic, Engine, FnPtr, Map, Scope};
 use rhai::plugin::*;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
+use std::error::Error;
 use std::ops::BitOr;
 use std::ops::BitOrAssign;
 use std::rc::Rc;
@@ -756,21 +756,53 @@ impl RegSettings {
 
 pub struct SynthScript {
     script_engine: Engine,
-    script_ast: AST,
-    script_scope: Scope<'static>,
+    script_ast: AST, 
     script_context: SharedGbBindings,
-    instrument_ids: Vec<String>,
+    instrument_ids: Rc<RefCell<Vec<String>>>,
+    instrument_functions: Rc<RefCell<Vec<Option<FnPtr>>>>,
 }
 
 impl SynthScript {
     const DEFAULT_INSTRUMENTS: &'static str = include_str!("../res/default-instruments.rhai");
 
     pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
+        let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new((1 .. NUM_INSTRUMENTS + 1).map(|i| i.to_string()).collect()));
+        let instrument_functions = Rc::new(RefCell::new(vec![None; NUM_INSTRUMENTS]));
+        let instrument_ids_clone = instrument_ids.clone();
+        let instrument_functions_clone = instrument_functions.clone();
+
         let mut engine = Engine::new();
 
         engine.set_max_expr_depths(1024, 1024);
         engine.register_type::<SharedGbBindings>()
               .register_type::<SharedGbSquare>();
+        engine.register_result_fn("set_instrument",
+            move |i: i32, instrument: Dynamic| {
+                runtime_check!(i >= 1 && i <= 16, "set_instrument: index must be 1 <= i <= 16, got {}", i);        
+                runtime_check!(instrument.type_id() == TypeId::of::<Map>(), "set_instrument: The instrument must be an object map, got {}", instrument.type_name());        
+
+                let mut map = instrument.try_cast::<Map>().unwrap();
+
+                // FIXME: Emojis don't seem to show up in the browser,
+                //        use the default number IDs.
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(id) = map.remove("id").map(|o| o.into_string().unwrap()) {
+                    instrument_ids_clone.borrow_mut()[(i - 1) as usize] = id;
+                }
+
+                match map.remove("press") {
+                    None =>
+                        Err(format!("set_instrument: The instrument must have a \"press\" property").into()),
+
+                    Some(f_dyn) => {
+                        runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(), "set_instrument: The \"press\" property must be a function pointer or an anonymous function, got a {}", f_dyn.type_name());        
+
+                        let f = f_dyn.try_cast::<FnPtr>().unwrap();
+                        instrument_functions_clone.borrow_mut()[(i - 1) as usize] = Some(f);
+                        Ok(())
+                    },
+                }
+            });
         engine.register_static_module("gb", exported_module!(gb_api).into());
 
         let settings_ring_index = Rc::new(RefCell::new(0));
@@ -807,28 +839,31 @@ impl SynthScript {
             noise: noise,
             }));
 
-        let mut scope = Scope::new();
-        scope.push("gb", gb.clone());
-
         SynthScript {
             script_engine: engine,
             script_ast: Default::default(),
             script_context: gb,
-            script_scope: scope,
-            instrument_ids: Vec::new(),
+            instrument_ids: instrument_ids,
+            instrument_functions: instrument_functions,
         }
     }
 
-    pub fn instrument_ids(&self) -> &Vec<String> {
-        &self.instrument_ids
+    pub fn instrument_ids(&self) -> Vec<String> {
+        self.instrument_ids.borrow().clone()
     }
 
-    fn default_instruments(&self) -> AST {
-        self.script_engine.compile(SynthScript::DEFAULT_INSTRUMENTS).unwrap()
+    fn load_default_instruments(&mut self) {
+        self.script_engine.compile(SynthScript::DEFAULT_INSTRUMENTS)
+            .map_err(|e| Box::new(e) as Box<dyn Error>)
+            .and_then(
+                |ast| self.set_instruments_ast(ast)
+                    .map_err(|e| e as Box<dyn Error>)
+            )
+            .expect("Error loading default instruments.");
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn deserialize_instruments(&self, base64: String) -> Result<AST, Box<dyn std::error::Error>> {
+    fn deserialize_instruments(&self, base64: String) -> Result<AST, Box<dyn Error>> {
         let decoded = crate::utils::decode_string(&base64)?;
         let ast = self.script_engine.compile(&decoded)?;
         Ok(ast)
@@ -837,108 +872,76 @@ impl SynthScript {
     #[cfg(target_arch = "wasm32")]
     pub fn load(&mut self, maybe_base64: Option<String>) {
         if let Some(base64) = maybe_base64 {
-            let maybe_ast = self.deserialize_instruments(base64);
+            let maybe_ast = self.deserialize_instruments(base64)
+                .and_then(
+                    |ast| self.set_instruments_ast(ast)
+                        .map_err(|e| e as Box<dyn Error>)
+                );
 
             match maybe_ast {
                 Ok(ast) => {
                     log!("Loaded the project instruments from the URL.");
-                    self.script_ast = ast;
                 },
                 Err(e) => {
                     elog!("Couldn't load the project instruments from the URL, using default instruments.\n\tError: {:?}", e);
-                    self.script_ast = self.default_instruments();
+                    self.load_default_instruments();
                 },
             }            
         } else {
             log!("No instruments provided in the URL, using default instruments.");
-            self.script_ast = self.default_instruments();
+                    self.load_default_instruments();
         }
-        self.extract_instrument_ids();
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load(&mut self, project_instruments_path: &std::path::Path) {
         if project_instruments_path.exists() {
-            let maybe_ast = self.script_engine.compile_file(project_instruments_path.to_path_buf());
+            let maybe_ast =
+                self.script_engine.compile_file(project_instruments_path.to_path_buf())
+                .and_then(|ast| self.set_instruments_ast(ast));
 
             match maybe_ast {
-                Ok(ast) => {
+                Ok(_) => {
                     log!("Loaded project instruments from file {:?}", project_instruments_path);
-                    self.script_ast = ast;
                 },
                 Err(e) => {
                     elog!("Couldn't load project instruments from file {:?}, using default instruments.\n\tError: {:?}", project_instruments_path, e);
-                    self.script_ast = self.default_instruments();
+                    self.load_default_instruments();
                 },
             }            
         } else {
             log!("Project instruments file {:?} doesn't exist, using default instruments.", project_instruments_path);
-            self.script_ast = self.default_instruments();
+            self.load_default_instruments();
         }
-        self.extract_instrument_ids();
     }
 
     pub fn trigger_instrument(&mut self, settings_ring_index: usize, instrument: u32, note: u32) -> () {
         // The script themselves are modifying this state, so reset it.
         self.script_context.borrow_mut().set_settings_ring_index(settings_ring_index);
 
-        let result: Result<(), _> = self.script_engine.call_fn(
-            &mut self.script_scope,
-            &self.script_ast,
-            format!("instrument_{}", instrument + 1),
-            ( note as i32, Self::note_to_freq(note), )
-            );
-        if let Err(e) = result {
-            elog!("{}", e)
+        if let Some(f) = &self.instrument_functions.borrow_mut()[instrument as usize] {
+            let result: Result<(), _> = f.call(
+                &self.script_engine,
+                &self.script_ast,
+                ( note as i32, Self::note_to_freq(note), )
+                );
+            if let Err(e) = result {
+                elog!("{}", e)
+            }
+
         }
     }
 
-    pub fn extract_instrument_ids(&mut self) {
-        let defined_instruments: Vec<usize> =
-            self.script_ast.iter_functions()
-                .filter_map(|f|
-                    if f.name.starts_with("instrument_") {
-                        f.name.get(11..).and_then(|s| s.parse().ok())
-                    } else {
-                        None
-                    }
-                ).collect();
-        self.instrument_ids = (1 .. NUM_INSTRUMENTS + 1).map(|i| {
-            let function_name = format!("instrument_id_{}", i);
+    fn set_instruments_ast(&mut self, ast: AST) -> Result<(), std::boxed::Box<rhai::EvalAltResult>> {
+        self.script_ast = ast;
 
-            #[cfg(not(target_arch = "wasm32"))]
-            let id_result = self.script_engine.call_fn(
-                &mut self.script_scope,
-                &self.script_ast,
-                &function_name,
-                ()
-                );
-            // FIXME: Emojis don't seem to show up in the browser,
-            //        use the default number IDs.
-            #[cfg(target_arch = "wasm32")]
-            let id_result: Result<String, Box<rhai::EvalAltResult>> =
-                Err(Box::new(ErrorFunctionNotFound(function_name.clone(), Position::NONE)));
+        let mut scope = Scope::new();
+        scope.push("gb", self.script_context.clone());
 
-            match id_result {
-                    Ok(id) => id,
-                    Err(e) => {
-                        match *e {
-                            ErrorFunctionNotFound(f, _) if f == function_name => {
-                                if defined_instruments.contains(&i) {
-                                    i.to_string()
-                                } else {
-                                    "".to_string()
-                                }
-                            }
-                            other => {
-                                elog!("Error calling {}:\n\t{:?}", function_name, other);
-                                i.to_string()                                
-                            }
-                        }
-                    },
-                }
-            })
-            .collect();
+        self.script_engine.run_ast_with_scope(
+            &mut scope,
+            &self.script_ast
+            )
     }
 
     fn note_to_freq(note: u32) -> f64 {
