@@ -52,7 +52,7 @@ enum SoundMsg {
     ApplySettings(Settings),
 }
 
-fn update_waveform(window: &MainWindow, samples: Vec<f32>, gain: f32, consumed: Arc<AtomicBool>) {
+fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicBool>) {
     let was_non_zero = !window.get_waveform_is_zero();
     let res_divider = 2.;
 
@@ -80,7 +80,7 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, gain: f32, consumed: 
             // channels a bit.
             pb.line_to(
                 i as f32 * width / (samples.len() / 2) as f32,
-                (source / gain * 2.0 + 1.0) * height / 2.0);
+                (source * 2.0 + 1.0) * height / 2.0);
         }
     }
     // Painting this takes a lot of CPU since we need to paint, clone
@@ -252,16 +252,11 @@ pub fn main() {
                                 synth_output = synth_output_mutex.lock().unwrap();
 
                                 if last_waveform_consumed.load(Ordering::Relaxed) {
-                                    let num_samples = sample_rate as usize / 64 * 2 / 3;
-                                    let wave_start = synth_output.buffer_wave_start.unwrap_or(0);
-
-                                    let end = synth_output.buffer.len().min(wave_start + num_samples * 2);
-                                    let copy = synth_output.buffer[wave_start..end].to_vec();
-                                    let gain = synth_output.gain;
+                                    let buffer_viz = std::mem::replace(&mut synth_output.buffer_viz, Vec::new());
                                     last_waveform_consumed.store(false, Ordering::Relaxed);
                                     let consumed_clone = last_waveform_consumed.clone();
                                     window_weak.clone().upgrade_in_event_loop(move |handle| {
-                                        update_waveform(&handle, copy, gain, consumed_clone)
+                                        update_waveform(&handle, buffer_viz, consumed_clone)
                                     });
                                 }
                             }

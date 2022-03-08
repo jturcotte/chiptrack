@@ -36,7 +36,7 @@ struct SyncPulse {
 
 pub struct OutputData {
     pub buffer: Vec<f32>,
-    pub buffer_wave_start: Option<usize>,
+    pub buffer_viz: Vec<f32>,
     pub gain: f32,
     sync_pulse: SyncPulse,
 }
@@ -106,12 +106,13 @@ impl Iterator for SyncPulse {
 }
 
 impl rboy::AudioPlayer for FakePlayer {
-    fn play(&mut self, left_channel: &[f32], right_channel: &[f32], buffer_wave_start: Option<usize>) {
+    fn play(&mut self, left_channel: &[f32], right_channel: &[f32], viz_channel: &[f32]) {
         let mut left_iter = left_channel.iter();
         let mut right_iter = right_channel.iter();
         let mut state = self.state.lock().unwrap();
         let gain = state.gain;
-        state.buffer_wave_start = state.buffer_wave_start.or(buffer_wave_start.map(|s| s * 2 + state.buffer.len()));
+        state.buffer_viz.clear();
+        state.buffer_viz.extend_from_slice(viz_channel);
 
         state.buffer.reserve(left_channel.len() * 2);
         while let Some(left) = left_iter.next() {
@@ -143,7 +144,7 @@ impl Synth {
 
         let output_data = Arc::new(Mutex::new(OutputData {
             buffer: Vec::new(),
-            buffer_wave_start: None,
+            buffer_viz: Vec::new(),
             gain: gain,
             sync_pulse: SyncPulse::new(settings.sync_enabled, sample_rate, 300, 2),
         }));
@@ -206,9 +207,6 @@ impl Synth {
                 self.output_data.lock().unwrap().sync_pulse.pulse();
             }
         }
-
-        // Reset the indicator of the start of the next note wave.
-        self.output_data.lock().unwrap().buffer_wave_start = None;
 
         // Generate one frame of mixed output.
         // For 44100hz audio, this will put 44100/64 audio samples in self.buffer.
