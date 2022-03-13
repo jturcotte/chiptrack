@@ -10,6 +10,7 @@ use std::cell::RefMut;
 use std::error::Error;
 use std::ops::BitOr;
 use std::ops::BitOrAssign;
+use std::ops::Range;
 use std::rc::Rc;
 
 use crate::sound_engine::NUM_INSTRUMENTS;
@@ -62,10 +63,42 @@ pub enum Channel {
 trait ScriptChannel {
     fn base(&self) -> u16;
     fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>>;
-    fn settings_ring_index(&mut self) -> Ref<'_, usize>;
+    fn frame_number(&mut self) -> Ref<'_, usize>;
+    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>>;
+    fn active_settings_range(&mut self) -> &mut Option<Range<usize>>;
+
+    fn note_pressed(&mut self) {
+        *self.previous_settings_range() = self.active_settings_range().take()
+    }
+
+    fn reset_previous_settings_range(&mut self) {
+        if let Some(mut range) = self.previous_settings_range().take() {
+            let base = self.base();
+            // Only clear reg settings in the present or future.
+            range.start = range.start.max(*self.frame_number());
+            let mut settings = self.settings_ring();
+            let len = settings.len();
+
+            // FIXME: Also clear the wave table register settings for the wave channel.
+            for i in range {
+                for a in base .. base + 5 {
+                    settings[i % len].clear_reg(a)
+                }
+            }
+        }
+    }
+
+    fn extend_active_settings_range(&mut self, index: usize) {
+        let to_frame = *self.frame_number() + index;
+        let maybe_range = self.active_settings_range();
+        match maybe_range.as_mut() {
+            Some(range) => range.end = range.end.max(to_frame + 1),
+            None => *maybe_range = Some(to_frame .. to_frame + 1),
+        }
+    }
 
     fn get_reg_settings(&mut self, index: usize) -> RefMut<'_, RegSettings> {
-        let i = *self.settings_ring_index() + index;
+        let i = *self.frame_number() + index;
         RefMut::map(self.settings_ring(), |s| {
             let len = s.len();
             &mut s[i % len]
@@ -73,9 +106,13 @@ trait ScriptChannel {
     }
 
     fn orit(&mut self, addr: u16, with: RegSetter) {
+        self.reset_previous_settings_range();
+        self.extend_active_settings_range(0);
         self.get_reg_settings(0).orit(addr, with)
     }
     fn orit_at_index(&mut self, index: usize, addr: u16, with: RegSetter) {
+        self.reset_previous_settings_range();
+        self.extend_active_settings_range(index);
         self.get_reg_settings(index).orit(addr, with)
     }
 
@@ -90,8 +127,11 @@ trait ScriptChannel {
 pub struct GbSquare {
     channel: Channel,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
-    settings_ring_index: Rc<RefCell<usize>>,
+    frame_number: Rc<RefCell<usize>>,
+    previous_settings_range: Option<Range<usize>>,
+    active_settings_range: Option<Range<usize>>,
 }
+
 impl GbSquare {
     pub fn set_sweep_time(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
         runtime_check!(v >= 0, "sweep_time must be >= 0, got {}", v);
@@ -193,7 +233,9 @@ impl GbSquare {
 impl ScriptChannel for GbSquare {
     fn base(&self) -> u16 { self.channel as u16 }
     fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> { self.settings_ring.borrow_mut() }
-    fn settings_ring_index(&mut self) -> Ref<'_, usize> { self.settings_ring_index.borrow() }
+    fn frame_number(&mut self) -> Ref<'_, usize> { self.frame_number.borrow() }
+    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.previous_settings_range }
+    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.active_settings_range }
 }
 pub type SharedGbSquare = Rc<RefCell<GbSquare>>;
 
@@ -202,7 +244,9 @@ pub type SharedGbSquare = Rc<RefCell<GbSquare>>;
 pub struct GbWave {
     channel: Channel,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
-    settings_ring_index: Rc<RefCell<usize>>,
+    frame_number: Rc<RefCell<usize>>,
+    previous_settings_range: Option<Range<usize>>,
+    active_settings_range: Option<Range<usize>>,
 }
 impl GbWave {
     pub fn set_playing(&mut self, index: usize, v: bool) -> Result<(), Box<EvalAltResult>> {
@@ -284,7 +328,9 @@ impl GbWave {
 impl ScriptChannel for GbWave {
     fn base(&self) -> u16 { self.channel as u16 }
     fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> { self.settings_ring.borrow_mut() }
-    fn settings_ring_index(&mut self) -> Ref<'_, usize> { self.settings_ring_index.borrow() }
+    fn frame_number(&mut self) -> Ref<'_, usize> { self.frame_number.borrow() }
+    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.previous_settings_range }
+    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.active_settings_range }
 }
 pub type SharedGbWave = Rc<RefCell<GbWave>>;
 
@@ -292,7 +338,9 @@ pub type SharedGbWave = Rc<RefCell<GbWave>>;
 pub struct GbNoise {
     channel: Channel,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
-    settings_ring_index: Rc<RefCell<usize>>,
+    frame_number: Rc<RefCell<usize>>,
+    previous_settings_range: Option<Range<usize>>,
+    active_settings_range: Option<Range<usize>>,
 }
 impl GbNoise {
     pub fn set_env_start(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
@@ -365,14 +413,16 @@ impl GbNoise {
 impl ScriptChannel for GbNoise {
     fn base(&self) -> u16 { self.channel as u16 }
     fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> { self.settings_ring.borrow_mut() }
-    fn settings_ring_index(&mut self) -> Ref<'_, usize> { self.settings_ring_index.borrow() }
+    fn frame_number(&mut self) -> Ref<'_, usize> { self.frame_number.borrow() }
+    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.previous_settings_range }
+    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.active_settings_range }
 }
 pub type SharedGbNoise = Rc<RefCell<GbNoise>>;
 
 #[derive(Debug, Clone)]
 pub struct GbBindings {
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
-    settings_ring_index: Rc<RefCell<usize>>,
+    frame_number: Rc<RefCell<usize>>,
     square1: SharedGbSquare,
     square2: SharedGbSquare,
     wave: SharedGbWave,
@@ -381,8 +431,14 @@ pub struct GbBindings {
 pub type SharedGbBindings = Rc<RefCell<GbBindings>>;
 
 impl GbBindings {
-    fn set_settings_ring_index(&mut self, v: usize) {
-        *self.settings_ring_index.borrow_mut() = v;
+    fn set_frame_number(&mut self, v: usize) {
+        *self.frame_number.borrow_mut() = v;
+    }
+    fn note_pressed(&mut self) {
+        self.square1.borrow_mut().note_pressed();
+        self.square2.borrow_mut().note_pressed();
+        self.wave.borrow_mut().note_pressed();
+        self.noise.borrow_mut().note_pressed();
     }
 }
 
@@ -452,8 +508,8 @@ pub mod gb_api {
         let len = this.settings_ring.borrow().len();
         runtime_check!(frames >= 0, "frames must be >= 0, got {}", frames);
         runtime_check!((frames as usize) < len, "frames must be < {}, got {}", len, frames);
-        let mut settings_ring_index = this.settings_ring_index.borrow_mut();
-        *settings_ring_index = (*settings_ring_index + frames as usize) % len;
+        let mut frame_number = this.frame_number.borrow_mut();
+        *frame_number = *frame_number + frames as usize;
         Ok(())
     }
 
@@ -667,7 +723,6 @@ pub mod gb_api {
         set_multi!(this_rc, values, i32, set_clock_divisor)
     }
 
-    // FIXME: Should it be i32 or should it be bool?
     #[rhai_fn(set = "initialize", pure, return_raw)]
     pub fn set_noise_initialize(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_initialize)
@@ -749,27 +804,36 @@ impl RegSettings {
             .for_each(|(a, r)| f(a, r))
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear_reg(&mut self, addr: u16) {
+        let index = addr as usize - 0xff10;
+        self.registers[index] = RegSetter::EMPTY;
+    }
+
+    pub fn clear_all(&mut self) {
         self.registers = [RegSetter::EMPTY; 48];
     }
 }
 
 pub struct SynthScript {
     script_engine: Engine,
-    script_ast: AST, 
+    script_ast: AST,
     script_context: SharedGbBindings,
     instrument_ids: Rc<RefCell<Vec<String>>>,
-    instrument_functions: Rc<RefCell<Vec<Option<FnPtr>>>>,
+    press_functions: Rc<RefCell<Vec<Option<FnPtr>>>>,
+    release_functions: Rc<RefCell<Vec<Option<FnPtr>>>>,
+    last_pressed_note: u32,
 }
 
 impl SynthScript {
     const DEFAULT_INSTRUMENTS: &'static str = include_str!("../res/default-instruments.rhai");
 
     pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
-        let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new((1 .. NUM_INSTRUMENTS + 1).map(|i| i.to_string()).collect()));
-        let instrument_functions = Rc::new(RefCell::new(vec![None; NUM_INSTRUMENTS]));
+        let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(vec!["".to_string(); NUM_INSTRUMENTS]));
+        let press_functions = Rc::new(RefCell::new(vec![None; NUM_INSTRUMENTS]));
+        let release_functions = Rc::new(RefCell::new(vec![None; NUM_INSTRUMENTS]));
         let instrument_ids_clone = instrument_ids.clone();
-        let instrument_functions_clone = instrument_functions.clone();
+        let press_functions_clone = press_functions.clone();
+        let release_functions_clone = release_functions.clone();
 
         let mut engine = Engine::new();
 
@@ -785,11 +849,29 @@ impl SynthScript {
 
                 // FIXME: Emojis don't seem to show up in the browser,
                 //        use the default number IDs.
-                #[cfg(not(target_arch = "wasm32"))]
-                if let Some(id) = map.remove("id").map(|o| o.into_string().unwrap()) {
-                    instrument_ids_clone.borrow_mut()[(i - 1) as usize] = id;
+                #[cfg(target_arch = "wasm32")] {
+                    instrument_ids_clone.borrow_mut()[(i - 1) as usize] = i.to_string();
+                }
+                #[cfg(not(target_arch = "wasm32"))] {
+                    instrument_ids_clone.borrow_mut()[(i - 1) as usize] = 
+                        if let Some(id) = map.remove("id").map(|o| o.into_string().unwrap()) {
+                            id
+                        } else {
+                            i.to_string()
+                        }                    
                 }
 
+                release_functions_clone.borrow_mut()[(i - 1) as usize] = match map.remove("release") {
+                    None =>
+                        None,
+
+                    Some(f_dyn) => {
+                        runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(), "set_instrument: The \"release\" property must be a function pointer or an anonymous function, got a {}", f_dyn.type_name());        
+
+                        let f = f_dyn.try_cast::<FnPtr>().unwrap();
+                        Some(f)
+                    }
+                };
                 match map.remove("press") {
                     None =>
                         Err(format!("set_instrument: The instrument must have a \"press\" property").into()),
@@ -798,41 +880,49 @@ impl SynthScript {
                         runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(), "set_instrument: The \"press\" property must be a function pointer or an anonymous function, got a {}", f_dyn.type_name());        
 
                         let f = f_dyn.try_cast::<FnPtr>().unwrap();
-                        instrument_functions_clone.borrow_mut()[(i - 1) as usize] = Some(f);
+                        press_functions_clone.borrow_mut()[(i - 1) as usize] = Some(f);
                         Ok(())
                     },
                 }
             });
         engine.register_static_module("gb", exported_module!(gb_api).into());
 
-        let settings_ring_index = Rc::new(RefCell::new(0));
+        let frame_number = Rc::new(RefCell::new(0));
         let square1 = Rc::new(RefCell::new(
             GbSquare {
                 channel: Square1,
                 settings_ring: settings_ring.clone(),
-                settings_ring_index: settings_ring_index.clone(),
+                frame_number: frame_number.clone(),
+                previous_settings_range: None,
+                active_settings_range: None,
             }));
         let square2 = Rc::new(RefCell::new(
             GbSquare {
                 channel: Square2,
                 settings_ring: settings_ring.clone(),
-                settings_ring_index: settings_ring_index.clone(),
+                frame_number: frame_number.clone(),
+                previous_settings_range: None,
+                active_settings_range: None,
             }));
         let wave = Rc::new(RefCell::new(
             GbWave {
                 channel: Wave,
                 settings_ring: settings_ring.clone(),
-                settings_ring_index: settings_ring_index.clone(),
+                frame_number: frame_number.clone(),
+                previous_settings_range: None,
+                active_settings_range: None,
             }));
         let noise = Rc::new(RefCell::new(
             GbNoise {
                 channel: Noise,
                 settings_ring: settings_ring.clone(),
-                settings_ring_index: settings_ring_index.clone(),
+                frame_number: frame_number.clone(),
+                previous_settings_range: None,
+                active_settings_range: None,
             }));
         let gb = Rc::new(RefCell::new(GbBindings{
             settings_ring: settings_ring.clone(),
-            settings_ring_index: settings_ring_index,
+            frame_number: frame_number,
             square1: square1,
             square2: square2,
             wave: wave,
@@ -844,7 +934,9 @@ impl SynthScript {
             script_ast: Default::default(),
             script_context: gb,
             instrument_ids: instrument_ids,
-            instrument_functions: instrument_functions,
+            press_functions: press_functions,
+            release_functions: release_functions,
+            last_pressed_note: 0,
         }
     }
 
@@ -915,11 +1007,17 @@ impl SynthScript {
         }
     }
 
-    pub fn trigger_instrument(&mut self, settings_ring_index: usize, instrument: u32, note: u32) -> () {
-        // The script themselves are modifying this state, so reset it.
-        self.script_context.borrow_mut().set_settings_ring_index(settings_ring_index);
+    pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u32, note: u32) -> () {
+        self.last_pressed_note = note;
 
-        if let Some(f) = &self.instrument_functions.borrow_mut()[instrument as usize] {
+        {
+            let mut gb = self.script_context.borrow_mut();
+            // The script themselves are modifying this state, so reset it.
+            gb.set_frame_number(frame_number);
+            gb.note_pressed();
+        }
+
+        if let Some(f) = &self.press_functions.borrow_mut()[instrument as usize] {
             let result: Result<(), _> = f.call(
                 &self.script_engine,
                 &self.script_ast,
@@ -929,6 +1027,26 @@ impl SynthScript {
                 elog!("{}", e)
             }
 
+        }
+    }
+
+    pub fn release_instrument_note(&mut self, frame_number: usize, instrument: u32, note: u32) -> () {
+        // If a second note is pressed before the first is released, we should only release the last note
+        if self.last_pressed_note == note {
+            // The script themselves are modifying this state, so reset it.
+            self.script_context.borrow_mut().set_frame_number(frame_number);
+
+            if let Some(f) = &self.release_functions.borrow_mut()[instrument as usize] {
+                let result: Result<(), _> = f.call(
+                    &self.script_engine,
+                    &self.script_ast,
+                    ( note as i32, Self::note_to_freq(note), )
+                    );
+                if let Err(e) = result {
+                    elog!("{}", e)
+                }
+
+            }
         }
     }
 

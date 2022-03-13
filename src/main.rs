@@ -37,6 +37,7 @@ thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine>> = RefCell::new(
 #[derive(Debug)]
 enum SoundMsg {
     PressNote(u32),
+    ReleaseNote(u32),
     SelectInstrument(u32),
     SelectPattern(u32),
     ToggleStep(u32),
@@ -225,6 +226,7 @@ pub fn main() {
                         while let Ok(msg) = sound_recv.try_recv() {
                             match msg {
                                 SoundMsg::PressNote(note) => engine.press_note(note),
+                                SoundMsg::ReleaseNote(note) => engine.release_note(note),
                                 SoundMsg::SelectInstrument(instrument) => engine.select_instrument(instrument),
                                 SoundMsg::SelectPattern(pattern_num) => engine.sequencer.select_pattern(pattern_num),
                                 SoundMsg::ToggleStep(toggled) => engine.sequencer.toggle_step(toggled),
@@ -283,7 +285,12 @@ pub fn main() {
         stream.play().unwrap();
 
         #[cfg(not(target_arch = "wasm32"))]
-            let midi = Some(Midi::new(move |key| cloned_sound_send.send(SoundMsg::PressNote(key)).unwrap()));
+        let midi = {
+            let cloned_sound_send2 = cloned_sound_send.clone();
+            let press = move |key| cloned_sound_send2.send(SoundMsg::PressNote(key)).unwrap();
+            let release = move |key| cloned_sound_send.send(SoundMsg::ReleaseNote(key)).unwrap();
+            Some(Midi::new(press, release))
+        };
         #[cfg(target_arch = "wasm32")]
             // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
             // us when that initialization is done and that we can start querying the list of midi
@@ -319,6 +326,7 @@ pub fn main() {
     let cloned_sound_send = sound_send.clone();
     let window_weak = window.as_weak();
     window.on_note_pressed(move |note| {
+        let cloned_sound_send2 = cloned_sound_send.clone();
         cloned_sound_send.send(SoundMsg::PressNote(note as u32)).unwrap();
 
         let model = window_weak.clone().upgrade().unwrap().get_notes();
@@ -337,6 +345,8 @@ pub fn main() {
             TimerMode::SingleShot,
             std::time::Duration::from_millis(15 * 6),
             Box::new(move || {
+                cloned_sound_send2.send(SoundMsg::ReleaseNote(note as u32)).unwrap();
+
                 let handle = window_weak.upgrade().unwrap();
                 let notes_model = handle.get_notes();
                 for row in 0..notes_model.row_count() {

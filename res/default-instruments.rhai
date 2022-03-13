@@ -10,24 +10,28 @@ fn three_semitones_steps(timeline, start) {
 set_instrument(1, #{
     id: "□",
     press: |note, freq| {
-        gb.square1.freq = freq;
         gb.square1.sweep_time = 0;
         gb.square1.sweep_dir = gb::SWE_INC;
         gb.square1.sweep_shift = 0;
 
         gb.square1.duty = gb::DUT_2_4;
-        let t =                          [0,   1,   1,   3,   2,   1];
-        gb.square1.env_start = t.frames([0xf, 0xd, 0xd, 0x6, 0x1, 0x0]);
+        gb.square1.env_start = 0xf;
         gb.square1.env_dir = gb::ENV_INC;
         gb.square1.env_period = 0;
+        gb.square1.freq = freq;
         gb.square1.initialize = true;
+    },
+    release: |note, freq| {
+        let t =                         [0,   1,   3,   2,   1];
+        gb.square1.env_start = t.frames([0xd, 0xd, 0x6, 0x1, 0x0]);
+        gb.square1.env_dir = gb::ENV_INC;
+        gb.square1.env_period = 0;
     },
 });
 
 set_instrument(2, #{
     id: "◰",
     press: |note, freq| {
-        gb.square1.freq = freq;
         gb.square1.sweep_time = 0;
         gb.square1.sweep_dir = gb::SWE_INC;
         gb.square1.sweep_shift = 0;
@@ -36,6 +40,7 @@ set_instrument(2, #{
         gb.square1.env_start = 0xf;
         gb.square1.env_dir = gb::ENV_DEC;
         gb.square1.env_period = 0;
+        gb.square1.freq = freq;
         gb.square1.trigger_with_length(64);
     },
 });
@@ -62,8 +67,6 @@ set_instrument(3, #{
 set_instrument(4, #{
     id: "▦",
     press: |note, freq| {
-        gb.square1.freq = freq;
-
         let t = [0, 2, 2, 2, 2, 2, 2, 2, 2];
         gb.square1.duty = t.frames([
             gb::DUT_1_4,
@@ -82,6 +85,7 @@ set_instrument(4, #{
         gb.square1.sweep_time = 0;
         gb.square1.sweep_dir = gb::SWE_DEC;
         gb.square1.sweep_shift = 0;
+        gb.square1.freq = freq;
         gb.square1.trigger();
     },
 });
@@ -198,7 +202,6 @@ set_instrument(6, #{
 set_instrument(7, #{
     id: "◎",
     press: |note, freq| {
-        gb.square1.freq = freq;
         // 1:superdrum e:d:d:2 f:2:d:2 g e
         gb.square1.duty = gb::DUT_2_4;
         gb.square1.env_start = 0xd;
@@ -207,6 +210,7 @@ set_instrument(7, #{
         gb.square1.sweep_time = 2;
         gb.square1.sweep_dir = gb::SWE_DEC;
         gb.square1.sweep_shift = 2;
+        gb.square1.freq = freq;
         gb.square1.trigger();
     },
 });
@@ -218,9 +222,12 @@ set_instrument(9, #{
         gb.wave.playing = false;
         gb.wave.table = "0123456789abcdeffedcba9876543210";
         gb.wave.playing = true;
-        let t = [0, 4, 1, 1];
-        gb.wave.volume = t.frames([gb::VOL_100, gb::VOL_50, gb::VOL_25, gb::VOL_0]);
+        gb.wave.volume = gb::VOL_100;
         gb.wave.trigger();
+    },
+    release: |note, freq| {
+        let t = [0, 1, 1];
+        gb.wave.volume = t.frames([gb::VOL_50, gb::VOL_25, gb::VOL_0]);
     },
 });
 
@@ -230,10 +237,13 @@ set_instrument(10, #{
         gb.wave.playing = false;
         gb.wave.table = "11235678999876679adffec985421131";
         gb.wave.playing = true;
+        gb.wave.volume = gb::VOL_100;
         gb.wave.freq = freq;
-        let t = [0, 4, 1, 1];
-        gb.wave.volume = t.frames([gb::VOL_100, gb::VOL_50, gb::VOL_25, gb::VOL_0]);
         gb.wave.trigger();
+    },
+    release: |note, freq| {
+        let t = [0, 1, 1];
+        gb.wave.volume = t.frames([gb::VOL_50, gb::VOL_25, gb::VOL_0]);
     },
 });
 
@@ -243,10 +253,13 @@ set_instrument(11, #{
         gb.wave.playing = false;
         gb.wave.table = "dedcba98765432100000000011111111";
         gb.wave.playing = true;
+        gb.wave.volume = gb::VOL_100;
         gb.wave.freq = freq;
-        let t = [0, 4, 1, 1];
-        gb.wave.volume = t.frames([gb::VOL_100, gb::VOL_50, gb::VOL_25, gb::VOL_0]);
         gb.wave.trigger();
+    },
+    release: |note, freq| {
+        let t = [0, 1, 1];
+        gb.wave.volume = t.frames([gb::VOL_50, gb::VOL_25, gb::VOL_0]);
     },
 });
 
@@ -256,14 +269,16 @@ set_instrument(12, #{
         gb.wave.playing = false;
         gb.wave.table = "f0f0f0f0f0f0f0f0ff00ff00ff00ff00";
         gb.wave.playing = true;
-        gb.wave.freq = freq;
         gb.wave.trigger();                // C#1 gate=11
-        let t = [0, 4, 1, 1];
-        gb.wave.volume = t.frames([gb::VOL_100, gb::VOL_50, gb::VOL_25, gb::VOL_0]);
+        gb.wave.volume = gb::VOL_100;
+        gb.wave.freq = freq;
         gb.wave.trigger();
     },
+    release: |note, freq| {
+        let t = [0, 1, 1];
+        gb.wave.volume = t.frames([gb::VOL_50, gb::VOL_25, gb::VOL_0]);
+    },
 });
-
 
 set_instrument(13, #{
     id: "◺",

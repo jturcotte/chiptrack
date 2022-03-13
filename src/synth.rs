@@ -192,7 +192,7 @@ impl Synth {
                 // with zeros.
                 dmg.wb(addr, set.value);
             });
-            settings_ring[i].clear();
+            settings_ring[i].clear_all();
         }
 
         // Just enable all channels for now
@@ -216,8 +216,12 @@ impl Synth {
         self.frame_number += 1;
     }
 
-    pub fn trigger_instrument(&mut self, instrument: u32, note: u32) -> () {
-        self.script.trigger_instrument(self.settings_ring_index(), instrument, note);
+    pub fn press_instrument_note(&mut self, instrument: u32, note: u32) -> () {
+        self.script.press_instrument_note(self.frame_number, instrument, note);
+    }
+
+    pub fn release_instrument_note(&mut self, instrument: u32, note: u32) -> () {
+        self.script.release_instrument_note(self.frame_number, instrument, note);
     }
 
     /// Can be used to manually mute when instruments have an infinite length and envelope.

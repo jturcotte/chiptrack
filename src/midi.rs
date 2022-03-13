@@ -9,18 +9,27 @@ pub struct Midi {
 }
 
 impl Midi {
-    pub fn new<F>(callback: F) -> Midi
+    pub fn new<F, G>(press_callback: F, release_callback: G) -> Midi
         where
             F: Fn(u32) + std::clone::Clone + std::marker::Send + 'static,
+            G: Fn(u32) + std::clone::Clone + std::marker::Send + 'static,
         {
         let callback2 = move |_stamp: u64, message: &[u8], _: &mut ()| {
             let event = LiveEvent::parse(message).unwrap();
             println!("{:?} hex: {:x?}", event, message);
             match event {
                 LiveEvent::Midi { channel, message } => match message {
-                    MidiMessage::NoteOn { key, vel } if vel != 0 => {
-                        println!("hit note {} on channel {} vel {}", key, channel, vel);
-                        callback(key.as_int() as u32);
+                    MidiMessage::NoteOn { key, vel } if vel == 0 => {
+                        println!("release note {} on channel {} vel {}", key, channel, vel);
+                        release_callback(key.as_int() as u32);
+                    }
+                    MidiMessage::NoteOn { key, vel }  => {
+                        println!("press note {} on channel {} vel {}", key, channel, vel);
+                        press_callback(key.as_int() as u32);
+                    }
+                    MidiMessage::NoteOff { key, vel } => {
+                        println!("release note {} on channel {} vel {}", key, channel, vel);
+                        release_callback(key.as_int() as u32);
                     }
                     _ => {}
                 },
