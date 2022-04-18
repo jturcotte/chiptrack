@@ -58,6 +58,8 @@ impl SoundEngine {
         for (instrument, typ, note) in note_events {
             if typ == NoteEvent::Press {
                 self.synth.press_instrument_note(instrument, note);
+            } else {
+                self.synth.release_instrument_note(instrument, note);
             }
             let selected_instrument = self.sequencer.song.selected_instrument;
             self.main_window.clone().upgrade_in_event_loop(move |handle| {
@@ -97,12 +99,12 @@ impl SoundEngine {
 
     pub fn press_note(&mut self, note: u32) -> () {
         self.synth.press_instrument_note(self.sequencer.song.selected_instrument, note);
-        self.sequencer.record_trigger(note);
+        self.sequencer.record_press(note);
     }
 
     pub fn release_note(&mut self, note: u32) -> () {
         self.synth.release_instrument_note(self.sequencer.song.selected_instrument, note);
-        // FIXME: Provide to the sequencer
+        self.sequencer.record_release(note);
     }
 
     pub fn save_project(&self, project_name: &str) {

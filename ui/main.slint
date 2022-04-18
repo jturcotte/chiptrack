@@ -22,7 +22,8 @@ struct PatternData := {
     active: bool,
 }
 struct StepData := {
-    empty: bool,
+    press: bool,
+    release: bool,
     active: bool,
     note_name: string,
 }
@@ -102,18 +103,22 @@ SequencerPattern := Rectangle {
 SequencerStep := Rectangle {
     callback clicked();
     property<bool> highlighted;
-    property<bool> empty;
+    property<bool> press;
+    property<bool> release;
     property<string> name;
     property<bool> beat;
-    background: empty ? white : #c0c0c0;
+    background: press || release ? #c0c0c0 : white;
     border_width: beat || highlighted ? 2px : 1px;
-    border_color: highlighted ? black : #a0a0a0;
+    border_color: highlighted ? black : #c0c0c0;
     border_radius: width/8;
-    Text {
-        text: name;
-        visible: !empty;
+    l := Text {
+        text:
+            (press ? name : "") + 
+            (press && release ? "" : (release ? "\n⇥" : "\n↦"));
+        visible: press || release;
+        y: (parent.height - height) / 2;
         width: 100%;
-        height: 100%;
+        // height: 100%;
         font_size: width / 3;
         color: #505050;
         horizontal_alignment: center;
@@ -237,10 +242,14 @@ MainWindow := Window {
         {empty: true}, {empty: true}, {empty: true}, {empty: true},
         ];
     property<[StepData]> sequencer_steps: [
-        {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true},
-        {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true},
-        {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true},
-        {empty: false, note_name: "C-4"}, {empty: true}, {empty: true}, {empty: true}];
+        {press: true, note_name: "C-4"},
+        {press: false}, {press: false}, {press: false},
+        {press: true, release: true, note_name: "C-4", active: true},
+        {press: false}, {press: false}, {press: false},
+        {press: true, note_name: "C-4"},
+        {press: false}, {press: false}, {press: false},
+        {press: false, release: true},
+        {press: false}, {press: false}, {press: false}];
     property<[InstrumentData]> instruments: [
         {active: false}, {active: false}, {active: false}, {active: false},
         {active: false}, {active: false}, {active: false}, {active: false},
@@ -393,7 +402,8 @@ MainWindow := Window {
                                 for step[idx] in sequencer_steps:
                                 SequencerStep {
                                     highlighted: step.active;
-                                    empty: step.empty;
+                                    press: step.press;
+                                    release: step.release;
                                     name: step.note_name;
                                     beat: mod(idx, 4) == 0;
                                     clicked => { root.step_clicked(idx); }
