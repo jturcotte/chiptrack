@@ -19,6 +19,7 @@ pub struct SoundEngine {
     pub sequencer: Sequencer,
     pub synth: Synth,
     main_window: Weak<MainWindow>,
+    pressed_note: Option<u32>,
 }
 
 impl SoundEngine {
@@ -46,6 +47,7 @@ impl SoundEngine {
                 sequencer: sequencer,
                 synth: synth,
                 main_window: main_window,
+                pressed_note: None,
             }
     }
 
@@ -56,11 +58,14 @@ impl SoundEngine {
     pub fn advance_frame(&mut self) -> () {
         let (step_change, note_events) = self.sequencer.advance_frame();
         for (instrument, typ, note) in note_events {
-            if typ == NoteEvent::Press {
+            let note_to_release = if typ == NoteEvent::Press {
                 self.synth.press_instrument_note(instrument, note);
+                self.pressed_note.replace(note)
             } else {
                 self.synth.release_instrument_note(instrument, note);
-            }
+                self.pressed_note = None;
+                None
+            };
             let selected_instrument = self.sequencer.song.selected_instrument;
             self.main_window.clone().upgrade_in_event_loop(move |handle| {
                 let pressed = typ == NoteEvent::Press;
@@ -68,6 +73,12 @@ impl SoundEngine {
                     let notes_model = handle.get_notes();
                     for row in 0..notes_model.row_count() {
                         let mut row_data = notes_model.row_data(row).unwrap();
+                        // A note release might not happen if a press happened in-between.
+                        if note_to_release.map_or(false, |n| row_data.note_number as u32 == n) {
+                            row_data.active = false;
+                            notes_model.set_row_data(row, row_data.clone());
+                        }
+
                         if row_data.note_number as u32 == note {
                             row_data.active = pressed;
                             notes_model.set_row_data(row, row_data);
@@ -100,11 +111,46 @@ impl SoundEngine {
     pub fn press_note(&mut self, note: u32) -> () {
         self.synth.press_instrument_note(self.sequencer.song.selected_instrument, note);
         self.sequencer.record_press(note);
+
+        if let Some(note_to_release) = self.pressed_note.take() {
+            self.main_window.clone().upgrade_in_event_loop(move |handle| {
+                let model = handle.get_notes();
+                for row in 0..model.row_count() {
+                    let mut row_data = model.row_data(row).unwrap();
+                    if row_data.note_number == note_to_release as i32 {
+                        row_data.active = false;
+                        model.set_row_data(row, row_data);
+                    }
+                }
+            });
+        }
+
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_notes();
+            for row in 0..model.row_count() {
+                let mut row_data = model.row_data(row).unwrap();
+                if row_data.note_number == note as i32 {
+                    row_data.active = true;
+                    model.set_row_data(row, row_data);
+                }
+            }
+        });
     }
 
     pub fn release_note(&mut self, note: u32) -> () {
         self.synth.release_instrument_note(self.sequencer.song.selected_instrument, note);
         self.sequencer.record_release(note);
+
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_notes();
+            for row in 0..model.row_count() {
+                let mut row_data = model.row_data(row).unwrap();
+                if row_data.note_number == note as i32 {
+                    row_data.active = false;
+                    model.set_row_data(row, row_data);
+                }
+            }
+        });
     }
 
     pub fn save_project(&self, project_name: &str) {

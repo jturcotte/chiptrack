@@ -322,49 +322,29 @@ pub fn main() {
         cloned_sound_send.send(SoundMsg::SelectInstrument(instrument as u32)).unwrap();
     });
 
+    let cloned_sound_send = sound_send.clone();
+    window.on_note_pressed(move |note| {
+        cloned_sound_send.send(SoundMsg::PressNote(note as u32)).unwrap();
+    });
+
+    let cloned_sound_send = sound_send.clone();
+    window.on_note_released(move |note| {
+        cloned_sound_send.send(SoundMsg::ReleaseNote(note as u32)).unwrap();
+    });
+
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
-    let window_weak = window.as_weak();
-    window.on_note_pressed(move |note| {
+    window.on_note_key_pressed(move |note| {
         let cloned_sound_send2 = cloned_sound_send.clone();
         cloned_sound_send.send(SoundMsg::PressNote(note as u32)).unwrap();
 
-        let model = window_weak.clone().upgrade().unwrap().get_notes();
-        for row in 0..model.row_count() {
-            let mut row_data = model.row_data(row).unwrap();
-            if row_data.note_number == note {
-                row_data.active = true;
-                model.set_row_data(row, row_data);
-            }
-        }
-
         // We have only one timer for direct interactions, and we don't handle
         // keys being held or even multiple keys at time yet, so just visually release all notes.
-        let window_weak = window_weak.clone();
         cloned_context.key_release_timer.start(
             TimerMode::SingleShot,
             std::time::Duration::from_millis(15 * 6),
             Box::new(move || {
                 cloned_sound_send2.send(SoundMsg::ReleaseNote(note as u32)).unwrap();
-
-                let handle = window_weak.upgrade().unwrap();
-                let notes_model = handle.get_notes();
-                for row in 0..notes_model.row_count() {
-                    let mut row_data = notes_model.row_data(row).unwrap();
-                    if row_data.active {
-                        row_data.active = false;
-                        notes_model.set_row_data(row, row_data);
-                    }
-                }
-
-                let instruments_model = handle.get_instruments();
-                for row in 0..instruments_model.row_count() {
-                    let mut row_data = instruments_model.row_data(row).unwrap();
-                    if row_data.active {
-                        row_data.active = false;
-                        instruments_model.set_row_data(row, row_data);
-                    }
-                }
             })
 
         );

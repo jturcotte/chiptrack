@@ -135,7 +135,8 @@ PianoKey :=  Rectangle {
     property<bool> highlighted;
     property<bool> is_black: false;
     property<string> note_name;
-    callback clicked();
+    callback pressed();
+    callback released();
     background: {
         if (is_black != highlighted) {
             black;
@@ -157,8 +158,14 @@ PianoKey :=  Rectangle {
     area := TouchArea {
         width: parent.width;
         height: parent.height;
-        clicked => {
-            root.clicked();
+        pointer-event(e) => {
+            if (e.button == PointerEventButton.left) {
+                if (e.kind == PointerEventKind.down) {
+                    root.pressed();
+                } else {
+                    root.released();
+                }
+            }
         }
     }
 }
@@ -288,6 +295,7 @@ MainWindow := Window {
     callback get_midi_note_name(int) -> string;
     callback mod(float, float) -> float;
 
+    callback note_key_pressed(int);
     callback note_pressed(int);
     callback note_released(int);
     callback octave_increased(int);
@@ -328,19 +336,19 @@ MainWindow := Window {
                 else if (event.text == "9") { root.pattern_clicked(8); }
                 else if (event.text == "0") { root.pattern_clicked(9); }
             } else {
-                if (event.text == "a") { note_pressed(first_note); }
-                else if (event.text == "s") { note_pressed(first_note + 2); }
-                else if (event.text == "d") { note_pressed(first_note + 4); }
-                else if (event.text == "f") { note_pressed(first_note + 5); }
-                else if (event.text == "g") { note_pressed(first_note + 7); }
-                else if (event.text == "h") { note_pressed(first_note + 9); }
-                else if (event.text == "j") { note_pressed(first_note + 11); }
-                else if (event.text == "k") { note_pressed(first_note + 12); }
-                else if (event.text == "w") { note_pressed(first_note + 1); }
-                else if (event.text == "e") { note_pressed(first_note + 3); }
-                else if (event.text == "t") { note_pressed(first_note + 6); }
-                else if (event.text == "y") { note_pressed(first_note + 8); }
-                else if (event.text == "u") { note_pressed(first_note + 10); }
+                if (event.text == "a") { note_key_pressed(first_note); }
+                else if (event.text == "s") { note_key_pressed(first_note + 2); }
+                else if (event.text == "d") { note_key_pressed(first_note + 4); }
+                else if (event.text == "f") { note_key_pressed(first_note + 5); }
+                else if (event.text == "g") { note_key_pressed(first_note + 7); }
+                else if (event.text == "h") { note_key_pressed(first_note + 9); }
+                else if (event.text == "j") { note_key_pressed(first_note + 11); }
+                else if (event.text == "k") { note_key_pressed(first_note + 12); }
+                else if (event.text == "w") { note_key_pressed(first_note + 1); }
+                else if (event.text == "e") { note_key_pressed(first_note + 3); }
+                else if (event.text == "t") { note_key_pressed_pressed(first_note + 6); }
+                else if (event.text == "y") { note_key_pressed(first_note + 8); }
+                else if (event.text == "u") { note_key_pressed(first_note + 10); }
                 else if (event.text == "1") { root.select_instrument(0); }
                 else if (event.text == "2") { root.select_instrument(1); }
                 else if (event.text == "3") { root.select_instrument(2); }
@@ -435,7 +443,8 @@ MainWindow := Window {
 
                                     height: is_black ? 60% : 100%;
                                     highlighted: note.active;
-                                    clicked => { root.note_pressed(note.note_number); }
+                                    pressed => { root.note_pressed(note.note_number); }
+                                    released => { root.note_released(note.note_number); }
                                 }
                             }
                             if (piano_opacity != 1.0):

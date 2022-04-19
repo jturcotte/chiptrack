@@ -1032,6 +1032,7 @@ impl SynthScript {
 
     pub fn release_instrument_note(&mut self, frame_number: usize, instrument: u32, note: u32) -> () {
         // If a second note is pressed before the first is released, we should only release the last note
+        // FIXME: When coming from the sequencer, any release should do. Somehow figure this out.
         if self.last_pressed_note == note {
             // The script themselves are modifying this state, so reset it.
             self.script_context.borrow_mut().set_frame_number(frame_number);
