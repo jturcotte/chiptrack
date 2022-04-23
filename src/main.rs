@@ -41,6 +41,7 @@ enum SoundMsg {
     SelectInstrument(u32),
     SelectPattern(u32),
     ToggleStep(u32),
+    ToggleStepRelease(u32),
     ManuallyAdvanceStep(bool),
     SetPlaying(bool),
     SetRecording(bool),
@@ -230,6 +231,7 @@ pub fn main() {
                                 SoundMsg::SelectInstrument(instrument) => engine.select_instrument(instrument),
                                 SoundMsg::SelectPattern(pattern_num) => engine.sequencer.select_pattern(pattern_num),
                                 SoundMsg::ToggleStep(toggled) => engine.sequencer.toggle_step(toggled),
+                                SoundMsg::ToggleStepRelease(toggled) => engine.sequencer.toggle_step_release(toggled),
                                 SoundMsg::ManuallyAdvanceStep(forwards) => engine.sequencer.manually_advance_step(forwards),
                                 SoundMsg::SetPlaying(toggled) => engine.sequencer.set_playing(toggled),
                                 SoundMsg::SetRecording(toggled) => engine.sequencer.set_recording(toggled),
@@ -379,9 +381,16 @@ pub fn main() {
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
-    window.on_step_clicked(move |step_num| {
+    window.on_toggle_step(move |step_num| {
         Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::ToggleStep(step_num as u32)).unwrap();
+    });
+
+    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
+    window.on_toggle_step_release(move |step_num| {
+        Lazy::force(&*cloned_context);
+        cloned_sound_send.send(SoundMsg::ToggleStepRelease(step_num as u32)).unwrap();
     });
 
     let cloned_context = context.clone();

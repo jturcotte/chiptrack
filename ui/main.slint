@@ -101,7 +101,8 @@ SequencerPattern := Rectangle {
 }
 
 SequencerStep := Rectangle {
-    callback clicked();
+    callback pressed();
+    callback right_pressed();
     property<bool> highlighted;
     property<bool> press;
     property<bool> release;
@@ -127,7 +128,15 @@ SequencerStep := Rectangle {
     TouchArea {
         width: 100%;
         height: 100%;
-        clicked => { root.clicked(); }
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) {
+                if (e.button == PointerEventButton.left) {
+                    root.pressed();
+                } else if (e.button == PointerEventButton.right) {
+                    root.right_pressed();
+                }
+            }
+        }
     }
 }
 
@@ -301,7 +310,8 @@ MainWindow := Window {
     callback octave_increased(int);
     callback select_instrument(int);
     callback pattern_clicked(int);
-    callback step_clicked(int);
+    callback toggle_step(int);
+    callback toggle_step_release(int);
     callback manually_advance_step(bool);
     callback play_clicked(bool);
     callback record_clicked(bool);
@@ -414,7 +424,8 @@ MainWindow := Window {
                                     release: step.release;
                                     name: step.note_name;
                                     beat: mod(idx, 4) == 0;
-                                    clicked => { root.step_clicked(idx); }
+                                    pressed => { root.toggle_step(idx); }
+                                    right_pressed => { root.toggle_step_release(idx); }
                                 }
                             }
                         }

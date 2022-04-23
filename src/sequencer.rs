@@ -195,9 +195,21 @@ impl Sequencer {
 
     pub fn toggle_step(&mut self, step_num: u32) -> () {
         let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][step_num as usize];
-        let toggled = !(step.press || step.release);
-        // FIXME: Allow setting the release separately
+        let toggled = !step.press;
         self.set_step_events(step_num as usize, self.selected_pattern, Some(toggled), Some(toggled), None);
+
+        // We don't yet have a separate concept of step cursor independent of the
+        // current sequencer step. But for now use the same thing to allow selecting
+        // which step to record a note onto when the playback is stopped.
+        if !self.playing {
+            self.select_step(step_num);
+        }
+    }
+
+    pub fn toggle_step_release(&mut self, step_num: u32) -> () {
+        let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][step_num as usize];
+        let toggled = !step.release;
+        self.set_step_events(step_num as usize, self.selected_pattern, None, Some(toggled), None);
 
         // We don't yet have a separate concept of step cursor independent of the
         // current sequencer step. But for now use the same thing to allow selecting
