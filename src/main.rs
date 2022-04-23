@@ -39,6 +39,7 @@ enum SoundMsg {
     PressNote(u32),
     ReleaseNote(u32),
     SelectInstrument(u32),
+    ToggleMuteInstrument(u32),
     SelectPattern(u32),
     ToggleStep(u32),
     ToggleStepRelease(u32),
@@ -229,6 +230,7 @@ pub fn main() {
                                 SoundMsg::PressNote(note) => engine.press_note(note),
                                 SoundMsg::ReleaseNote(note) => engine.release_note(note),
                                 SoundMsg::SelectInstrument(instrument) => engine.select_instrument(instrument),
+                                SoundMsg::ToggleMuteInstrument(instrument) => engine.sequencer.toggle_mute_instrument(instrument),
                                 SoundMsg::SelectPattern(pattern_num) => engine.sequencer.select_pattern(pattern_num),
                                 SoundMsg::ToggleStep(toggled) => engine.sequencer.toggle_step(toggled),
                                 SoundMsg::ToggleStepRelease(toggled) => engine.sequencer.toggle_step_release(toggled),
@@ -322,6 +324,13 @@ pub fn main() {
     window.on_select_instrument(move |instrument| {
         Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::SelectInstrument(instrument as u32)).unwrap();
+    });
+
+    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
+    window.on_toggle_mute_instrument(move |instrument| {
+        Lazy::force(&*cloned_context);
+        cloned_sound_send.send(SoundMsg::ToggleMuteInstrument(instrument as u32)).unwrap();
     });
 
     let cloned_sound_send = sound_send.clone();

@@ -8,6 +8,7 @@ use serde::{Serialize, Deserialize};
 use slint::Model;
 use slint::VecModel;
 use slint::Weak;
+use std::collections::HashSet;
 use std::fs::File;
 use std::path::Path;
 
@@ -36,6 +37,8 @@ pub struct SequencerSong {
     pub selected_instrument: u32,
     song_patterns: Vec<usize>,
     step_instruments: Vec<[[InstrumentStep; NUM_STEPS]; NUM_INSTRUMENTS]>,
+    #[serde(default)]
+    muted_instruments: HashSet<u32>,
 }
 
 impl Default for SequencerSong {
@@ -45,6 +48,7 @@ impl Default for SequencerSong {
             song_patterns: Vec::new(),
             // Initialize all notes to C5
             step_instruments: vec![[[InstrumentStep{note: 60, press: false, release: false}; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
+            muted_instruments: HashSet::new(),
         }
     }
 }
@@ -147,6 +151,21 @@ impl Sequencer {
 
             let mut row_data = model.row_data(instrument as usize).unwrap();
             row_data.selected = true;
+            model.set_row_data(instrument as usize, row_data);
+        });
+    }
+
+    pub fn toggle_mute_instrument(&mut self, instrument: u32) -> () {
+        let was_muted = self.song.muted_instruments.take(&instrument).is_some();
+        if !was_muted {
+            self.song.muted_instruments.insert(instrument);
+        }
+
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_instruments();
+            let mut row_data = model.row_data(instrument as usize).unwrap();
+            row_data.muted = !was_muted;
+            println!("MUTED {:?}", row_data.muted);
             model.set_row_data(instrument as usize, row_data);
         });
     }
@@ -318,6 +337,9 @@ impl Sequencer {
             // Release are at then end of a step, so start by triggering any release of the
             // previous frame.
             for i in 0..NUM_INSTRUMENTS {
+                if self.song.muted_instruments.contains(&(i as u32)) {
+                    continue;
+                }
                 let InstrumentStep{note, press: _, release} = self.song.step_instruments[self.selected_pattern][i][self.current_step];
                 if release {
                     println!("⬆  Instrument release {:?} note {:?}", i, note);
@@ -331,6 +353,9 @@ impl Sequencer {
             }
 
             for i in 0..NUM_INSTRUMENTS {
+                if self.song.muted_instruments.contains(&(i as u32)) {
+                    continue;
+                }
                 let InstrumentStep{note, press, release: _} = self.song.step_instruments[self.selected_pattern][i][self.current_step];
                 if press {
                     println!("👇 Instrument press {:?} note {:?}", i, note);

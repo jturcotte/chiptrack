@@ -31,6 +31,7 @@ struct InstrumentData := {
     id: string,
     selected: bool,
     active: bool,
+    muted: bool,
 }
 struct NoteData := {
     note_number: int,
@@ -180,27 +181,38 @@ PianoKey :=  Rectangle {
 }
 
 InstrumentButton := Rectangle {
-    callback clicked();
+    callback pressed();
+    callback right_pressed();
     property<string> id;
     property<bool> highlighted;
     property<bool> active;
+    property<bool> muted;
     width: height;
     background: active ? #e0e0e0 : white;
     border_color: highlighted ? black : #a0a0a0;
     border_width: 1px;
     border_radius: width/16;
     Text {
-        text: id;
+        text: muted ? "🔇" : id;
         width: 100%;
         height: 100%;
         font_size: height / 3;
         horizontal_alignment: center;
         vertical_alignment: center;
+        color: muted ? #a0a0a0 : black;
     }
     TouchArea {
         width: 100%;
         height: 100%;
-        clicked => { root.clicked(); }
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) {
+                if (e.button == PointerEventButton.left) {
+                    root.pressed();
+                } else if (e.button == PointerEventButton.right) {
+                    root.right_pressed();
+                }
+            }
+        }
     }
 }
 
@@ -309,6 +321,7 @@ MainWindow := Window {
     callback note_released(int);
     callback octave_increased(int);
     callback select_instrument(int);
+    callback toggle_mute_instrument(int);
     callback pattern_clicked(int);
     callback toggle_step(int);
     callback toggle_step_release(int);
@@ -570,7 +583,9 @@ MainWindow := Window {
                                     id: instrument.id;
                                     highlighted: instrument.selected;
                                     active: instrument.active;
-                                    clicked => { root.select_instrument(idx); }
+                                    muted: instrument.muted;
+                                    pressed => { root.select_instrument(idx); }
+                                    right_pressed => { root.toggle_mute_instrument(idx); }
                                     x: mod(idx, 4) * (width + parent.spacing);
                                     y: floor(idx / 4) * (height + parent.spacing);
                                     height: parent.item_size;
