@@ -15,11 +15,17 @@ pub const NUM_INSTRUMENTS: usize = 16;
 pub const NUM_STEPS: usize = 16;
 pub const NUM_PATTERNS: usize = 16;
 
+#[derive(PartialEq, Clone, Copy, Debug)]
+enum NoteSource {
+    Key(u32),
+    Sequencer(u32),
+}
+
 pub struct SoundEngine {
     pub sequencer: Sequencer,
     pub synth: Synth,
     main_window: Weak<MainWindow>,
-    pressed_note: Option<u32>,
+    pressed_note: Option<NoteSource>,
 }
 
 impl SoundEngine {
@@ -55,26 +61,63 @@ impl SoundEngine {
         self.synth.apply_settings(settings);
     }
 
+    fn singularize_note_release(&mut self, source: NoteSource, event: NoteEvent) -> Option<u32> {
+        let note_to_release =
+            if event == NoteEvent::Press {
+                self.pressed_note.replace(source)
+            } else {
+                match (self.pressed_note, source) {
+                    // Only pressed live notes if the released note matches (another one wasn't pressed since)
+                    (Some(NoteSource::Key(pressed_note)), NoteSource::Key(released_note))
+                        if pressed_note == released_note =>
+                        self.pressed_note.take(),
+                    // Don't release any other kind of pressed key when a live key is released
+                    (_, NoteSource::Key(_)) => None,
+                    // Nor when the last pressed note is a live note
+                    (Some(NoteSource::Key(_)), _) => None,
+                    // For anything else involving sequencer notes, a release is a wildcard for any note.
+                    // This function is only called for the selected instrument (where live keys can be mixed),
+                    // and this behavior must match recorded releases for non-selected instruments always being
+                    // sent to the synth. For that reason, we don't take the pressed_note and leave it there.
+                    (_, _) => self.pressed_note,
+                } 
+            };
+
+        note_to_release.map(|ps| match ps {
+            NoteSource::Key(note) => note,
+            NoteSource::Sequencer(note) => note,
+        })
+    }
+
     pub fn advance_frame(&mut self) -> () {
         let (step_change, note_events) = self.sequencer.advance_frame();
         for (instrument, typ, note) in note_events {
-            let note_to_release = if typ == NoteEvent::Press {
+            let is_selected_instrument = instrument == self.sequencer.song.selected_instrument;
+
+            let note_to_release = 
+                if is_selected_instrument {
+                    self.singularize_note_release(NoteSource::Sequencer(note), NoteEvent::Press)
+                } else {
+                    None
+                };
+
+            if typ == NoteEvent::Press {
                 self.synth.press_instrument_note(instrument, note);
-                self.pressed_note.replace(note)
-            } else {
-                self.synth.release_instrument_note(instrument, note);
-                self.pressed_note = None;
-                None
+            } else if !is_selected_instrument || note_to_release.is_some() {
+                // Only send the sequenced release to the synth if the last of the pressed notes is
+                // being released, or if this isn't the selected instruments (in which case only one
+                // note will be pressed at a time).
+                self.synth.release_instrument(instrument);
             };
-            let selected_instrument = self.sequencer.song.selected_instrument;
+
             self.main_window.clone().upgrade_in_event_loop(move |handle| {
                 let pressed = typ == NoteEvent::Press;
-                if instrument == selected_instrument {
+                if is_selected_instrument {
                     let notes_model = handle.get_notes();
                     for row in 0..notes_model.row_count() {
                         let mut row_data = notes_model.row_data(row).unwrap();
                         // A note release might not happen if a press happened in-between.
-                        if note_to_release.map_or(false, |n| row_data.note_number as u32 == n) {
+                        if note_to_release.map_or(false, |n| n == row_data.note_number as u32) {
                             row_data.active = false;
                             notes_model.set_row_data(row, row_data.clone());
                         }
@@ -97,6 +140,8 @@ impl SoundEngine {
     pub fn select_instrument(&mut self, instrument: u32) -> () {
         self.sequencer.select_instrument(instrument);
 
+        self.pressed_note = None;
+
         // Release all notes visually that might have been pressed for the previous instrument.
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_notes();
@@ -108,21 +153,26 @@ impl SoundEngine {
         });
     }
 
+    fn release_note_visually(&mut self, note: u32) -> () {
+        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            let model = handle.get_notes();
+            for row in 0..model.row_count() {
+                let mut row_data = model.row_data(row).unwrap();
+                if note == row_data.note_number as u32 {
+                    row_data.active = false;
+                    model.set_row_data(row, row_data);
+                }
+            }
+        });
+    }
+
     pub fn press_note(&mut self, note: u32) -> () {
         self.synth.press_instrument_note(self.sequencer.song.selected_instrument, note);
         self.sequencer.record_press(note);
 
-        if let Some(note_to_release) = self.pressed_note.take() {
-            self.main_window.clone().upgrade_in_event_loop(move |handle| {
-                let model = handle.get_notes();
-                for row in 0..model.row_count() {
-                    let mut row_data = model.row_data(row).unwrap();
-                    if row_data.note_number == note_to_release as i32 {
-                        row_data.active = false;
-                        model.set_row_data(row, row_data);
-                    }
-                }
-            });
+        // Check which not
+        if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), NoteEvent::Press) {
+            self.release_note_visually(note_to_release)
         }
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
@@ -138,19 +188,13 @@ impl SoundEngine {
     }
 
     pub fn release_note(&mut self, note: u32) -> () {
-        self.synth.release_instrument_note(self.sequencer.song.selected_instrument, note);
-        self.sequencer.record_release(note);
-
-        self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_notes();
-            for row in 0..model.row_count() {
-                let mut row_data = model.row_data(row).unwrap();
-                if row_data.note_number == note as i32 {
-                    row_data.active = false;
-                    model.set_row_data(row, row_data);
-                }
-            }
-        });
+        // Instruments are monophonic, ignore any note release, either sequenced or live,
+        // for the current instrument if it wasn't the last pressed one.
+        if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), NoteEvent::Release) {
+            self.synth.release_instrument(self.sequencer.song.selected_instrument);
+            self.sequencer.record_release(note);
+            self.release_note_visually(note_to_release);
+        }
     }
 
     pub fn save_project(&self, project_name: &str) {

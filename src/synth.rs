@@ -220,8 +220,8 @@ impl Synth {
         self.script.press_instrument_note(self.frame_number, instrument, note);
     }
 
-    pub fn release_instrument_note(&mut self, instrument: u32, note: u32) -> () {
-        self.script.release_instrument_note(self.frame_number, instrument, note);
+    pub fn release_instrument(&mut self, instrument: u32) -> () {
+        self.script.release_instrument(self.frame_number, instrument);
     }
 
     /// Can be used to manually mute when instruments have an infinite length and envelope.

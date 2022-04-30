@@ -814,14 +814,19 @@ impl RegSettings {
     }
 }
 
+#[derive(Clone)]
+struct InstrumentState {
+    press_function: Option<FnPtr>,
+    release_function: Option<FnPtr>,
+    pressed_note: Option<u32>,
+}
+
 pub struct SynthScript {
     script_engine: Engine,
     script_ast: AST,
     script_context: SharedGbBindings,
     instrument_ids: Rc<RefCell<Vec<String>>>,
-    press_functions: Rc<RefCell<Vec<Option<FnPtr>>>>,
-    release_functions: Rc<RefCell<Vec<Option<FnPtr>>>>,
-    last_pressed_note: u32,
+    instrument_states: Rc<RefCell<Vec<InstrumentState>>>,
 }
 
 impl SynthScript {
@@ -829,11 +834,9 @@ impl SynthScript {
 
     pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
         let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(vec!["".to_string(); NUM_INSTRUMENTS]));
-        let press_functions = Rc::new(RefCell::new(vec![None; NUM_INSTRUMENTS]));
-        let release_functions = Rc::new(RefCell::new(vec![None; NUM_INSTRUMENTS]));
+        let instrument_states = Rc::new(RefCell::new(vec![InstrumentState{press_function: None, release_function: None, pressed_note: None}; NUM_INSTRUMENTS]));
         let instrument_ids_clone = instrument_ids.clone();
-        let press_functions_clone = press_functions.clone();
-        let release_functions_clone = release_functions.clone();
+        let instrument_states_clone = instrument_states.clone();
 
         let mut engine = Engine::new();
 
@@ -861,7 +864,7 @@ impl SynthScript {
                         }                    
                 }
 
-                release_functions_clone.borrow_mut()[(i - 1) as usize] = match map.remove("release") {
+                instrument_states_clone.borrow_mut()[(i - 1) as usize].release_function = match map.remove("release") {
                     None =>
                         None,
 
@@ -880,7 +883,7 @@ impl SynthScript {
                         runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(), "set_instrument: The \"press\" property must be a function pointer or an anonymous function, got a {}", f_dyn.type_name());        
 
                         let f = f_dyn.try_cast::<FnPtr>().unwrap();
-                        press_functions_clone.borrow_mut()[(i - 1) as usize] = Some(f);
+                        instrument_states_clone.borrow_mut()[(i - 1) as usize].press_function = Some(f);
                         Ok(())
                     },
                 }
@@ -934,9 +937,7 @@ impl SynthScript {
             script_ast: Default::default(),
             script_context: gb,
             instrument_ids: instrument_ids,
-            press_functions: press_functions,
-            release_functions: release_functions,
-            last_pressed_note: 0,
+            instrument_states: instrument_states,
         }
     }
 
@@ -1008,8 +1009,6 @@ impl SynthScript {
     }
 
     pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u32, note: u32) -> () {
-        self.last_pressed_note = note;
-
         {
             let mut gb = self.script_context.borrow_mut();
             // The script themselves are modifying this state, so reset it.
@@ -1017,7 +1016,26 @@ impl SynthScript {
             gb.note_pressed();
         }
 
-        if let Some(f) = &self.press_functions.borrow_mut()[instrument as usize] {
+        let state = &mut self.instrument_states.borrow_mut()[instrument as usize];
+        if let Some(f) = &state.press_function {
+            state.pressed_note = Some(note);
+            let result: Result<(), _> = f.call(
+                &self.script_engine,
+                &self.script_ast,
+                ( note as i32, Self::note_to_freq(note), )
+                );
+            if let Err(e) = result {
+                elog!("{}", e)
+            }
+        }
+    }
+
+    pub fn release_instrument(&mut self, frame_number: usize, instrument: u32) -> () {
+        // The script themselves are modifying this state, so reset it.
+        self.script_context.borrow_mut().set_frame_number(frame_number);
+
+        let state = &mut self.instrument_states.borrow_mut()[instrument as usize];
+        if let (Some(f), Some(note)) = (&state.release_function, state.pressed_note.take()) {
             let result: Result<(), _> = f.call(
                 &self.script_engine,
                 &self.script_ast,
@@ -1027,27 +1045,6 @@ impl SynthScript {
                 elog!("{}", e)
             }
 
-        }
-    }
-
-    pub fn release_instrument_note(&mut self, frame_number: usize, instrument: u32, note: u32) -> () {
-        // If a second note is pressed before the first is released, we should only release the last note
-        // FIXME: When coming from the sequencer, any release should do. Somehow figure this out.
-        if self.last_pressed_note == note {
-            // The script themselves are modifying this state, so reset it.
-            self.script_context.borrow_mut().set_frame_number(frame_number);
-
-            if let Some(f) = &self.release_functions.borrow_mut()[instrument as usize] {
-                let result: Result<(), _> = f.call(
-                    &self.script_engine,
-                    &self.script_ast,
-                    ( note as i32, Self::note_to_freq(note), )
-                    );
-                if let Err(e) = result {
-                    elog!("{}", e)
-                }
-
-            }
         }
     }
 

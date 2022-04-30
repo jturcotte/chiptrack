@@ -63,6 +63,7 @@ pub struct Sequencer {
     recording: bool,
     erasing: bool,
     last_press_frame: Option<u32>,
+    just_recorded_over_next_step: bool,
     main_window: Weak<MainWindow>,
 }
 
@@ -78,6 +79,7 @@ impl Sequencer {
             recording: true,
             erasing: false,
             last_press_frame: None,
+            just_recorded_over_next_step: false,
             main_window: main_window.clone(),
         }
     }
@@ -165,7 +167,6 @@ impl Sequencer {
             let model = handle.get_instruments();
             let mut row_data = model.row_data(instrument as usize).unwrap();
             row_data.muted = !was_muted;
-            println!("MUTED {:?}", row_data.muted);
             model.set_row_data(instrument as usize, row_data);
         });
     }
@@ -340,9 +341,13 @@ impl Sequencer {
                 if self.song.muted_instruments.contains(&(i as u32)) {
                     continue;
                 }
+                if self.just_recorded_over_next_step && i as u32 == self.song.selected_instrument {
+                    // Let the press loop further down reset the flag.
+                    continue;
+                }
                 let InstrumentStep{note, press: _, release} = self.song.step_instruments[self.selected_pattern][i][self.current_step];
                 if release {
-                    println!("⬆  Instrument release {:?} note {:?}", i, note);
+                    println!("➖ Instrument release {:?} note {:?}", i, note);
                     note_events.push((i as u32, NoteEvent::Release, note));
                 }
             }
@@ -356,9 +361,13 @@ impl Sequencer {
                 if self.song.muted_instruments.contains(&(i as u32)) {
                     continue;
                 }
+                if self.just_recorded_over_next_step && i as u32 == self.song.selected_instrument {
+                    self.just_recorded_over_next_step = false;
+                    continue;
+                }
                 let InstrumentStep{note, press, release: _} = self.song.step_instruments[self.selected_pattern][i][self.current_step];
                 if press {
-                    println!("👇 Instrument press {:?} note {:?}", i, note);
+                    println!("➕ Instrument press {:?} note {:?}", i, note);
                     note_events.push((i as u32, NoteEvent::Press, note));
                 }
             }
@@ -368,11 +377,10 @@ impl Sequencer {
         }
     }
 
-    fn record_event(&mut self, event: NoteEvent, note: u32) {
+    fn record_event(&mut self, event: NoteEvent, note: Option<u32>) {
         if !self.recording {
             return;
         }
-
 
         let (press, release, (step, pattern, _)) = match event {
             NoteEvent::Press if !self.playing => {
@@ -396,6 +404,7 @@ impl Sequencer {
                     if self.current_frame % FRAMES_PER_STEP < SNAP_AT_STEP_FRAME {
                         (self.current_step, self.selected_pattern, None)
                     } else {
+                        self.just_recorded_over_next_step = true;
                         self.next_step_and_pattern_and_song_pattern(true)
                     })
             },
@@ -422,6 +431,7 @@ impl Sequencer {
                         // Register the release at the end of the current step.
                         (self.current_step, self.selected_pattern, None)
                     } else {
+                        self.just_recorded_over_next_step = true;
                         // It ends on or after the snap frame of the current step.
                         // Register the release at the end of the next step.
                         self.next_step_and_pattern_and_song_pattern(true)
@@ -429,17 +439,18 @@ impl Sequencer {
 
             },
         };
-        self.set_step_events(step, pattern, press, release, Some(note));
+        self.set_step_events(step, pattern, press, release, note);
     }
 
     pub fn record_press(&mut self, note: u32) {
-        self.record_event(NoteEvent::Press, note);
+        self.record_event(NoteEvent::Press, Some(note));
         self.last_press_frame = Some(self.current_frame);
     }
 
-    pub fn record_release(&mut self, note: u32) {
-        self.record_event(NoteEvent::Release, note);
-
+    pub fn record_release(&mut self, _note: u32) {
+        // The note release won't be passed to the synth on playback,
+        // so don't overwrite the note in the step just in case it contained something useful.
+        self.record_event(NoteEvent::Release, None);
     }
 
     pub fn append_song_pattern(&mut self, pattern: u32) {
