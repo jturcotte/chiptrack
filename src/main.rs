@@ -66,13 +66,8 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
     let height = window.get_waveform_height() / res_divider;
     let mut pb = PathBuilder::new();
     let mut non_zero = false;
-    pb.move_to(0.0, height / 2.0);
     {
         for (i, source) in samples.iter().enumerate() {
-            // Plot only the right channel as the left one might be used as a sync channel.
-            if i % 2 == 0 {
-                continue;
-            }
             if *source != 0.0 {
                 non_zero = true;
             }
@@ -81,9 +76,13 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
             // per channel to avoid clipping when all channels are playing.
             // So multiply by 2.0 to amplify the visualization of single
             // channels a bit.
-            pb.line_to(
-                i as f32 * width / (samples.len() / 2) as f32,
-                (source * 2.0 + 1.0) * height / 2.0);
+            let x = i as f32 * width / samples.len() as f32;
+            let y = (source * 2.0 + 1.0) * height / 2.0;
+            if i == 0 {
+                pb.move_to(x, y);
+            } else {
+                pb.line_to(x, y);            
+            }
         }
     }
     // Painting this takes a lot of CPU since we need to paint, clone
