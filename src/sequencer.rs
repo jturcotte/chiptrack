@@ -4,7 +4,7 @@
 use crate::utils::MidiNote;
 use crate::MainWindow;
 use crate::SongPatternData;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use slint::Model;
 use slint::VecModel;
 use slint::Weak;
@@ -13,8 +13,8 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::sound_engine::NUM_INSTRUMENTS;
-use crate::sound_engine::NUM_STEPS;
 use crate::sound_engine::NUM_PATTERNS;
+use crate::sound_engine::NUM_STEPS;
 
 const FRAMES_PER_STEP: u32 = 6;
 const SNAP_AT_STEP_FRAME: u32 = 4;
@@ -47,7 +47,14 @@ impl Default for SequencerSong {
             selected_instrument: 0,
             song_patterns: Vec::new(),
             // Initialize all notes to C5
-            step_instruments: vec![[[InstrumentStep{note: 60, press: false, release: false}; NUM_STEPS]; NUM_INSTRUMENTS]; NUM_PATTERNS],
+            step_instruments: vec![
+                [[InstrumentStep {
+                    note: 60,
+                    press: false,
+                    release: false
+                }; NUM_STEPS]; NUM_INSTRUMENTS];
+                NUM_PATTERNS
+            ],
             muted_instruments: HashSet::new(),
         }
     }
@@ -172,18 +179,16 @@ impl Sequencer {
     }
 
     fn update_patterns(&mut self) -> () {
-        let non_empty_patterns: Vec<usize> =
-            (0..NUM_PATTERNS)
-                .filter(|p| {
-                    (0..NUM_INSTRUMENTS)
-                        .any(|i| {
-                            (0..NUM_STEPS).any(|s| {
-                                let step = self.song.step_instruments[*p][i][s];
-                                step.press || step.release
-                            })
-                        })
+        let non_empty_patterns: Vec<usize> = (0..NUM_PATTERNS)
+            .filter(|p| {
+                (0..NUM_INSTRUMENTS).any(|i| {
+                    (0..NUM_STEPS).any(|s| {
+                        let step = self.song.step_instruments[*p][i][s];
+                        step.press || step.release
+                    })
                 })
-                .collect();
+            })
+            .collect();
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let patterns = handle.get_sequencer_patterns();
@@ -193,14 +198,12 @@ impl Sequencer {
                 patterns.set_row_data(p, pattern_row_data);
             }
         });
-
     }
 
     fn update_steps(&mut self) -> () {
-        let steps: Vec<InstrumentStep> =
-            (0..NUM_STEPS)
-                .map(|i| self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][i])
-                .collect();
+        let steps: Vec<InstrumentStep> = (0..NUM_STEPS)
+            .map(|i| self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][i])
+            .collect();
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_steps();
             for (i, step) in steps.iter().enumerate() {
@@ -214,9 +217,16 @@ impl Sequencer {
     }
 
     pub fn toggle_step(&mut self, step_num: u32) -> () {
-        let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][step_num as usize];
+        let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize]
+            [step_num as usize];
         let toggled = !step.press;
-        self.set_step_events(step_num as usize, self.selected_pattern, Some(toggled), Some(toggled), None);
+        self.set_step_events(
+            step_num as usize,
+            self.selected_pattern,
+            Some(toggled),
+            Some(toggled),
+            None,
+        );
 
         // We don't yet have a separate concept of step cursor independent of the
         // current sequencer step. But for now use the same thing to allow selecting
@@ -227,7 +237,8 @@ impl Sequencer {
     }
 
     pub fn toggle_step_release(&mut self, step_num: u32) -> () {
-        let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][step_num as usize];
+        let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize]
+            [step_num as usize];
         let toggled = !step.release;
         self.set_step_events(step_num as usize, self.selected_pattern, None, Some(toggled), None);
 
@@ -257,11 +268,19 @@ impl Sequencer {
         }
     }
 
-    fn set_step_events(&mut self, step_num: usize, pattern: usize, set_press: Option<bool>, set_release: Option<bool>, set_note: Option<u32>) -> () {
+    fn set_step_events(
+        &mut self,
+        step_num: usize,
+        pattern: usize,
+        set_press: Option<bool>,
+        set_release: Option<bool>,
+        set_note: Option<u32>,
+    ) -> () {
         let mut step = &mut self.song.step_instruments[pattern][self.song.selected_instrument as usize][step_num];
         if set_press.map_or(true, |v| v == step.press)
             && set_release.map_or(true, |v| v == step.release)
-            && set_note.map_or(true, |v| v == step.note) {
+            && set_note.map_or(true, |v| v == step.note)
+        {
             return;
         }
 
@@ -275,22 +294,19 @@ impl Sequencer {
             step.note = note;
         }
 
-        let pattern_empty =
-            if set_press.unwrap_or(false) || set_release.unwrap_or(false) {
-                false
-            } else {
-                (0..NUM_INSTRUMENTS)
-                    .all(|i| {
-                        (0..NUM_STEPS).all(|s| {
-                            let step = self.song.step_instruments[self.selected_pattern][i][s];
-                            !step.press && !step.release
-                        })
-                    })
-            };
+        let pattern_empty = if set_press.unwrap_or(false) || set_release.unwrap_or(false) {
+            false
+        } else {
+            (0..NUM_INSTRUMENTS).all(|i| {
+                (0..NUM_STEPS).all(|s| {
+                    let step = self.song.step_instruments[self.selected_pattern][i][s];
+                    !step.press && !step.release
+                })
+            })
+        };
 
         let selected_pattern = self.selected_pattern;
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-
             let patterns = handle.get_sequencer_patterns();
             let mut pattern_row_data = patterns.row_data(selected_pattern).unwrap();
             pattern_row_data.empty = pattern_empty;
@@ -345,7 +361,11 @@ impl Sequencer {
                     // Let the press loop further down reset the flag.
                     continue;
                 }
-                let InstrumentStep{note, press: _, release} = self.song.step_instruments[self.selected_pattern][i][self.current_step];
+                let InstrumentStep {
+                    note,
+                    press: _,
+                    release,
+                } = self.song.step_instruments[self.selected_pattern][i][self.current_step];
                 if release {
                     println!("➖ Instrument release {:?} note {:?}", i, note);
                     note_events.push((i as u32, NoteEvent::Release, note));
@@ -365,7 +385,11 @@ impl Sequencer {
                     self.just_recorded_over_next_step = false;
                     continue;
                 }
-                let InstrumentStep{note, press, release: _} = self.song.step_instruments[self.selected_pattern][i][self.current_step];
+                let InstrumentStep {
+                    note,
+                    press,
+                    release: _,
+                } = self.song.step_instruments[self.selected_pattern][i][self.current_step];
                 if press {
                     println!("➕ Instrument press {:?} note {:?}", i, note);
                     note_events.push((i as u32, NoteEvent::Press, note));
@@ -384,7 +408,8 @@ impl Sequencer {
 
         let (press, release, (step, pattern, _)) = match event {
             NoteEvent::Press if !self.playing => {
-                let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][self.current_step as usize];
+                let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize]
+                    [self.current_step as usize];
                 if !step.press {
                     // If the step isn't already pressed, set both the press and the release it.
                     (Some(true), Some(true), (self.current_step, self.selected_pattern, None))
@@ -392,13 +417,17 @@ impl Sequencer {
                     // Else, only set the note.
                     (None, None, (self.current_step, self.selected_pattern, None))
                 }
-            },
+            }
             NoteEvent::Release if !self.playing =>
-                // Ignore the release when recording and not playing,
-                // it should be the same step as the press anyway.
-                return,
+            // Ignore the release when recording and not playing,
+            // it should be the same step as the press anyway.
+            {
+                return
+            }
             NoteEvent::Press => {
-                (Some(true), None,
+                (
+                    Some(true),
+                    None,
                     // Try to clamp the event to the nearest frame.
                     // Use 4 instead of 3 just to try to compensate for the key press to visual and audible delay.
                     if self.current_frame % FRAMES_PER_STEP < SNAP_AT_STEP_FRAME {
@@ -406,22 +435,26 @@ impl Sequencer {
                     } else {
                         self.just_recorded_over_next_step = true;
                         self.next_step_and_pattern_and_song_pattern(true)
-                    })
-            },
+                    },
+                )
+            }
             NoteEvent::Release => {
                 // Align the release with the same frame position within the step as the press had.
                 // We're going to sequence full steps anyway.
                 // This is to prevent the release to be offset only by one frame but still end up
                 // one step later just because the press would already have been on the step's edge itself.
-                let steps_note_length = 
-                   ((self.current_frame as f32 - self.last_press_frame.unwrap() as f32) / FRAMES_PER_STEP as f32)
-                                       .round() as u32;
+                let steps_note_length = ((self.current_frame as f32 - self.last_press_frame.unwrap() as f32)
+                    / FRAMES_PER_STEP as f32)
+                    .round() as u32;
                 // We need to place the release in the previous step (its end), so substract one step.
-                let rounded_end_frame = self.last_press_frame.unwrap() + (steps_note_length.max(1) - 1) * FRAMES_PER_STEP;
+                let rounded_end_frame =
+                    self.last_press_frame.unwrap() + (steps_note_length.max(1) - 1) * FRAMES_PER_STEP;
 
                 let is_end_in_prev_step = rounded_end_frame / FRAMES_PER_STEP < self.current_frame / FRAMES_PER_STEP;
                 let end_snaps_to_next_step = rounded_end_frame % FRAMES_PER_STEP < SNAP_AT_STEP_FRAME;
-                (None, Some(true),
+                (
+                    None,
+                    Some(true),
                     if is_end_in_prev_step && end_snaps_to_next_step {
                         // It ends before the snap frame of the previous step.
                         // Register the release at the end of the previous step.
@@ -435,9 +468,9 @@ impl Sequencer {
                         // It ends on or after the snap frame of the current step.
                         // Register the release at the end of the next step.
                         self.next_step_and_pattern_and_song_pattern(true)
-                    })
-
-            },
+                    },
+                )
+            }
         };
         self.set_step_events(step, pattern, press, release, note);
     }
@@ -459,7 +492,10 @@ impl Sequencer {
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = handle.get_sequencer_song_patterns();
             let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-            vec_model.push(SongPatternData{number: pattern as i32, active: false});
+            vec_model.push(SongPatternData {
+                number: pattern as i32,
+                active: false,
+            });
         });
     }
 
@@ -467,7 +503,11 @@ impl Sequencer {
         if !self.song.song_patterns.is_empty() {
             self.song.song_patterns.pop();
             if self.current_song_pattern.unwrap() == self.song.song_patterns.len() {
-                self.select_song_pattern(if self.song.song_patterns.is_empty() { None } else { Some(0) });
+                self.select_song_pattern(if self.song.song_patterns.is_empty() {
+                    None
+                } else {
+                    Some(0)
+                });
             }
 
             self.main_window.clone().upgrade_in_event_loop(move |handle| {
@@ -493,7 +533,11 @@ impl Sequencer {
 
     fn set_song(&mut self, song: SequencerSong) {
         self.song = song;
-        self.current_song_pattern = if self.song.song_patterns.is_empty() { None } else { Some(0) };
+        self.current_song_pattern = if self.song.song_patterns.is_empty() {
+            None
+        } else {
+            Some(0)
+        };
 
         let current_song_pattern = self.current_song_pattern;
         let song_patterns = self.song.song_patterns.clone();
@@ -501,22 +545,22 @@ impl Sequencer {
             let model = handle.get_sequencer_song_patterns();
             let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
             for (i, number) in song_patterns.iter().enumerate() {
-                vec_model.push(
-                    SongPatternData{
-                        number: *number as i32,
-                        active: match current_song_pattern {
-                            Some(sp) => i == sp,
-                            None => false,
-                        }
-                    });
+                vec_model.push(SongPatternData {
+                    number: *number as i32,
+                    active: match current_song_pattern {
+                        Some(sp) => i == sp,
+                        None => false,
+                    },
+                });
             }
         });
 
         self.select_pattern(
-            *self.current_song_pattern
+            *self
+                .current_song_pattern
                 .map(|i| self.song.song_patterns.get(i).unwrap())
-                .unwrap_or(&0_usize) as u32
-            );
+                .unwrap_or(&0_usize) as u32,
+        );
         self.select_instrument(self.song.selected_instrument as u32);
         self.update_patterns();
     }
@@ -537,13 +581,21 @@ impl Sequencer {
                 Ok(mut song) => {
                     log!("Loaded the project song from the URL.");
                     // Expand the song in memory again.
-                    song.step_instruments.resize_with(NUM_PATTERNS, || [[InstrumentStep{note: 60, enabled: false}; NUM_STEPS]; NUM_INSTRUMENTS]);
+                    song.step_instruments.resize_with(NUM_PATTERNS, || {
+                        [[InstrumentStep {
+                            note: 60,
+                            enabled: false,
+                        }; NUM_STEPS]; NUM_INSTRUMENTS]
+                    });
                     self.set_song(song);
-                },
+                }
                 Err(e) => {
-                    elog!("Couldn't load the project song from the URL, starting from scratch.\n\tError: {:?}", e);
+                    elog!(
+                        "Couldn't load the project song from the URL, starting from scratch.\n\tError: {:?}",
+                        e
+                    );
                     self.set_song(Default::default());
-                },
+                }
             }
         } else {
             log!("No song provided in the URL, starting from scratch.");
@@ -555,23 +607,35 @@ impl Sequencer {
     pub fn load(&mut self, project_song_path: &Path) {
         if project_song_path.exists() {
             let parsed: Result<SequencerSong, std::io::Error> =
-                File::open(project_song_path)
-                .and_then(|f| serde_json::from_reader(f).map_err(|e| e.into()));
+                File::open(project_song_path).and_then(|f| serde_json::from_reader(f).map_err(|e| e.into()));
 
             match parsed {
                 Ok(mut song) => {
                     log!("Loaded project song from file {:?}", project_song_path);
                     // Expand the song in memory again.
-                    song.step_instruments.resize_with(NUM_PATTERNS, || [[InstrumentStep{note: 60, press: false, release: false}; NUM_STEPS]; NUM_INSTRUMENTS]);
+                    song.step_instruments.resize_with(NUM_PATTERNS, || {
+                        [[InstrumentStep {
+                            note: 60,
+                            press: false,
+                            release: false,
+                        }; NUM_STEPS]; NUM_INSTRUMENTS]
+                    });
                     self.set_song(song);
-                },
+                }
                 Err(e) => {
-                    elog!("Couldn't load project song from file {:?}, starting from scratch.\n\tError: {:?}", project_song_path, e);
+                    elog!(
+                        "Couldn't load project song from file {:?}, starting from scratch.\n\tError: {:?}",
+                        project_song_path,
+                        e
+                    );
                     self.set_song(Default::default());
-                },
+                }
             }
         } else {
-            log!("Project song file {:?} doesn't exist, starting from scratch.", project_song_path);
+            log!(
+                "Project song file {:?} doesn't exist, starting from scratch.",
+                project_song_path
+            );
             self.set_song(Default::default());
         }
     }
@@ -588,9 +652,13 @@ impl Sequencer {
         let wraps = forwards && next_step == 0 || !forwards && self.current_step == 0;
         if wraps {
             let (next_pattern, next_song_pattern) = if !self.song.song_patterns.is_empty() {
-                let sp = self.current_song_pattern.map(|sp|
-                        ((sp as isize + self.song.song_patterns.len() as isize + delta) % self.song.song_patterns.len() as isize) as usize
-                    ).unwrap_or(0);
+                let sp = self
+                    .current_song_pattern
+                    .map(|sp| {
+                        ((sp as isize + self.song.song_patterns.len() as isize + delta)
+                            % self.song.song_patterns.len() as isize) as usize
+                    })
+                    .unwrap_or(0);
                 (self.song.song_patterns[sp], Some(sp))
             } else {
                 (self.selected_pattern, None)

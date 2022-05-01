@@ -33,14 +33,16 @@ impl SoundEngine {
         let mut sequencer = Sequencer::new(main_window.clone());
         let mut synth = Synth::new(main_window.clone(), sample_rate, settings);
 
-        #[cfg(not(target_arch = "wasm32"))] {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
             let song_path = SoundEngine::project_song_path(project_name);
             let instruments_path = SoundEngine::project_instruments_path(project_name);
             sequencer.load(song_path.as_path());
             synth.load(instruments_path.as_path());
         }
 
-        #[cfg(target_arch = "wasm32")] {
+        #[cfg(target_arch = "wasm32")]
+        {
             let window = web_sys::window().unwrap();
             let query_string = window.location().search().unwrap();
             let search_params = web_sys::UrlSearchParams::new_with_str(&query_string).unwrap();
@@ -50,11 +52,11 @@ impl SoundEngine {
         }
 
         SoundEngine {
-                sequencer: sequencer,
-                synth: synth,
-                main_window: main_window,
-                pressed_note: None,
-            }
+            sequencer: sequencer,
+            synth: synth,
+            main_window: main_window,
+            pressed_note: None,
+        }
     }
 
     pub fn apply_settings(&mut self, settings: Settings) {
@@ -62,26 +64,27 @@ impl SoundEngine {
     }
 
     fn singularize_note_release(&mut self, source: NoteSource, event: NoteEvent) -> Option<u32> {
-        let note_to_release =
-            if event == NoteEvent::Press {
-                self.pressed_note.replace(source)
-            } else {
-                match (self.pressed_note, source) {
-                    // Only pressed live notes if the released note matches (another one wasn't pressed since)
-                    (Some(NoteSource::Key(pressed_note)), NoteSource::Key(released_note))
-                        if pressed_note == released_note =>
-                        self.pressed_note.take(),
-                    // Don't release any other kind of pressed key when a live key is released
-                    (_, NoteSource::Key(_)) => None,
-                    // Nor when the last pressed note is a live note
-                    (Some(NoteSource::Key(_)), _) => None,
-                    // For anything else involving sequencer notes, a release is a wildcard for any note.
-                    // This function is only called for the selected instrument (where live keys can be mixed),
-                    // and this behavior must match recorded releases for non-selected instruments always being
-                    // sent to the synth. For that reason, we don't take the pressed_note and leave it there.
-                    (_, _) => self.pressed_note,
-                } 
-            };
+        let note_to_release = if event == NoteEvent::Press {
+            self.pressed_note.replace(source)
+        } else {
+            match (self.pressed_note, source) {
+                // Only pressed live notes if the released note matches (another one wasn't pressed since)
+                (Some(NoteSource::Key(pressed_note)), NoteSource::Key(released_note))
+                    if pressed_note == released_note =>
+                {
+                    self.pressed_note.take()
+                }
+                // Don't release any other kind of pressed key when a live key is released
+                (_, NoteSource::Key(_)) => None,
+                // Nor when the last pressed note is a live note
+                (Some(NoteSource::Key(_)), _) => None,
+                // For anything else involving sequencer notes, a release is a wildcard for any note.
+                // This function is only called for the selected instrument (where live keys can be mixed),
+                // and this behavior must match recorded releases for non-selected instruments always being
+                // sent to the synth. For that reason, we don't take the pressed_note and leave it there.
+                (_, _) => self.pressed_note,
+            }
+        };
 
         note_to_release.map(|ps| match ps {
             NoteSource::Key(note) => note,
@@ -94,12 +97,11 @@ impl SoundEngine {
         for (instrument, typ, note) in note_events {
             let is_selected_instrument = instrument == self.sequencer.song.selected_instrument;
 
-            let note_to_release = 
-                if is_selected_instrument {
-                    self.singularize_note_release(NoteSource::Sequencer(note), NoteEvent::Press)
-                } else {
-                    None
-                };
+            let note_to_release = if is_selected_instrument {
+                self.singularize_note_release(NoteSource::Sequencer(note), NoteEvent::Press)
+            } else {
+                None
+            };
 
             if typ == NoteEvent::Press {
                 self.synth.press_instrument_note(instrument, note);
@@ -167,7 +169,8 @@ impl SoundEngine {
     }
 
     pub fn press_note(&mut self, note: u32) -> () {
-        self.synth.press_instrument_note(self.sequencer.song.selected_instrument, note);
+        self.synth
+            .press_instrument_note(self.sequencer.song.selected_instrument, note);
         self.sequencer.record_press(note);
 
         // Check which not
@@ -204,7 +207,10 @@ impl SoundEngine {
         // Until a better export function is available, just print this on the console when saving.
         let encoded_song = utils::encode_file(SoundEngine::project_song_path(project_name));
         let encoded_instruments = utils::encode_file(SoundEngine::project_instruments_path(project_name));
-        println!("Online player URL: http://localhost:8080?p={}&s={}&i={}", project_name, encoded_song, encoded_instruments);
+        println!(
+            "Online player URL: http://localhost:8080?p={}&s={}&i={}",
+            project_name, encoded_song, encoded_instruments
+        );
     }
 
     pub fn project_song_path(project_name: &str) -> PathBuf {
@@ -219,4 +225,3 @@ impl SoundEngine {
         path
     }
 }
-

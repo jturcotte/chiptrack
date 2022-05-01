@@ -15,8 +15,8 @@ use wasm_bindgen::prelude::*;
 use crate::midi::Midi;
 use crate::sound_engine::SoundEngine;
 use crate::utils::MidiNote;
-use cpal::{Sample, SampleFormat};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{Sample, SampleFormat};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
 use slint::{Model, Rgba8Pixel, SharedPixelBuffer, Timer, TimerMode};
@@ -24,9 +24,9 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::env;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::time::Duration;
 use tiny_skia::*;
 
@@ -81,7 +81,7 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
             if i == 0 {
                 pb.move_to(x, y);
             } else {
-                pb.line_to(x, y);            
+                pb.line_to(x, y);
             }
         }
     }
@@ -92,7 +92,8 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
     if non_zero || was_non_zero {
         if let Some(path) = pb.finish() {
             let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width as u32, height as u32);
-            if let Some(mut pixmap) = PixmapMut::from_bytes(pixel_buffer.make_mut_bytes(), width as u32, height as u32) {
+            if let Some(mut pixmap) = PixmapMut::from_bytes(pixel_buffer.make_mut_bytes(), width as u32, height as u32)
+            {
                 pixmap.fill(tiny_skia::Color::TRANSPARENT);
                 let mut paint = Paint::default();
                 paint.blend_mode = BlendMode::Source;
@@ -112,7 +113,11 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
     }
 }
 
-fn check_if_project_changed(project_name: &str, notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) -> () {
+fn check_if_project_changed(
+    project_name: &str,
+    notify_recv: &mpsc::Receiver<DebouncedEvent>,
+    engine: &mut SoundEngine,
+) -> () {
     while let Ok(msg) = notify_recv.try_recv() {
         let instruments_path = SoundEngine::project_instruments_path(&project_name);
         let instruments = instruments_path.file_name();
@@ -120,7 +125,9 @@ fn check_if_project_changed(project_name: &str, notify_recv: &mpsc::Receiver<Deb
             DebouncedEvent::Write(path) if path.file_name() == instruments => true,
             DebouncedEvent::Create(path) if path.file_name() == instruments => true,
             DebouncedEvent::Remove(path) if path.file_name() == instruments => true,
-            DebouncedEvent::Rename(from, to) if from.file_name() == instruments || to.file_name() == instruments => true,
+            DebouncedEvent::Rename(from, to) if from.file_name() == instruments || to.file_name() == instruments => {
+                true
+            }
             _ => false,
         };
         if reload {
@@ -168,20 +175,35 @@ pub fn main() {
     let sequencer_song_model = Rc::new(slint::VecModel::default());
     let sequencer_pattern_model = Rc::new(slint::VecModel::default());
     for i in 0..16 {
-        sequencer_pattern_model.push(PatternData{empty: true, active: i == 0});
+        sequencer_pattern_model.push(PatternData {
+            empty: true,
+            active: i == 0,
+        });
     }
     let sequencer_step_model = Rc::new(slint::VecModel::default());
     for _ in 0..16 {
-        sequencer_step_model.push(StepData{press: false, release: false, active: false, note_name: "".into()});
+        sequencer_step_model.push(StepData {
+            press: false,
+            release: false,
+            active: false,
+            note_name: "".into(),
+        });
     }
     let note_model = Rc::new(slint::VecModel::default());
     let start: i32 = 60;
     let start_octave: i32 = MidiNote(start).octave();
-    let notes: Vec<NoteData> = (start..(start+13)).map(|i| {
-        let note = MidiNote(i);
-        let pos = note.key_pos() + (note.octave() - start_octave) * 7;
-        NoteData{note_number: i, key_pos: pos, is_black: note.is_black(), active: false}
-    }).collect();
+    let notes: Vec<NoteData> = (start..(start + 13))
+        .map(|i| {
+            let note = MidiNote(i);
+            let pos = note.key_pos() + (note.octave() - start_octave) * 7;
+            NoteData {
+                note_number: i,
+                key_pos: pos,
+                is_black: note.is_black(),
+                active: false,
+            }
+        })
+        .collect();
     for n in notes.iter().filter(|n| !n.is_black) {
         note_model.push(n.clone());
     }
@@ -189,7 +211,6 @@ pub fn main() {
     for n in notes.iter().filter(|n| n.is_black) {
         note_model.push(n.clone());
     }
-
 
     struct Context {
         key_release_timer: Timer,
@@ -230,24 +251,29 @@ pub fn main() {
         // and live notes should probably eventually be quantized onto that,
         // so a buffer roughly the size of a frame should work fine.
         #[cfg(not(target_arch = "wasm32"))]
-            let audio_buffer_samples = 512;
+        let audio_buffer_samples = 512;
         // Everything happens on the same thread in wasm32, and is a bit slower,
         // so increase the buffer size there.
         #[cfg(target_arch = "wasm32")]
-            let audio_buffer_samples = 2048;
+        let audio_buffer_samples = 2048;
 
         config.buffer_size = cpal::BufferSize::Fixed(audio_buffer_samples);
 
-        let last_waveform_consumed  = Arc::new(AtomicBool::new(true));
+        let last_waveform_consumed = Arc::new(AtomicBool::new(true));
 
         let stream = match sample_format {
-            SampleFormat::F32 =>
-            device.build_output_stream(&config,
+            SampleFormat::F32 => device.build_output_stream(
+                &config,
                 move |dest: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     SOUND_ENGINE.with(|maybe_engine_cell| {
                         let mut maybe_engine = maybe_engine_cell.borrow_mut();
                         if let None = *maybe_engine {
-                            *maybe_engine = Some(SoundEngine::new(sample_rate, &project_name, window_weak.clone(), initial_settings.clone()));
+                            *maybe_engine = Some(SoundEngine::new(
+                                sample_rate,
+                                &project_name,
+                                window_weak.clone(),
+                                initial_settings.clone(),
+                            ));
                         }
                         let engine = maybe_engine.as_mut().unwrap();
 
@@ -274,18 +300,21 @@ pub fn main() {
                                 }
                             }
 
-                            let src_len = std::cmp::min(len-di, synth_output.buffer.len());
+                            let src_len = std::cmp::min(len - di, synth_output.buffer.len());
                             let part = synth_output.buffer.drain(..src_len);
-                            dest[di..di+src_len].copy_from_slice(part.as_slice());
+                            dest[di..di + src_len].copy_from_slice(part.as_slice());
 
                             di += src_len;
                         }
                     });
-                }, err_fn),
+                },
+                err_fn,
+            ),
             // FIXME
             SampleFormat::I16 => device.build_output_stream(&config, write_silence::<i16>, err_fn),
             SampleFormat::U16 => device.build_output_stream(&config, write_silence::<u16>, err_fn),
-        }.unwrap();
+        }
+        .unwrap();
 
         fn write_silence<T: Sample>(data: &mut [T], _: &cpal::OutputCallbackInfo) {
             for sample in data.iter_mut() {
@@ -303,13 +332,13 @@ pub fn main() {
             Some(Midi::new(press, release))
         };
         #[cfg(target_arch = "wasm32")]
-            // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
-            // us when that initialization is done and that we can start querying the list of midi
-            // devices. It's also annoying for users that don't care about MIDI to get a permission
-            // request, so I'll need this to be enabled explicitly for the Web version.
-            // The aldio latency is still so bad with the web version though,
-            // so I'm not sure if that's really worth it.
-            let midi = None;
+        // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
+        // us when that initialization is done and that we can start querying the list of midi
+        // devices. It's also annoying for users that don't care about MIDI to get a permission
+        // request, so I'll need this to be enabled explicitly for the Web version.
+        // The aldio latency is still so bad with the web version though,
+        // so I'm not sure if that's really worth it.
+        let midi = None;
 
         Context {
             key_release_timer: Default::default(),
@@ -318,26 +347,26 @@ pub fn main() {
         }
     }));
 
-    window.on_get_midi_note_name(|note| {
-        MidiNote(note).name()
-    });
+    window.on_get_midi_note_name(|note| MidiNote(note).name());
 
-    window.on_mod(|x, y| {
-        x % y
-    });
+    window.on_mod(|x, y| x % y);
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_select_instrument(move |instrument| {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::SelectInstrument(instrument as u32)).unwrap();
+        cloned_sound_send
+            .send(SoundMsg::SelectInstrument(instrument as u32))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.on_toggle_mute_instrument(move |instrument| {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::ToggleMuteInstrument(instrument as u32)).unwrap();
+        cloned_sound_send
+            .send(SoundMsg::ToggleMuteInstrument(instrument as u32))
+            .unwrap();
     });
 
     let cloned_sound_send = sound_send.clone();
@@ -363,8 +392,7 @@ pub fn main() {
             std::time::Duration::from_millis(15 * 6),
             Box::new(move || {
                 cloned_sound_send2.send(SoundMsg::ReleaseNote(note as u32)).unwrap();
-            })
-
+            }),
         );
     });
 
@@ -372,8 +400,7 @@ pub fn main() {
     window.on_octave_increased(move |octave_delta| {
         let window = window_weak.clone().upgrade().unwrap();
         let first_note = window.get_first_note();
-        if first_note <= 24 && octave_delta < 0
-            || first_note >= 96 && octave_delta > 0 {
+        if first_note <= 24 && octave_delta < 0 || first_note >= 96 && octave_delta > 0 {
             return;
         }
         window.set_first_note(first_note + octave_delta * 12);
@@ -392,7 +419,9 @@ pub fn main() {
     let cloned_sound_send = sound_send.clone();
     window.on_pattern_clicked(move |pattern_num| {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::SelectPattern(pattern_num as u32)).unwrap();
+        cloned_sound_send
+            .send(SoundMsg::SelectPattern(pattern_num as u32))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
@@ -406,7 +435,9 @@ pub fn main() {
     let cloned_sound_send = sound_send.clone();
     window.on_toggle_step_release(move |step_num| {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::ToggleStepRelease(step_num as u32)).unwrap();
+        cloned_sound_send
+            .send(SoundMsg::ToggleStepRelease(step_num as u32))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
@@ -437,7 +468,9 @@ pub fn main() {
     let cloned_sound_send = sound_send.clone();
     window.on_append_song_pattern(move |pattern_num| {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::AppendSongPattern(pattern_num as u32)).unwrap();
+        cloned_sound_send
+            .send(SoundMsg::AppendSongPattern(pattern_num as u32))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
@@ -483,7 +516,7 @@ pub fn main() {
                         '\u{8}' => {
                             Lazy::force(&*cloned_context);
                             cloned_sound_send.send(SoundMsg::SetErasing(true)).unwrap();
-                        },
+                        }
                         _ => (),
                     }
                 }
@@ -507,7 +540,6 @@ pub fn main() {
         Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::ApplySettings(settings)).unwrap();
     });
-
 
     // For WASM we need to wait for the user to trigger the creation of the sound
     // device through an input event. For other platforms, artificially force the

@@ -1,22 +1,22 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-use crate::ChannelActiveNote;
-use crate::ChannelTraceNote;
-use crate::MainWindow;
-use crate::Settings;
 use crate::synth_script::Channel;
 use crate::synth_script::RegSettings;
 use crate::synth_script::SynthScript;
 use crate::utils::MidiNote;
+use crate::ChannelActiveNote;
+use crate::ChannelTraceNote;
+use crate::MainWindow;
+use crate::Settings;
 use slint::Color;
 use slint::Model;
 use slint::SharedString;
 use slint::VecModel;
 use slint::Weak;
-use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 // The pass-through channel is otherwise too loud compared to mixed content.
 const SYNC_GAIN: f32 = 1.0 / 3.0;
@@ -81,13 +81,15 @@ impl Iterator for SyncPulse {
             None
         } else {
             match self.state {
-                PulseState::Zero => {
-                    Some(0.0)
-                },
+                PulseState::Zero => Some(0.0),
                 PulseState::Up(p, l) => {
-                    self.state = if p == 0 { PulseState::Down(self.period, l) } else { PulseState::Up(p - 1, l) };
+                    self.state = if p == 0 {
+                        PulseState::Down(self.period, l)
+                    } else {
+                        PulseState::Up(p - 1, l)
+                    };
                     Some(1.0)
-                },
+                }
                 PulseState::Down(p, l) => {
                     self.state = if p == 0 {
                         if l == 0 {
@@ -99,7 +101,7 @@ impl Iterator for SyncPulse {
                         PulseState::Down(p - 1, l)
                     };
                     Some(-1.0)
-                },
+                }
             }
         }
     }
@@ -149,13 +151,13 @@ impl Synth {
             sync_pulse: SyncPulse::new(settings.sync_enabled, sample_rate, 300, 2),
         }));
 
-        let player = Box::new(FakePlayer{
+        let player = Box::new(FakePlayer {
             sample_rate: sample_rate,
             state: output_data.clone(),
         });
         let mut dmg = rboy::Sound::new(player);
         // Already power it on.
-        dmg.wb( 0xff26, 0x80 );
+        dmg.wb(0xff26, 0x80);
 
         Synth {
             dmg: dmg,
@@ -269,13 +271,19 @@ impl Synth {
             Color::from_rgb_u8(0, 192, 0),
             Color::from_rgb_u8(64, 0, 192),
             Color::from_rgb_u8(0, 64, 192),
-            ];
+        ];
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let trace_model = handle.get_synth_trace_notes();
-            let trace_vec_model = trace_model.as_any().downcast_ref::<VecModel<ChannelTraceNote>>().unwrap();
+            let trace_vec_model = trace_model
+                .as_any()
+                .downcast_ref::<VecModel<ChannelTraceNote>>()
+                .unwrap();
             let active_model = handle.get_synth_active_notes();
-            let active_vec_model = active_model.as_any().downcast_ref::<VecModel<ChannelActiveNote>>().unwrap();
+            let active_vec_model = active_model
+                .as_any()
+                .downcast_ref::<VecModel<ChannelActiveNote>>()
+                .unwrap();
 
             while trace_vec_model.row_count() > 0 {
                 // FIXME: Provide the oldest tick number to the UI or get it from it

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::synth_script::Channel::*;
-use rhai::{AST, Array, Dynamic, Engine, FnPtr, Map, Scope};
 use rhai::plugin::*;
+use rhai::{Array, Dynamic, Engine, FnPtr, Map, Scope, AST};
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
@@ -18,7 +18,7 @@ use crate::sound_engine::NUM_INSTRUMENTS;
 // Only works if the function's return type is Result<_, Box<EvalAltResult>>
 macro_rules! runtime_check {
     ($cond : expr, $($err : tt) +) => {
-        if !$cond { 
+        if !$cond {
             return Err(format!($( $err )*).into());
         };
     }
@@ -27,21 +27,48 @@ macro_rules! runtime_check {
 macro_rules! set {
     ($this_rc: ident, $v: ident, $method: ident) => {
         $this_rc.borrow_mut().$method(0, $v)
-    }
+    };
 }
 
 macro_rules! set_multi {
     ($this_rc: ident, $frame_values: ident, $vtype: ty, $method: ident) => {{
-        runtime_check!($frame_values.len() == 2 && $frame_values.iter().all(|d| d.is::<Array>()),
-            concat!(stringify!($method), " should only be provided frame values, but got {:?}"), $frame_values);
+        runtime_check!(
+            $frame_values.len() == 2 && $frame_values.iter().all(|d| d.is::<Array>()),
+            concat!(
+                stringify!($method),
+                " should only be provided frame values, but got {:?}"
+            ),
+            $frame_values
+        );
         let timeline = $frame_values[0].clone_cast::<Array>();
         let values = $frame_values[1].clone_cast::<Array>();
-        runtime_check!(timeline.len() == values.len(),
-            concat!(stringify!($method), " should only be provided a timeline and values of the same length, but got {} vs {}"), timeline.len(), values.len());
-        runtime_check!(timeline.iter().all(|d| d.is::<i32>()),
-            concat!(stringify!($method), " should only be provided an i32 timeline, but got {:?}"), timeline);
-        runtime_check!(values.iter().all(|d| d.is::<$vtype>()),
-            concat!(stringify!($method), " should only be provided ", stringify!($vtype)," values, but got {:?}"), values);
+        runtime_check!(
+            timeline.len() == values.len(),
+            concat!(
+                stringify!($method),
+                " should only be provided a timeline and values of the same length, but got {} vs {}"
+            ),
+            timeline.len(),
+            values.len()
+        );
+        runtime_check!(
+            timeline.iter().all(|d| d.is::<i32>()),
+            concat!(
+                stringify!($method),
+                " should only be provided an i32 timeline, but got {:?}"
+            ),
+            timeline
+        );
+        runtime_check!(
+            values.iter().all(|d| d.is::<$vtype>()),
+            concat!(
+                stringify!($method),
+                " should only be provided ",
+                stringify!($vtype),
+                " values, but got {:?}"
+            ),
+            values
+        );
         let mut this = $this_rc.borrow_mut();
         let mut index = 0;
         for (wait_frames, d) in timeline.iter().zip(values.iter()) {
@@ -49,7 +76,7 @@ macro_rules! set_multi {
             this.$method(index, d.clone_cast::<$vtype>())?;
         }
         Ok(())
-    }}
+    }};
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -81,7 +108,7 @@ trait ScriptChannel {
 
             // FIXME: Also clear the wave table register settings for the wave channel.
             for i in range {
-                for a in base .. base + 5 {
+                for a in base..base + 5 {
                     settings[i % len].clear_reg(a)
                 }
             }
@@ -93,7 +120,7 @@ trait ScriptChannel {
         let maybe_range = self.active_settings_range();
         match maybe_range.as_mut() {
             Some(range) => range.end = range.end.max(to_frame + 1),
-            None => *maybe_range = Some(to_frame .. to_frame + 1),
+            None => *maybe_range = Some(to_frame..to_frame + 1),
         }
     }
 
@@ -117,7 +144,7 @@ trait ScriptChannel {
     }
 
     fn set_initialize(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(v == 0 || v == 1, "initialize must be 0 or 1, got {}", v);        
+        runtime_check!(v == 0 || v == 1, "initialize must be 0 or 1, got {}", v);
         self.orit_at_index(index, self.base() + 4, RegSetter::new(0x80, v as u8));
         Ok(())
     }
@@ -186,14 +213,14 @@ impl GbSquare {
             index,
             self.channel as u16 + 3,
             // Frequency LSB
-            RegSetter::new(0xff, (gb_freq & 0xff) as u8)
-            );
+            RegSetter::new(0xff, (gb_freq & 0xff) as u8),
+        );
         self.orit_at_index(
             index,
             self.channel as u16 + 4,
             // Frequency MSB
-            RegSetter::new(0x07, (gb_freq >> 8) as u8)
-            );
+            RegSetter::new(0x07, (gb_freq >> 8) as u8),
+        );
         Ok(())
     }
 
@@ -203,15 +230,15 @@ impl GbSquare {
         self.orit(
             self.channel as u16 + 1,
             // Length load
-            RegSetter::new(0x3f, 64 - length as u8)
-            );
+            RegSetter::new(0x3f, 64 - length as u8),
+        );
         self.orit(
             self.channel as u16 + 4,
             // Trigger
             RegSetter::new(0x80, 1)
                 // Length enable
-                | RegSetter::new(0x40, 1)
-            );
+                | RegSetter::new(0x40, 1),
+        );
         Ok(())
     }
 
@@ -221,24 +248,33 @@ impl GbSquare {
             // Trigger
             RegSetter::new(0x80, 1)
                 // Length enable
-                | RegSetter::new(0x40, 0)
-            );
+                | RegSetter::new(0x40, 0),
+        );
         Ok(())
     }
 
     pub fn to_gb_freq(freq: f64) -> i32 {
-        2048 - (131072.0/freq).round() as i32
+        2048 - (131072.0 / freq).round() as i32
     }
 }
 impl ScriptChannel for GbSquare {
-    fn base(&self) -> u16 { self.channel as u16 }
-    fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> { self.settings_ring.borrow_mut() }
-    fn frame_number(&mut self) -> Ref<'_, usize> { self.frame_number.borrow() }
-    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.previous_settings_range }
-    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.active_settings_range }
+    fn base(&self) -> u16 {
+        self.channel as u16
+    }
+    fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> {
+        self.settings_ring.borrow_mut()
+    }
+    fn frame_number(&mut self) -> Ref<'_, usize> {
+        self.frame_number.borrow()
+    }
+    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.previous_settings_range
+    }
+    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.active_settings_range
+    }
 }
 pub type SharedGbSquare = Rc<RefCell<GbSquare>>;
-
 
 #[derive(Debug, Clone)]
 pub struct GbWave {
@@ -262,8 +298,16 @@ impl GbWave {
     }
 
     pub fn set_table(&mut self, index: usize, hex_string: String) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(hex_string.len() == 32, "table must have a length of 32, got {}", hex_string.len());
-        runtime_check!(hex_string.chars().all(|c| c >= '0' && c <= '9' || c >= 'a' && c <= 'f' ), "table must only contain characters [0-9a-f], got {}", hex_string);
+        runtime_check!(
+            hex_string.len() == 32,
+            "table must have a length of 32, got {}",
+            hex_string.len()
+        );
+        runtime_check!(
+            hex_string.chars().all(|c| c >= '0' && c <= '9' || c >= 'a' && c <= 'f'),
+            "table must only contain characters [0-9a-f], got {}",
+            hex_string
+        );
 
         // Each hexadecimal character in the hex string is one 4 bits sample.
         for i in (0..hex_string.len()).step_by(2) {
@@ -281,14 +325,14 @@ impl GbWave {
             index,
             Wave as u16 + 3,
             // Frequency LSB
-            RegSetter::new(0xff, (gb_freq & 0xff) as u8)
-            );
+            RegSetter::new(0xff, (gb_freq & 0xff) as u8),
+        );
         self.orit_at_index(
             index,
             Wave as u16 + 4,
             // Frequency MSB
-            RegSetter::new(0x07, (gb_freq >> 8) as u8)
-            );
+            RegSetter::new(0x07, (gb_freq >> 8) as u8),
+        );
         Ok(())
     }
 
@@ -298,15 +342,15 @@ impl GbWave {
         self.orit(
             Wave as u16 + 1,
             // Length load
-            RegSetter::new(0xff, (256 - length) as u8)
-            );
+            RegSetter::new(0xff, (256 - length) as u8),
+        );
         self.orit(
             Wave as u16 + 4,
             // Trigger
             RegSetter::new(0x80, 1)
                 // Length enable
-                | RegSetter::new(0x40, 1)
-            );
+                | RegSetter::new(0x40, 1),
+        );
         Ok(())
     }
 
@@ -316,21 +360,31 @@ impl GbWave {
             // Trigger
             RegSetter::new(0x80, 1)
                 // Length enable
-                | RegSetter::new(0x40, 0)
-            );
+                | RegSetter::new(0x40, 0),
+        );
         Ok(())
     }
 
     pub fn to_gb_freq(freq: f64) -> i32 {
-        2048 - (65536.0/freq).round() as i32
+        2048 - (65536.0 / freq).round() as i32
     }
 }
 impl ScriptChannel for GbWave {
-    fn base(&self) -> u16 { self.channel as u16 }
-    fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> { self.settings_ring.borrow_mut() }
-    fn frame_number(&mut self) -> Ref<'_, usize> { self.frame_number.borrow() }
-    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.previous_settings_range }
-    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.active_settings_range }
+    fn base(&self) -> u16 {
+        self.channel as u16
+    }
+    fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> {
+        self.settings_ring.borrow_mut()
+    }
+    fn frame_number(&mut self) -> Ref<'_, usize> {
+        self.frame_number.borrow()
+    }
+    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.previous_settings_range
+    }
+    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.active_settings_range
+    }
 }
 pub type SharedGbWave = Rc<RefCell<GbWave>>;
 
@@ -389,15 +443,15 @@ impl GbNoise {
         self.orit(
             Noise as u16 + 1,
             // Length load
-            RegSetter::new(0x3f, 64 - length as u8)
-            );
+            RegSetter::new(0x3f, 64 - length as u8),
+        );
         self.orit(
             Noise as u16 + 4,
             // Trigger
             RegSetter::new(0x80, 1)
                 // Length enable
-                | RegSetter::new(0x40, 1)
-            );
+                | RegSetter::new(0x40, 1),
+        );
         Ok(())
     }
 
@@ -405,17 +459,27 @@ impl GbNoise {
         self.orit(
             Noise as u16 + 4,
             // Trigger
-            RegSetter::new(0x80, 1)
-            );
+            RegSetter::new(0x80, 1),
+        );
         Ok(())
     }
-}    
+}
 impl ScriptChannel for GbNoise {
-    fn base(&self) -> u16 { self.channel as u16 }
-    fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> { self.settings_ring.borrow_mut() }
-    fn frame_number(&mut self) -> Ref<'_, usize> { self.frame_number.borrow() }
-    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.previous_settings_range }
-    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> { &mut self.active_settings_range }
+    fn base(&self) -> u16 {
+        self.channel as u16
+    }
+    fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> {
+        self.settings_ring.borrow_mut()
+    }
+    fn frame_number(&mut self) -> Ref<'_, usize> {
+        self.frame_number.borrow()
+    }
+    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.previous_settings_range
+    }
+    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.active_settings_range
+    }
 }
 pub type SharedGbNoise = Rc<RefCell<GbNoise>>;
 
@@ -467,7 +531,6 @@ pub mod gb_api {
     pub const DIV_80: i32 = 5;
     pub const DIV_96: i32 = 6;
     pub const DIV_112: i32 = 7;
-
 
     /// Just a clearer wrapper for [[t1, t2, ...], [v1, v2, ...]], which is what multi setters expect.
     #[rhai_fn(global, name = "frames", return_raw)]
@@ -554,7 +617,10 @@ pub mod gb_api {
         set!(this_rc, v, set_env_start)
     }
     #[rhai_fn(set = "env_start", pure, return_raw)]
-    pub fn set_multi_square_env_start(this_rc: &mut SharedGbSquare, values: Vec<Dynamic>) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_multi_square_env_start(
+        this_rc: &mut SharedGbSquare,
+        values: Vec<Dynamic>,
+    ) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, i32, set_env_start)
     }
 
@@ -668,7 +734,6 @@ pub mod gb_api {
         this_rc.borrow_mut().trigger()
     }
 
-
     #[rhai_fn(set = "env_start", pure, return_raw)]
     pub fn set_noise_env_start(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_env_start)
@@ -756,9 +821,12 @@ impl RegSetter {
     pub fn new(mask: u8, value: u8) -> RegSetter {
         let shifted = value << mask.trailing_zeros();
         assert!(shifted & mask == shifted);
-        RegSetter {mask: mask, value: shifted}
+        RegSetter {
+            mask: mask,
+            value: shifted,
+        }
     }
-    const EMPTY: RegSetter = RegSetter {mask: 0, value: 0};
+    const EMPTY: RegSetter = RegSetter { mask: 0, value: 0 };
 }
 impl BitOr for RegSetter {
     type Output = Self;
@@ -785,7 +853,9 @@ pub struct RegSettings {
 
 impl RegSettings {
     pub fn new() -> RegSettings {
-        RegSettings { registers: [RegSetter::EMPTY; 48] }
+        RegSettings {
+            registers: [RegSetter::EMPTY; 48],
+        }
     }
 
     pub fn orit(&mut self, addr: u16, with: RegSetter) {
@@ -798,9 +868,16 @@ impl RegSettings {
     where
         F: FnMut(u16, RegSetter),
     {
-        self.registers.iter()
+        self.registers
+            .iter()
             .enumerate()
-            .filter_map(|(a, &r)| if r.mask != 0 { Some((a as u16 + 0xff10, r)) } else { None } )
+            .filter_map(|(a, &r)| {
+                if r.mask != 0 {
+                    Some((a as u16 + 0xff10, r))
+                } else {
+                    None
+                }
+            })
             .for_each(|(a, r)| f(a, r))
     }
 
@@ -834,19 +911,31 @@ impl SynthScript {
 
     pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
         let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(vec!["".to_string(); NUM_INSTRUMENTS]));
-        let instrument_states = Rc::new(RefCell::new(vec![InstrumentState{press_function: None, release_function: None, pressed_note: None}; NUM_INSTRUMENTS]));
+        let instrument_states = Rc::new(RefCell::new(vec![
+            InstrumentState {
+                press_function: None,
+                release_function: None,
+                pressed_note: None
+            };
+            NUM_INSTRUMENTS
+        ]));
         let instrument_ids_clone = instrument_ids.clone();
         let instrument_states_clone = instrument_states.clone();
 
         let mut engine = Engine::new();
 
         engine.set_max_expr_depths(1024, 1024);
-        engine.register_type::<SharedGbBindings>()
-              .register_type::<SharedGbSquare>();
+        engine
+            .register_type::<SharedGbBindings>()
+            .register_type::<SharedGbSquare>();
         engine.register_result_fn("set_instrument",
             move |i: i32, instrument: Dynamic| {
-                runtime_check!(i >= 1 && i <= 16, "set_instrument: index must be 1 <= i <= 16, got {}", i);        
-                runtime_check!(instrument.type_id() == TypeId::of::<Map>(), "set_instrument: The instrument must be an object map, got {}", instrument.type_name());        
+                runtime_check!(i >= 1 && i <= 16,
+                    "set_instrument: index must be 1 <= i <= 16, got {}",
+                    i);
+                runtime_check!(instrument.type_id() == TypeId::of::<Map>(),
+                    "set_instrument: The instrument must be an object map, got {}",
+                    instrument.type_name());
 
                 let mut map = instrument.try_cast::<Map>().unwrap();
 
@@ -856,12 +945,12 @@ impl SynthScript {
                     instrument_ids_clone.borrow_mut()[(i - 1) as usize] = i.to_string();
                 }
                 #[cfg(not(target_arch = "wasm32"))] {
-                    instrument_ids_clone.borrow_mut()[(i - 1) as usize] = 
+                    instrument_ids_clone.borrow_mut()[(i - 1) as usize] =
                         if let Some(id) = map.remove("id").map(|o| o.into_string().unwrap()) {
                             id
                         } else {
                             i.to_string()
-                        }                    
+                        }
                 }
 
                 instrument_states_clone.borrow_mut()[(i - 1) as usize].release_function = match map.remove("release") {
@@ -869,7 +958,9 @@ impl SynthScript {
                         None,
 
                     Some(f_dyn) => {
-                        runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(), "set_instrument: The \"release\" property must be a function pointer or an anonymous function, got a {}", f_dyn.type_name());        
+                        runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(),
+                            "set_instrument: The \"release\" property must be a function pointer or an anonymous function, got a {}",
+                            f_dyn.type_name());
 
                         let f = f_dyn.try_cast::<FnPtr>().unwrap();
                         Some(f)
@@ -880,7 +971,9 @@ impl SynthScript {
                         Err(format!("set_instrument: The instrument must have a \"press\" property").into()),
 
                     Some(f_dyn) => {
-                        runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(), "set_instrument: The \"press\" property must be a function pointer or an anonymous function, got a {}", f_dyn.type_name());        
+                        runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(),
+                            "set_instrument: The \"press\" property must be a function pointer or an anonymous function, got a {}",
+                            f_dyn.type_name());
 
                         let f = f_dyn.try_cast::<FnPtr>().unwrap();
                         instrument_states_clone.borrow_mut()[(i - 1) as usize].press_function = Some(f);
@@ -891,46 +984,42 @@ impl SynthScript {
         engine.register_static_module("gb", exported_module!(gb_api).into());
 
         let frame_number = Rc::new(RefCell::new(0));
-        let square1 = Rc::new(RefCell::new(
-            GbSquare {
-                channel: Square1,
-                settings_ring: settings_ring.clone(),
-                frame_number: frame_number.clone(),
-                previous_settings_range: None,
-                active_settings_range: None,
-            }));
-        let square2 = Rc::new(RefCell::new(
-            GbSquare {
-                channel: Square2,
-                settings_ring: settings_ring.clone(),
-                frame_number: frame_number.clone(),
-                previous_settings_range: None,
-                active_settings_range: None,
-            }));
-        let wave = Rc::new(RefCell::new(
-            GbWave {
-                channel: Wave,
-                settings_ring: settings_ring.clone(),
-                frame_number: frame_number.clone(),
-                previous_settings_range: None,
-                active_settings_range: None,
-            }));
-        let noise = Rc::new(RefCell::new(
-            GbNoise {
-                channel: Noise,
-                settings_ring: settings_ring.clone(),
-                frame_number: frame_number.clone(),
-                previous_settings_range: None,
-                active_settings_range: None,
-            }));
-        let gb = Rc::new(RefCell::new(GbBindings{
+        let square1 = Rc::new(RefCell::new(GbSquare {
+            channel: Square1,
+            settings_ring: settings_ring.clone(),
+            frame_number: frame_number.clone(),
+            previous_settings_range: None,
+            active_settings_range: None,
+        }));
+        let square2 = Rc::new(RefCell::new(GbSquare {
+            channel: Square2,
+            settings_ring: settings_ring.clone(),
+            frame_number: frame_number.clone(),
+            previous_settings_range: None,
+            active_settings_range: None,
+        }));
+        let wave = Rc::new(RefCell::new(GbWave {
+            channel: Wave,
+            settings_ring: settings_ring.clone(),
+            frame_number: frame_number.clone(),
+            previous_settings_range: None,
+            active_settings_range: None,
+        }));
+        let noise = Rc::new(RefCell::new(GbNoise {
+            channel: Noise,
+            settings_ring: settings_ring.clone(),
+            frame_number: frame_number.clone(),
+            previous_settings_range: None,
+            active_settings_range: None,
+        }));
+        let gb = Rc::new(RefCell::new(GbBindings {
             settings_ring: settings_ring.clone(),
             frame_number: frame_number,
             square1: square1,
             square2: square2,
             wave: wave,
             noise: noise,
-            }));
+        }));
 
         SynthScript {
             script_engine: engine,
@@ -946,12 +1035,10 @@ impl SynthScript {
     }
 
     fn load_default_instruments(&mut self) {
-        self.script_engine.compile(SynthScript::DEFAULT_INSTRUMENTS)
+        self.script_engine
+            .compile(SynthScript::DEFAULT_INSTRUMENTS)
             .map_err(|e| Box::new(e) as Box<dyn Error>)
-            .and_then(
-                |ast| self.set_instruments_ast(ast)
-                    .map_err(|e| e as Box<dyn Error>)
-            )
+            .and_then(|ast| self.set_instruments_ast(ast).map_err(|e| e as Box<dyn Error>))
             .expect("Error loading default instruments.");
     }
 
@@ -965,45 +1052,54 @@ impl SynthScript {
     #[cfg(target_arch = "wasm32")]
     pub fn load(&mut self, maybe_base64: Option<String>) {
         if let Some(base64) = maybe_base64 {
-            let maybe_ast = self.deserialize_instruments(base64)
-                .and_then(
-                    |ast| self.set_instruments_ast(ast)
-                        .map_err(|e| e as Box<dyn Error>)
-                );
+            let maybe_ast = self
+                .deserialize_instruments(base64)
+                .and_then(|ast| self.set_instruments_ast(ast).map_err(|e| e as Box<dyn Error>));
 
             match maybe_ast {
                 Ok(ast) => {
                     log!("Loaded the project instruments from the URL.");
-                },
+                }
                 Err(e) => {
-                    elog!("Couldn't load the project instruments from the URL, using default instruments.\n\tError: {:?}", e);
+                    elog!(
+                        "Couldn't load the project instruments from the URL, using default instruments.\n\tError: {:?}",
+                        e
+                    );
                     self.load_default_instruments();
-                },
-            }            
+                }
+            }
         } else {
             log!("No instruments provided in the URL, using default instruments.");
-                    self.load_default_instruments();
+            self.load_default_instruments();
         }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load(&mut self, project_instruments_path: &std::path::Path) {
         if project_instruments_path.exists() {
-            let maybe_ast =
-                self.script_engine.compile_file(project_instruments_path.to_path_buf())
+            let maybe_ast = self
+                .script_engine
+                .compile_file(project_instruments_path.to_path_buf())
                 .and_then(|ast| self.set_instruments_ast(ast));
 
             match maybe_ast {
                 Ok(_) => {
                     log!("Loaded project instruments from file {:?}", project_instruments_path);
-                },
+                }
                 Err(e) => {
-                    elog!("Couldn't load project instruments from file {:?}, using default instruments.\n\tError: {:?}", project_instruments_path, e);
+                    elog!(
+                        "Couldn't load project instruments from file {:?}, using default instruments.\n\tError: {:?}",
+                        project_instruments_path,
+                        e
+                    );
                     self.load_default_instruments();
-                },
-            }            
+                }
+            }
         } else {
-            log!("Project instruments file {:?} doesn't exist, using default instruments.", project_instruments_path);
+            log!(
+                "Project instruments file {:?} doesn't exist, using default instruments.",
+                project_instruments_path
+            );
             self.load_default_instruments();
         }
     }
@@ -1022,8 +1118,8 @@ impl SynthScript {
             let result: Result<(), _> = f.call(
                 &self.script_engine,
                 &self.script_ast,
-                ( note as i32, Self::note_to_freq(note), )
-                );
+                (note as i32, Self::note_to_freq(note)),
+            );
             if let Err(e) = result {
                 elog!("{}", e)
             }
@@ -1039,12 +1135,11 @@ impl SynthScript {
             let result: Result<(), _> = f.call(
                 &self.script_engine,
                 &self.script_ast,
-                ( note as i32, Self::note_to_freq(note), )
-                );
+                (note as i32, Self::note_to_freq(note)),
+            );
             if let Err(e) = result {
                 elog!("{}", e)
             }
-
         }
     }
 
@@ -1054,10 +1149,7 @@ impl SynthScript {
         let mut scope = Scope::new();
         scope.push("gb", self.script_context.clone());
 
-        self.script_engine.run_ast_with_scope(
-            &mut scope,
-            &self.script_ast
-            )
+        self.script_engine.run_ast_with_scope(&mut scope, &self.script_ast)
     }
 
     fn note_to_freq(note: u32) -> f64 {

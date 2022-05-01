@@ -54,8 +54,7 @@ pub fn encode_file(path: PathBuf) -> String {
 #[cfg(target_arch = "wasm32")]
 pub fn decode_string(base64: &str) -> Result<String, Box<dyn std::error::Error>> {
     let decoded = base64_url::decode(&base64)?;
-    let decompressed = miniz_oxide::inflate::decompress_to_vec(decoded.as_slice())
-        .map_err(|s| format!("{:?}", s))?;
+    let decompressed = miniz_oxide::inflate::decompress_to_vec(decoded.as_slice()).map_err(|s| format!("{:?}", s))?;
     let utf8 = String::from_utf8(decompressed)?;
     Ok(utf8)
 }

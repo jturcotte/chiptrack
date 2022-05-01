@@ -10,10 +10,10 @@ pub struct Midi {
 
 impl Midi {
     pub fn new<F, G>(press_callback: F, release_callback: G) -> Midi
-        where
-            F: Fn(u32) + std::clone::Clone + std::marker::Send + 'static,
-            G: Fn(u32) + std::clone::Clone + std::marker::Send + 'static,
-        {
+    where
+        F: Fn(u32) + std::clone::Clone + std::marker::Send + 'static,
+        G: Fn(u32) + std::clone::Clone + std::marker::Send + 'static,
+    {
         let callback2 = move |_stamp: u64, message: &[u8], _: &mut ()| {
             let event = LiveEvent::parse(message).unwrap();
             println!("{:?} hex: {:x?}", event, message);
@@ -23,7 +23,7 @@ impl Midi {
                         println!("release note {} on channel {} vel {}", key, channel, vel);
                         release_callback(key.as_int() as u32);
                     }
-                    MidiMessage::NoteOn { key, vel }  => {
+                    MidiMessage::NoteOn { key, vel } => {
                         println!("press note {} on channel {} vel {}", key, channel, vel);
                         press_callback(key.as_int() as u32);
                     }
@@ -40,15 +40,20 @@ impl Midi {
         // Just connect to all available input MIDI devices for now.
         let port_count = MidiInput::new("").unwrap().port_count();
         log!("Found {} midi ports", port_count);
-        let connections: Vec<_> =
-            (0 .. port_count).map(|i| {
+        let connections: Vec<_> = (0..port_count)
+            .map(|i| {
                 let mut midi_in = MidiInput::new("Chiptrack").unwrap();
                 midi_in.ignore(midir::Ignore::All);
                 let port = &midi_in.ports()[i];
                 log!("Connecting to port {}", midi_in.port_name(&port).unwrap());
-                midi_in.connect(&port, &format!("Chiptrack Input Port {}", i), callback2.clone(), ()).unwrap()
-            }).collect();
+                midi_in
+                    .connect(&port, &format!("Chiptrack Input Port {}", i), callback2.clone(), ())
+                    .unwrap()
+            })
+            .collect();
 
-        Midi { _connections: connections }
+        Midi {
+            _connections: connections,
+        }
     }
 }
