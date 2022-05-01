@@ -33,6 +33,9 @@ midly = "0.5"
 
 [dependencies.slint]
 version = "0.2"
+default-features = false
+# Re-enable everything except "backend-qt"
+features = ["std", "backend-gl-all", "compat-0-2-0"]
 
 [build-dependencies.slint-build]
 version = "0.2"

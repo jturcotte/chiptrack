@@ -20,8 +20,7 @@ It uses:
 # sudo apt install libasound2-dev
 # OR
 # sudo yum install alsa-lib-devel
-git submodule update --init
-SLINT_NO_QT=1 cargo run --release
+cargo run --release
 ```
 
 ## License
