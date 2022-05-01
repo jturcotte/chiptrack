@@ -109,7 +109,11 @@ SequencerStep := Rectangle {
     property<bool> release;
     property<string> name;
     property<bool> beat;
-    background: press || release ? #c0c0c0 : white;
+    background: press
+        ? #c0c0c0
+        : release 
+            ? #f0f0f0
+            : white;
     border_width: beat || highlighted ? 2px : 1px;
     border_color: highlighted ? black : #c0c0c0;
     border_radius: width/8;
