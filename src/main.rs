@@ -112,6 +112,48 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
     }
 }
 
+fn check_if_project_changed(project_name: &str, notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) -> () {
+    while let Ok(msg) = notify_recv.try_recv() {
+        let instruments_path = SoundEngine::project_instruments_path(&project_name);
+        let instruments = instruments_path.file_name();
+        let reload = match msg {
+            DebouncedEvent::Write(path) if path.file_name() == instruments => true,
+            DebouncedEvent::Create(path) if path.file_name() == instruments => true,
+            DebouncedEvent::Remove(path) if path.file_name() == instruments => true,
+            DebouncedEvent::Rename(from, to) if from.file_name() == instruments || to.file_name() == instruments => true,
+            _ => false,
+        };
+        if reload {
+            #[cfg(not(target_arch = "wasm32"))]
+            engine.synth.load(instruments_path.as_path());
+        }
+    }
+}
+
+fn process_audio_messages(project_name: &str, sound_recv: &mpsc::Receiver<SoundMsg>, engine: &mut SoundEngine) -> () {
+    while let Ok(msg) = sound_recv.try_recv() {
+        match msg {
+            SoundMsg::PressNote(note) => engine.press_note(note),
+            SoundMsg::ReleaseNote(note) => engine.release_note(note),
+            SoundMsg::SelectInstrument(instrument) => engine.select_instrument(instrument),
+            SoundMsg::ToggleMuteInstrument(instrument) => engine.sequencer.toggle_mute_instrument(instrument),
+            SoundMsg::SelectPattern(pattern_num) => engine.sequencer.select_pattern(pattern_num),
+            SoundMsg::ToggleStep(toggled) => engine.sequencer.toggle_step(toggled),
+            SoundMsg::ToggleStepRelease(toggled) => engine.sequencer.toggle_step_release(toggled),
+            SoundMsg::ManuallyAdvanceStep(forwards) => engine.sequencer.manually_advance_step(forwards),
+            SoundMsg::SetPlaying(toggled) => engine.sequencer.set_playing(toggled),
+            SoundMsg::SetRecording(toggled) => engine.sequencer.set_recording(toggled),
+            SoundMsg::SetErasing(toggled) => engine.sequencer.set_erasing(toggled),
+            SoundMsg::AppendSongPattern(pattern_num) => engine.sequencer.append_song_pattern(pattern_num),
+            SoundMsg::RemoveLastSongPattern => engine.sequencer.remove_last_song_pattern(),
+            SoundMsg::ClearSongPatterns => engine.sequencer.clear_song_patterns(),
+            SoundMsg::SaveProject => engine.save_project(&project_name),
+            SoundMsg::MuteInstruments => engine.synth.mute_instruments(),
+            SoundMsg::ApplySettings(settings) => engine.apply_settings(settings),
+        }
+    }
+}
+
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub fn main() {
     // This provides better error messages in debug mode.
@@ -209,42 +251,8 @@ pub fn main() {
                         }
                         let engine = maybe_engine.as_mut().unwrap();
 
-                        while let Ok(msg) = notify_recv.try_recv() {
-                            let instruments_path = SoundEngine::project_instruments_path(&project_name);
-                            let instruments = instruments_path.file_name();
-                            let reload = match msg {
-                                DebouncedEvent::Write(path) if path.file_name() == instruments => true,
-                                DebouncedEvent::Create(path) if path.file_name() == instruments => true,
-                                DebouncedEvent::Remove(path) if path.file_name() == instruments => true,
-                                DebouncedEvent::Rename(from, to) if from.file_name() == instruments || to.file_name() == instruments => true,
-                                _ => false,
-                            };
-                            if reload {
-                                #[cfg(not(target_arch = "wasm32"))]
-                                engine.synth.load(instruments_path.as_path());
-                            }
-                        }
-                        while let Ok(msg) = sound_recv.try_recv() {
-                            match msg {
-                                SoundMsg::PressNote(note) => engine.press_note(note),
-                                SoundMsg::ReleaseNote(note) => engine.release_note(note),
-                                SoundMsg::SelectInstrument(instrument) => engine.select_instrument(instrument),
-                                SoundMsg::ToggleMuteInstrument(instrument) => engine.sequencer.toggle_mute_instrument(instrument),
-                                SoundMsg::SelectPattern(pattern_num) => engine.sequencer.select_pattern(pattern_num),
-                                SoundMsg::ToggleStep(toggled) => engine.sequencer.toggle_step(toggled),
-                                SoundMsg::ToggleStepRelease(toggled) => engine.sequencer.toggle_step_release(toggled),
-                                SoundMsg::ManuallyAdvanceStep(forwards) => engine.sequencer.manually_advance_step(forwards),
-                                SoundMsg::SetPlaying(toggled) => engine.sequencer.set_playing(toggled),
-                                SoundMsg::SetRecording(toggled) => engine.sequencer.set_recording(toggled),
-                                SoundMsg::SetErasing(toggled) => engine.sequencer.set_erasing(toggled),
-                                SoundMsg::AppendSongPattern(pattern_num) => engine.sequencer.append_song_pattern(pattern_num),
-                                SoundMsg::RemoveLastSongPattern => engine.sequencer.remove_last_song_pattern(),
-                                SoundMsg::ClearSongPatterns => engine.sequencer.clear_song_patterns(),
-                                SoundMsg::SaveProject => engine.save_project(&project_name),
-                                SoundMsg::MuteInstruments => engine.synth.mute_instruments(),
-                                SoundMsg::ApplySettings(settings) => engine.apply_settings(settings),
-                            }
-                        }
+                        check_if_project_changed(&project_name, &notify_recv, engine);
+                        process_audio_messages(&project_name, &sound_recv, engine);
 
                         let len = dest.len();
                         let mut di = 0;
