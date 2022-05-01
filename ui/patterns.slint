@@ -1,0 +1,125 @@
+import {
+    Button,
+    ComboBox,
+    GridBox,
+    HorizontalBox,
+    VerticalBox
+} from "std-widgets.slint";
+import {
+    SongPatternData,
+    PatternData,
+    StepData,
+    InstrumentData,
+    NoteData,
+    ChannelTraceNote,
+    ChannelActiveNote
+} from "data.slint";
+
+SequencerPattern := Rectangle {
+    callback clicked();
+    property<int> number: 0;
+    property<bool> highlighted;
+    property<bool> empty;
+    background: empty ? white : #c0c0c0;
+    border_width: 1px;
+    border_color: highlighted ? black : #a0a0a0;
+    border_radius: width/8;
+    Text {
+        text: "P" + (number + 1);
+        width: 100%;
+        height: 100%;
+        font_size: min(width, height) / 2.5;
+        color: highlighted ? #505050 : #a0a0a0;
+        horizontal_alignment: center;
+        vertical_alignment: center;
+    }
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.clicked(); }
+    }
+}
+
+SequencerStep := Rectangle {
+    callback pressed();
+    callback right_pressed();
+    property<bool> highlighted;
+    property<bool> press;
+    property<bool> release;
+    property<string> name;
+    property<bool> beat;
+    background: press
+        ? #c0c0c0
+        : release 
+            ? #f0f0f0
+            : white;
+    border_width: beat || highlighted ? 2px : 1px;
+    border_color: highlighted ? black : #c0c0c0;
+    border_radius: width/8;
+    l := Text {
+        text:
+            (press ? name : "") + 
+            (press && release ? "" : (release ? "\n⇥" : "\n↦"));
+        visible: press || release;
+        y: (parent.height - height) / 2;
+        width: 100%;
+        // height: 100%;
+        font_size: width / 3;
+        color: #505050;
+        horizontal_alignment: center;
+        vertical_alignment: center;
+    }
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) {
+                if (e.button == PointerEventButton.left) {
+                    root.pressed();
+                } else if (e.button == PointerEventButton.right) {
+                    root.right_pressed();
+                }
+            }
+        }
+    }
+}
+
+PatternsPanel := GridBox {
+    callback pattern_clicked(int);
+    callback toggle_step(int);
+    callback toggle_step_release(int);
+    property<[PatternData]> sequencer_patterns;
+    property<[StepData]> sequencer_steps;
+
+    Row {
+        HorizontalLayout {
+            spacing: 2px;
+
+            for pattern[idx] in sequencer_patterns:
+            SequencerPattern {
+                number: idx;
+                highlighted: pattern.active;
+                empty: pattern.empty;
+                clicked => { root.pattern_clicked(idx); }
+            }
+        }
+    }
+    Row {
+        HorizontalLayout {
+            spacing: 2px;
+
+            for step[idx] in sequencer_steps:
+            SequencerStep {
+                highlighted: step.active;
+                press: step.press;
+                release: step.release;
+                name: step.note_name;
+                beat: mod(idx, 4) == 0;
+                pressed => { root.toggle_step(idx); }
+                right_pressed => { root.toggle_step_release(idx); }
+            }
+        }
+    }
+}
+
+export { SequencerPattern, PatternsPanel }
