@@ -38,6 +38,7 @@ version = "0.2"
 version = "0.2"
 
 [dependencies.rboy]
-path = "rboy"
+git = "https://github.com/jturcotte/rboy.git"
+rev = "836b4e7a58288a29c13bf7f8b967358c7331ee41"
 # Use as a lib, features are used by its bin's main.rs only.
 default-features = false
