@@ -41,7 +41,13 @@ set_instrument(2, #{
         gb.square1.env_dir = gb::ENV_DEC;
         gb.square1.env_period = 0;
         gb.square1.freq = freq;
-        gb.square1.trigger_with_length(64);
+        gb.square1.initialize = true;
+    },
+    release: |note, freq| {
+        let t =                         [0,   1,   3,   2,   1];
+        gb.square1.env_start = t.frames([0xd, 0xd, 0x6, 0x1, 0x0]);
+        gb.square1.env_dir = gb::ENV_INC;
+        gb.square1.env_period = 0;
     },
 });
 
