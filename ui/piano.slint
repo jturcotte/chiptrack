@@ -1,23 +1,5 @@
-import {
-    Button,
-    ComboBox,
-    GridBox,
-    HorizontalBox,
-    VerticalBox
-} from "std-widgets.slint";
-import {
-    SongPatternData,
-    PatternData,
-    StepData,
-    InstrumentData,
-    NoteData,
-    ChannelTraceNote,
-    ChannelActiveNote
-} from "data.slint";
-
-import {
-    GlobalUtils
-} from "globals.slint";
+import { NoteData } from "data.slint";
+import { GlobalUtils } from "globals.slint";
 
 PianoKey :=  Rectangle {
     property<bool> highlighted;
