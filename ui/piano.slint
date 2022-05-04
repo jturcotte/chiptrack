@@ -1,0 +1,82 @@
+import {
+    Button,
+    ComboBox,
+    GridBox,
+    HorizontalBox,
+    VerticalBox
+} from "std-widgets.slint";
+import {
+    SongPatternData,
+    PatternData,
+    StepData,
+    InstrumentData,
+    NoteData,
+    ChannelTraceNote,
+    ChannelActiveNote
+} from "data.slint";
+
+import {
+    GlobalUtils
+} from "globals.slint";
+
+PianoKey :=  Rectangle {
+    property<bool> highlighted;
+    property<bool> is_black: false;
+    property<string> note_name;
+    callback pressed();
+    callback released();
+    background: {
+        if (is_black != highlighted) {
+            black;
+        } else {
+            white;
+        }
+    };
+    border_color: black;
+    border_width: 1px;
+    Text {
+        text: note_name;
+        width: 100%;
+        height: 98%;
+        font_size: width / 3;
+        color: #505050;
+        horizontal_alignment: center;
+        vertical_alignment: bottom;
+    }
+    area := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        pointer-event(e) => {
+            if (e.button == PointerEventButton.left) {
+                if (e.kind == PointerEventKind.down) {
+                    root.pressed();
+                } else {
+                    root.released();
+                }
+            }
+        }
+    }
+}
+
+Piano := Rectangle {
+    property<[NoteData]> notes;
+    callback note_pressed(int);
+    callback note_released(int);
+
+    for note[idx] in notes:
+    PianoKey {
+        note_name: idx == 0 ? GlobalUtils.get_midi_note_name(note.note_number) : "";
+        is_black: note.is_black;
+        x: note.is_black
+            ? (note.key_pos + 1) * floor(parent.width / 8px) * 1px - width / 2
+            : note.key_pos * floor(parent.width / 8px) * 1px;
+        width: is_black
+            ? parent.width / 8 * 0.8
+            : floor(parent.width / 8px) * 1px + 1px;
+
+        height: is_black ? 60% : 100%;
+        highlighted: note.active;
+        pressed => { note_pressed(note.note_number); }
+        released => { note_released(note.note_number); }
+    }
+}

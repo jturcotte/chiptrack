@@ -1,0 +1,128 @@
+import {
+    SongPatternData,
+    PatternData,
+    StepData,
+    InstrumentData,
+    NoteData,
+    ChannelTraceNote,
+    ChannelActiveNote
+} from "data.slint";
+
+OctaveIndicator := Rectangle {
+    border_width: 1px;
+    border_color: black;
+    background: white;
+    Rectangle {
+        background: black;
+        y: 1 * parent.height / 7px * 1px - height / 2;
+        height: parent.height / 7 * 0.8;
+        width: 60%;
+    }
+    Rectangle {
+        background: black;
+        y: 2 * parent.height / 7px * 1px - height / 2;
+        height: parent.height / 7 * 0.8;
+        width: 60%;
+    }
+    Rectangle {
+        background: black;
+        y: 3 * parent.height / 7px * 1px - height / 2;
+        height: parent.height / 7 * 0.8;
+        width: 60%;
+    }
+    Rectangle {
+        background: black;
+        y: 5 * parent.height / 7px * 1px - height / 2;
+        height: parent.height / 7 * 0.8;
+        width: 60%;
+    }
+    Rectangle {
+        background: black;
+        y: 6 * parent.height / 7px * 1px - height / 2;
+        height: parent.height / 7 * 0.8;
+        width: 60%;
+    }
+}
+
+Visualization := VerticalLayout {
+    property<[ChannelTraceNote]> synth_trace_notes;
+    property<[ChannelActiveNote]> synth_active_notes;
+    property<int> current_tick_number;
+
+    visualization := Rectangle {
+        property<int> visible_octaves: 4;
+        property<length> note_height: height / (7 * visible_octaves + 2);
+        // One note spacer, and the real note
+        property<length> noise_area_height: note_height * 2;
+
+        background: #f8f8f8;
+        border_width: 1px;
+        border_color: #e8e8e8;
+
+        HorizontalLayout {
+            Rectangle {
+                z: 1;
+                width: 5%;
+
+                for i in visualization.visible_octaves:
+                OctaveIndicator {
+                    width: 100%;
+                    height: visualization.note_height * 7;
+                    y: parent.height - visualization.noise_area_height - height * (i + 1);
+                }
+
+                for note[idx] in synth_active_notes:
+                Rectangle {
+                    border-radius: width;
+                    width: height;
+                    height: visualization.note_height * 3;
+                    x: (note.trace.is_black ? parent.width * 0.6 : parent.width) - width / 2;
+                    y: parent.height
+                        - (note.trace.octave == 0 && note.trace.key_pos == 0
+                            ? visualization.note_height
+                            : visualization.noise_area_height
+                                + ((note.trace.octave - 2) * 7 + note.trace.key_pos + (note.trace.is_black ? 1.5 : 1)) * visualization.note_height
+                            )
+                        + visualization.note_height / 2 - height / 2;
+                    background: white;
+                    border-color: note.trace.color;
+                    border-width: 2px;
+                    Text {
+                        width: 100%;
+                        height: 100%;
+                        text: note.note_name;
+                        font_size: min(width, height) / 2.5;
+                        color: note.trace.color;
+                        horizontal_alignment: center;
+                        vertical_alignment: center;
+                    }
+                }
+            }
+            trace_container := Rectangle {
+                property<length> tick_width: width / (6 * 16 * 2);
+                Rectangle {
+                    // FIXME: current_tick_number is updated 64x per second, so this will cause jitter
+                    //        of the scroll animation when we scroll 2 ticks over a frame.
+                    //        Ideally we should animate this to scroll 64 ticks over a whole
+                    //        second instead, but I don't know any way to do this with the
+                    //        current API.
+                    x: current_tick_number * trace_container.tick_width;
+
+                    for note[idx] in synth_trace_notes:
+                    Rectangle {
+                        width: trace_container.tick_width;
+                        height: visualization.note_height * (note.is_black ? 0.8 : 1.0);
+                        x: -note.tick_number * width;
+                        y: parent.height
+                            - (note.octave == 0 && note.key_pos == 0
+                                ? visualization.note_height
+                                : visualization.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + (note.is_black ? 1.5 : 1)) * visualization.note_height
+                                );
+                        background: note.color;
+                        opacity: note.volume;
+                    }
+                }
+            }
+        }
+    }
+}

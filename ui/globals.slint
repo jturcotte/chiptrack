@@ -1,0 +1,13 @@
+struct Settings := {
+    sync_enabled: bool,
+}
+
+export global GlobalSettings := {
+    property<Settings> settings: { sync_enabled: false, };
+    callback settings_changed(Settings);
+}
+
+export global GlobalUtils := {
+    callback get_midi_note_name(int) -> string;
+    callback mod(float, float) -> float;
+}

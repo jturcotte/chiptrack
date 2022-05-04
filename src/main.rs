@@ -233,7 +233,7 @@ pub fn main() {
     watcher.watch(".", RecursiveMode::NonRecursive).unwrap();
 
     let window_weak = window.as_weak();
-    let initial_settings = window.global::<SettingsGlobal>().get_settings();
+    let initial_settings = window.global::<GlobalSettings>().get_settings();
     let cloned_sound_send = sound_send.clone();
     let context = Rc::new(Lazy::new(|| {
         let host = cpal::default_host();
@@ -347,9 +347,9 @@ pub fn main() {
         }
     }));
 
-    window.on_get_midi_note_name(|note| MidiNote(note).name());
+    window.global::<GlobalUtils>().on_get_midi_note_name(|note| MidiNote(note).name());
 
-    window.on_mod(|x, y| x % y);
+    window.global::<GlobalUtils>().on_mod(|x, y| x % y);
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
@@ -535,7 +535,7 @@ pub fn main() {
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
-    window.global::<SettingsGlobal>().on_settings_changed(move |settings| {
+    window.global::<GlobalSettings>().on_settings_changed(move |settings| {
         println!("SET {:?}", settings);
         Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::ApplySettings(settings)).unwrap();
