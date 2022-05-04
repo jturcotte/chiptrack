@@ -7,9 +7,11 @@ use crate::synth_script::SynthScript;
 use crate::utils::MidiNote;
 use crate::ChannelActiveNote;
 use crate::ChannelTraceNote;
+use crate::GlobalEngine;
 use crate::MainWindow;
 use crate::Settings;
 use slint::Color;
+use slint::Global;
 use slint::Model;
 use slint::SharedString;
 use slint::VecModel;
@@ -238,7 +240,7 @@ impl Synth {
     fn update_instrument_ids(&self) {
         let ids = self.script.instrument_ids();
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_instruments();
+            let model = GlobalEngine::get(&handle).get_instruments();
             for (i, id) in ids.iter().enumerate() {
                 let mut row_data = model.row_data(i).unwrap();
                 row_data.id = SharedString::from(id);
@@ -274,12 +276,13 @@ impl Synth {
         ];
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let trace_model = handle.get_synth_trace_notes();
+            let global = GlobalEngine::get(&handle);
+            let trace_model = global.get_synth_trace_notes();
             let trace_vec_model = trace_model
                 .as_any()
                 .downcast_ref::<VecModel<ChannelTraceNote>>()
                 .unwrap();
-            let active_model = handle.get_synth_active_notes();
+            let active_model = global.get_synth_active_notes();
             let active_vec_model = active_model
                 .as_any()
                 .downcast_ref::<VecModel<ChannelActiveNote>>()
@@ -333,7 +336,7 @@ impl Synth {
                     active_vec_model.push(active);
                 }
             }
-            handle.set_current_tick_number(frame_number);
+            global.set_current_tick_number(frame_number);
         });
     }
 }

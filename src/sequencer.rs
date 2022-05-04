@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: MIT
 
 use crate::utils::MidiNote;
+use crate::GlobalEngine;
 use crate::MainWindow;
 use crate::SongPatternData;
 use serde::{Deserialize, Serialize};
+use slint::Global;
 use slint::Model;
 use slint::VecModel;
 use slint::Weak;
@@ -97,7 +99,7 @@ impl Sequencer {
         let new = self.current_song_pattern;
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_sequencer_song_patterns();
+            let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
             if let Some(current) = old {
                 let mut pattern_row_data = model.row_data(current).unwrap();
                 pattern_row_data.active = false;
@@ -120,7 +122,7 @@ impl Sequencer {
         self.update_steps();
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_sequencer_patterns();
+            let model = GlobalEngine::get(&handle).get_sequencer_patterns();
             let mut pattern_row_data = model.row_data(old).unwrap();
             pattern_row_data.active = false;
             model.set_row_data(old, pattern_row_data);
@@ -136,7 +138,7 @@ impl Sequencer {
         self.current_step = step as usize;
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_sequencer_steps();
+            let model = GlobalEngine::get(&handle).get_sequencer_steps();
             let mut row_data = model.row_data(old_step).unwrap();
             row_data.active = false;
             model.set_row_data(old_step, row_data);
@@ -153,7 +155,7 @@ impl Sequencer {
         self.update_steps();
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_instruments();
+            let model = GlobalEngine::get(&handle).get_instruments();
             let mut row_data = model.row_data(old_instrument).unwrap();
             row_data.selected = false;
             model.set_row_data(old_instrument, row_data);
@@ -171,7 +173,7 @@ impl Sequencer {
         }
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_instruments();
+            let model = GlobalEngine::get(&handle).get_instruments();
             let mut row_data = model.row_data(instrument as usize).unwrap();
             row_data.muted = !was_muted;
             model.set_row_data(instrument as usize, row_data);
@@ -191,7 +193,7 @@ impl Sequencer {
             .collect();
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let patterns = handle.get_sequencer_patterns();
+            let patterns = GlobalEngine::get(&handle).get_sequencer_patterns();
             for p in non_empty_patterns {
                 let mut pattern_row_data = patterns.row_data(p).unwrap();
                 pattern_row_data.empty = false;
@@ -205,7 +207,7 @@ impl Sequencer {
             .map(|i| self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][i])
             .collect();
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_sequencer_steps();
+            let model = GlobalEngine::get(&handle).get_sequencer_steps();
             for (i, step) in steps.iter().enumerate() {
                 let mut row_data = model.row_data(i).unwrap();
                 row_data.press = step.press;
@@ -307,12 +309,12 @@ impl Sequencer {
 
         let selected_pattern = self.selected_pattern;
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let patterns = handle.get_sequencer_patterns();
+            let patterns = GlobalEngine::get(&handle).get_sequencer_patterns();
             let mut pattern_row_data = patterns.row_data(selected_pattern).unwrap();
             pattern_row_data.empty = pattern_empty;
             patterns.set_row_data(selected_pattern, pattern_row_data);
 
-            let steps = handle.get_sequencer_steps();
+            let steps = GlobalEngine::get(&handle).get_sequencer_steps();
             let mut step_row_data = steps.row_data(step_num).unwrap();
             if let Some(press) = set_press {
                 step_row_data.press = press;
@@ -490,7 +492,7 @@ impl Sequencer {
         self.song.song_patterns.push(pattern as usize);
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_sequencer_song_patterns();
+            let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
             let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
             vec_model.push(SongPatternData {
                 number: pattern as i32,
@@ -511,7 +513,7 @@ impl Sequencer {
             }
 
             self.main_window.clone().upgrade_in_event_loop(move |handle| {
-                let model = handle.get_sequencer_song_patterns();
+                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
                 let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
                 vec_model.remove(vec_model.row_count() - 1);
             });
@@ -523,7 +525,7 @@ impl Sequencer {
         self.select_song_pattern(None);
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_sequencer_song_patterns();
+            let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
             let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
             for _ in 0..vec_model.row_count() {
                 vec_model.remove(0);
@@ -542,7 +544,7 @@ impl Sequencer {
         let current_song_pattern = self.current_song_pattern;
         let song_patterns = self.song.song_patterns.clone();
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
-            let model = handle.get_sequencer_song_patterns();
+            let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
             let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
             for (i, number) in song_patterns.iter().enumerate() {
                 vec_model.push(SongPatternData {

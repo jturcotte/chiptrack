@@ -1,8 +1,108 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-struct Settings := {
+export struct SongPatternData := {
+    number: int,
+    active: bool,
+}
+export struct PatternData := {
+    empty: bool,
+    active: bool,
+}
+export struct StepData := {
+    press: bool,
+    release: bool,
+    active: bool,
+    note_name: string,
+}
+export struct InstrumentData := {
+    id: string,
+    selected: bool,
+    active: bool,
+    muted: bool,
+}
+export struct NoteData := {
+    note_number: int,
+    key_pos: int,
+    is_black: bool,
+    active: bool,
+}
+export struct ChannelTraceNote := {
+    tick_number: int,
+    octave: int,
+    key_pos: int,
+    is_black: bool,
+    volume: float,
+    color: color,
+}
+export struct ChannelActiveNote := {
+    trace: ChannelTraceNote,
+    note_name: string,
+}
+export struct Settings := {
     sync_enabled: bool,
+}
+
+export global GlobalEngine := {
+    property<[SongPatternData]> sequencer_song_patterns: [
+        {number: 0},
+        {number: 1},
+        {number: 0},
+        {number: 1},
+        {number: 0, active: true},
+        {number: 1},
+        {number: 2},
+        {number: 3}];
+    property<[PatternData]> sequencer_patterns: [
+        {empty: true, active: true},
+        {empty: true}, {empty: true}, {empty: true},
+        {empty: true}, {empty: true}, {empty: true}, {empty: true},
+        {empty: true}, {empty: true}, {empty: true}, {empty: true},
+        {empty: true}, {empty: true}, {empty: true}, {empty: true},
+        ];
+    property<[StepData]> sequencer_steps: [
+        {press: true, note_name: "C-4"},
+        {press: false}, {press: false}, {press: false},
+        {press: true, release: true, note_name: "C-4", active: true},
+        {press: false}, {press: false}, {press: false},
+        {press: true, note_name: "C-4"},
+        {press: false}, {press: false}, {press: false},
+        {press: false, release: true},
+        {press: false}, {press: false}, {press: false}];
+    property<[InstrumentData]> instruments: [
+        {active: false}, {active: false}, {active: false}, {active: false},
+        {active: false}, {active: false}, {active: false}, {active: false},
+        {active: false}, {active: false}, {active: false}, {active: false},
+        {active: false}, {active: false}, {active: false}, {active: false},
+        ];
+    property<int> current_tick_number: 123;
+    property<[ChannelTraceNote]> synth_trace_notes: [
+        { tick_number: 123, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), },
+        { tick_number: 123, octave: 3, key_pos: 3, is_black: true, volume: 1.0, color: Colors.rgb(255,0,0), },
+        { tick_number: 122, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), },
+        { tick_number: 121, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), },
+    ];
+    property<[ChannelActiveNote]> synth_active_notes: [
+        { trace: { tick_number: 123, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), }, note_name: "C", },
+        { trace: { tick_number: 123, octave: 3, key_pos: 3, is_black: true, volume: 1.0, color: Colors.rgb(255,0,0), }, note_name: "F#", },
+    ];
+
+    callback note_key_pressed(int);
+    callback note_pressed(int);
+    callback note_released(int);
+    callback select_instrument(int);
+    callback toggle_mute_instrument(int);
+    callback pattern_clicked(int);
+    callback toggle_step(int);
+    callback toggle_step_release(int);
+    callback manually_advance_step(bool);
+    callback play_clicked(bool);
+    callback record_clicked(bool);
+    callback append_song_pattern(int);
+    callback remove_last_song_pattern();
+    callback clear_song_patterns();
+    callback save_project();
+    callback mute_instruments();
 }
 
 export global GlobalSettings := {

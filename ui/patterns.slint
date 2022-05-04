@@ -7,8 +7,9 @@ import {
 
 import {
     PatternData,
-    StepData
-} from "data.slint";
+    StepData,
+    GlobalEngine
+} from "globals.slint";
 
 SequencerPattern := Rectangle {
     callback clicked();
@@ -80,22 +81,16 @@ SequencerStep := Rectangle {
 }
 
 PatternsPanel := GridBox {
-    callback pattern_clicked(int);
-    callback toggle_step(int);
-    callback toggle_step_release(int);
-    property<[PatternData]> sequencer_patterns;
-    property<[StepData]> sequencer_steps;
-
     Row {
         HorizontalLayout {
             spacing: 2px;
 
-            for pattern[idx] in sequencer_patterns:
+            for pattern[idx] in GlobalEngine.sequencer_patterns:
             SequencerPattern {
                 number: idx;
                 highlighted: pattern.active;
                 empty: pattern.empty;
-                clicked => { root.pattern_clicked(idx); }
+                clicked => { GlobalEngine.pattern_clicked(idx); }
             }
         }
     }
@@ -103,15 +98,15 @@ PatternsPanel := GridBox {
         HorizontalLayout {
             spacing: 2px;
 
-            for step[idx] in sequencer_steps:
+            for step[idx] in GlobalEngine.sequencer_steps:
             SequencerStep {
                 highlighted: step.active;
                 press: step.press;
                 release: step.release;
                 name: step.note_name;
                 beat: mod(idx, 4) == 0;
-                pressed => { root.toggle_step(idx); }
-                right_pressed => { root.toggle_step_release(idx); }
+                pressed => { GlobalEngine.toggle_step(idx); }
+                right_pressed => { GlobalEngine.toggle_step_release(idx); }
             }
         }
     }

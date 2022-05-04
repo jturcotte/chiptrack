@@ -3,8 +3,9 @@
 
 import {
     ChannelTraceNote,
-    ChannelActiveNote
-} from "data.slint";
+    ChannelActiveNote,
+    GlobalEngine
+} from "globals.slint";
 
 OctaveIndicator := Rectangle {
     border_width: 1px;
@@ -43,10 +44,6 @@ OctaveIndicator := Rectangle {
 }
 
 Visualization := VerticalLayout {
-    property<[ChannelTraceNote]> synth_trace_notes;
-    property<[ChannelActiveNote]> synth_active_notes;
-    property<int> current_tick_number;
-
     visualization := Rectangle {
         property<int> visible_octaves: 4;
         property<length> note_height: height / (7 * visible_octaves + 2);
@@ -69,7 +66,7 @@ Visualization := VerticalLayout {
                     y: parent.height - visualization.noise_area_height - height * (i + 1);
                 }
 
-                for note[idx] in synth_active_notes:
+                for note[idx] in GlobalEngine.synth_active_notes:
                 Rectangle {
                     border-radius: width;
                     width: height;
@@ -104,9 +101,9 @@ Visualization := VerticalLayout {
                     //        Ideally we should animate this to scroll 64 ticks over a whole
                     //        second instead, but I don't know any way to do this with the
                     //        current API.
-                    x: current_tick_number * trace_container.tick_width;
+                    x: GlobalEngine.current_tick_number * trace_container.tick_width;
 
-                    for note[idx] in synth_trace_notes:
+                    for note[idx] in GlobalEngine.synth_trace_notes:
                     Rectangle {
                         width: trace_container.tick_width;
                         height: visualization.note_height * (note.is_black ? 0.8 : 1.0);

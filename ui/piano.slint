@@ -1,8 +1,7 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-import { NoteData } from "data.slint";
-import { GlobalUtils } from "globals.slint";
+import { NoteData, GlobalEngine, GlobalUtils } from "globals.slint";
 
 PianoKey :=  Rectangle {
     property<bool> highlighted;
@@ -45,8 +44,6 @@ PianoKey :=  Rectangle {
 
 Piano := Rectangle {
     property<[NoteData]> notes;
-    callback note_pressed(int);
-    callback note_released(int);
 
     for note[idx] in notes:
     PianoKey {
@@ -61,7 +58,7 @@ Piano := Rectangle {
 
         height: is_black ? 60% : 100%;
         highlighted: note.active;
-        pressed => { note_pressed(note.note_number); }
-        released => { note_released(note.note_number); }
+        pressed => { GlobalEngine.note_pressed(note.note_number); }
+        released => { GlobalEngine.note_released(note.note_number); }
     }
 }

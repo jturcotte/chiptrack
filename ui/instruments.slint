@@ -1,8 +1,7 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-import { InstrumentData } from "data.slint";
-import { GlobalUtils } from "globals.slint";
+import { InstrumentData, GlobalEngine, GlobalUtils } from "globals.slint";
 
 InstrumentButton := Rectangle {
     callback pressed();
@@ -41,23 +40,19 @@ InstrumentButton := Rectangle {
 }
 
 InstrumentsPanel := Rectangle {
-    property<[InstrumentData]> instruments;
-    callback select_instrument(int);
-    callback toggle_mute_instrument(int);
-
     property<length> spacing: 5px;
     property<int> grid_size: 4;
     property<length> item_size: (width - (spacing * (grid_size - 1))) / grid_size;
     vertical-stretch: (grid_size / (grid_size + 1));
     width: height;
-    for instrument[idx] in instruments:
+    for instrument[idx] in GlobalEngine.instruments:
     InstrumentButton {
         id: instrument.id;
         highlighted: instrument.selected;
         active: instrument.active;
         muted: instrument.muted;
-        pressed => { root.select_instrument(idx); }
-        right_pressed => { root.toggle_mute_instrument(idx); }
+        pressed => { GlobalEngine.select_instrument(idx); }
+        right_pressed => { GlobalEngine.toggle_mute_instrument(idx); }
         x: GlobalUtils.mod(idx, 4) * (width + parent.spacing);
         y: floor(idx / 4) * (height + parent.spacing);
         height: parent.item_size;

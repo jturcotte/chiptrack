@@ -10,17 +10,9 @@ import {
 } from "std-widgets.slint";
 
 import {
-    SongPatternData,
-    PatternData,
-    StepData,
-    InstrumentData,
     NoteData,
-    ChannelTraceNote,
-    ChannelActiveNote
-} from "data.slint";
-
-import {
     GlobalSettings,
+    GlobalEngine,
     GlobalUtils
 } from "globals.slint";
 
@@ -33,41 +25,11 @@ import { Visualization } from "visualization.slint";
 
 export {
     GlobalSettings,
+    GlobalEngine,
     GlobalUtils
 }
 
 export MainWindow := Window {
-    property<[SongPatternData]> sequencer_song_patterns: [
-        {number: 0},
-        {number: 1},
-        {number: 0},
-        {number: 1},
-        {number: 0, active: true},
-        {number: 1},
-        {number: 2},
-        {number: 3}];
-    property<[PatternData]> sequencer_patterns: [
-        {empty: true, active: true},
-        {empty: true}, {empty: true}, {empty: true},
-        {empty: true}, {empty: true}, {empty: true}, {empty: true},
-        {empty: true}, {empty: true}, {empty: true}, {empty: true},
-        {empty: true}, {empty: true}, {empty: true}, {empty: true},
-        ];
-    property<[StepData]> sequencer_steps: [
-        {press: true, note_name: "C-4"},
-        {press: false}, {press: false}, {press: false},
-        {press: true, release: true, note_name: "C-4", active: true},
-        {press: false}, {press: false}, {press: false},
-        {press: true, note_name: "C-4"},
-        {press: false}, {press: false}, {press: false},
-        {press: false, release: true},
-        {press: false}, {press: false}, {press: false}];
-    property<[InstrumentData]> instruments: [
-        {active: false}, {active: false}, {active: false}, {active: false},
-        {active: false}, {active: false}, {active: false}, {active: false},
-        {active: false}, {active: false}, {active: false}, {active: false},
-        {active: false}, {active: false}, {active: false}, {active: false},
-        ];
     property<int> first_note: 60;
     property<[NoteData]> notes: [
         {note_number: first_note, key_pos: 0, is_black: false, active: false},
@@ -84,37 +46,10 @@ export MainWindow := Window {
         {note_number: first_note + 8, key_pos: 4, is_black: true, active: false},
         {note_number: first_note + 10, key_pos: 5, is_black: true, active: false},
     ];
-    property<int> current_tick_number: 123;
-    property<[ChannelTraceNote]> synth_trace_notes: [
-        { tick_number: 123, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), },
-        { tick_number: 123, octave: 3, key_pos: 3, is_black: true, volume: 1.0, color: Colors.rgb(255,0,0), },
-        { tick_number: 122, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), },
-        { tick_number: 121, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), },
-    ];
-    property<[ChannelActiveNote]> synth_active_notes: [
-        { trace: { tick_number: 123, octave: 3, key_pos: 0, is_black: false, volume: 1.0, color: Colors.rgb(255,0,0), }, note_name: "C", },
-        { trace: { tick_number: 123, octave: 3, key_pos: 3, is_black: true, volume: 1.0, color: Colors.rgb(255,0,0), }, note_name: "F#", },
-    ];
     property<bool> playing: false;
     property in_song_mode <=> song_mode_button.toggled;
 
-    callback note_key_pressed(int);
-    callback note_pressed(int);
-    callback note_released(int);
     callback octave_increased(int);
-    callback select_instrument(int);
-    callback toggle_mute_instrument(int);
-    callback pattern_clicked(int);
-    callback toggle_step(int);
-    callback toggle_step_release(int);
-    callback manually_advance_step(bool);
-    callback play_clicked(bool);
-    callback record_clicked(bool);
-    callback append_song_pattern(int);
-    callback remove_last_song_pattern();
-    callback clear_song_patterns();
-    callback save_project();
-    callback mute_instruments();
     callback global_key_event(string, bool);
 
     property<bool> waveform_is_zero: true;
@@ -129,48 +64,48 @@ export MainWindow := Window {
     key_handler := FocusScope {
         key-pressed(event) => {
             if (event.modifiers.control) {
-                if (event.text == "s") { save_project(); }
-                else if (event.text == "1") { root.pattern_clicked(0); }
-                else if (event.text == "2") { root.pattern_clicked(1); }
-                else if (event.text == "3") { root.pattern_clicked(2); }
-                else if (event.text == "4") { root.pattern_clicked(3); }
-                else if (event.text == "5") { root.pattern_clicked(4); }
-                else if (event.text == "6") { root.pattern_clicked(5); }
-                else if (event.text == "7") { root.pattern_clicked(6); }
-                else if (event.text == "8") { root.pattern_clicked(7); }
-                else if (event.text == "9") { root.pattern_clicked(8); }
-                else if (event.text == "0") { root.pattern_clicked(9); }
+                if (event.text == "s") { GlobalEngine.save_project(); }
+                else if (event.text == "1") { GlobalEngine.pattern_clicked(0); }
+                else if (event.text == "2") { GlobalEngine.pattern_clicked(1); }
+                else if (event.text == "3") { GlobalEngine.pattern_clicked(2); }
+                else if (event.text == "4") { GlobalEngine.pattern_clicked(3); }
+                else if (event.text == "5") { GlobalEngine.pattern_clicked(4); }
+                else if (event.text == "6") { GlobalEngine.pattern_clicked(5); }
+                else if (event.text == "7") { GlobalEngine.pattern_clicked(6); }
+                else if (event.text == "8") { GlobalEngine.pattern_clicked(7); }
+                else if (event.text == "9") { GlobalEngine.pattern_clicked(8); }
+                else if (event.text == "0") { GlobalEngine.pattern_clicked(9); }
             } else {
-                if (event.text == "a") { note_key_pressed(first_note); }
-                else if (event.text == "s") { note_key_pressed(first_note + 2); }
-                else if (event.text == "d") { note_key_pressed(first_note + 4); }
-                else if (event.text == "f") { note_key_pressed(first_note + 5); }
-                else if (event.text == "g") { note_key_pressed(first_note + 7); }
-                else if (event.text == "h") { note_key_pressed(first_note + 9); }
-                else if (event.text == "j") { note_key_pressed(first_note + 11); }
-                else if (event.text == "k") { note_key_pressed(first_note + 12); }
-                else if (event.text == "w") { note_key_pressed(first_note + 1); }
-                else if (event.text == "e") { note_key_pressed(first_note + 3); }
-                else if (event.text == "t") { note_key_pressed(first_note + 6); }
-                else if (event.text == "y") { note_key_pressed(first_note + 8); }
-                else if (event.text == "u") { note_key_pressed(first_note + 10); }
-                else if (event.text == "1") { root.select_instrument(0); }
-                else if (event.text == "2") { root.select_instrument(1); }
-                else if (event.text == "3") { root.select_instrument(2); }
-                else if (event.text == "4") { root.select_instrument(3); }
-                else if (event.text == "5") { root.select_instrument(4); }
-                else if (event.text == "6") { root.select_instrument(5); }
-                else if (event.text == "7") { root.select_instrument(6); }
-                else if (event.text == "8") { root.select_instrument(7); }
-                else if (event.text == "9") { root.select_instrument(8); }
-                else if (event.text == "0") { root.select_instrument(9); }
-                else if (event.text == Keys.LeftArrow) { root.manually_advance_step(false); }
-                else if (event.text == Keys.RightArrow) { root.manually_advance_step(true); }
+                if (event.text == "a") { GlobalEngine.note_key_pressed(first_note); }
+                else if (event.text == "s") { GlobalEngine.note_key_pressed(first_note + 2); }
+                else if (event.text == "d") { GlobalEngine.note_key_pressed(first_note + 4); }
+                else if (event.text == "f") { GlobalEngine.note_key_pressed(first_note + 5); }
+                else if (event.text == "g") { GlobalEngine.note_key_pressed(first_note + 7); }
+                else if (event.text == "h") { GlobalEngine.note_key_pressed(first_note + 9); }
+                else if (event.text == "j") { GlobalEngine.note_key_pressed(first_note + 11); }
+                else if (event.text == "k") { GlobalEngine.note_key_pressed(first_note + 12); }
+                else if (event.text == "w") { GlobalEngine.note_key_pressed(first_note + 1); }
+                else if (event.text == "e") { GlobalEngine.note_key_pressed(first_note + 3); }
+                else if (event.text == "t") { GlobalEngine.note_key_pressed(first_note + 6); }
+                else if (event.text == "y") { GlobalEngine.note_key_pressed(first_note + 8); }
+                else if (event.text == "u") { GlobalEngine.note_key_pressed(first_note + 10); }
+                else if (event.text == "1") { GlobalEngine.select_instrument(0); }
+                else if (event.text == "2") { GlobalEngine.select_instrument(1); }
+                else if (event.text == "3") { GlobalEngine.select_instrument(2); }
+                else if (event.text == "4") { GlobalEngine.select_instrument(3); }
+                else if (event.text == "5") { GlobalEngine.select_instrument(4); }
+                else if (event.text == "6") { GlobalEngine.select_instrument(5); }
+                else if (event.text == "7") { GlobalEngine.select_instrument(6); }
+                else if (event.text == "8") { GlobalEngine.select_instrument(7); }
+                else if (event.text == "9") { GlobalEngine.select_instrument(8); }
+                else if (event.text == "0") { GlobalEngine.select_instrument(9); }
+                else if (event.text == Keys.LeftArrow) { GlobalEngine.manually_advance_step(false); }
+                else if (event.text == Keys.RightArrow) { GlobalEngine.manually_advance_step(true); }
                 else if (event.text == Keys.PageDown) { root.octave_increased(-1); }
                 else if (event.text == Keys.PageUp) { root.octave_increased(1); }
                 else if (event.text == Keys.Tab) { song_mode_button.toggled = !song_mode_button.toggled; }
-                else if (event.text == Keys.Return) { root.play_clicked(!root.playing); }
-                else if (event.text == Keys.Escape) { root.mute_instruments(); }
+                else if (event.text == Keys.Return) { GlobalEngine.play_clicked(!root.playing); }
+                else if (event.text == Keys.Escape) { GlobalEngine.mute_instruments(); }
             }
             global_key_event(event.text, true);
             accept
@@ -194,12 +129,6 @@ export MainWindow := Window {
                     PatternsPanel {
                         height: (controls_scroll_area.height - parent.spacing) * 0.4;
                         padding: 0;
-
-                        sequencer_patterns: root.sequencer_patterns;
-                        sequencer_steps: root.sequencer_steps;
-                        pattern_clicked(p) => { root.pattern_clicked(p); }
-                        toggle_step(s) => { root.toggle_step(s); }
-                        toggle_step_release(s) => { root.toggle_step_release(s); }
                     }
 
                     HorizontalBox {
@@ -213,15 +142,10 @@ export MainWindow := Window {
                             Piano {
                                 opacity: parent.piano_opacity;
                                 notes: root.notes;
-                                note_pressed(note) => { root.note_pressed(note); }
-                                note_released(note) => { root.note_released(note); }
                             }
                             if (piano_opacity != 1.0):
                             Visualization {
                                 opacity: 1.0 - parent.piano_opacity;
-                                current_tick_number: root.current_tick_number;
-                                synth_trace_notes: root.synth_trace_notes;
-                                synth_active_notes: root.synth_active_notes;
                             }
                         }
                         VerticalBox {
@@ -245,9 +169,6 @@ export MainWindow := Window {
 
                             }
                             instruments_grid := InstrumentsPanel {
-                                instruments: root.instruments;
-                                select_instrument(i) => { root.select_instrument(i); }
-                                toggle_mute_instrument(i) => { root.toggle_mute_instrument(i); }
                             }
                         }
                     }
@@ -256,11 +177,6 @@ export MainWindow := Window {
                     if (y != not_song_mode_y):                
                     SongPanel {
                         height: (controls_scroll_area.height - parent.spacing) * 0.4;
-                        sequencer_song_patterns: root.sequencer_song_patterns;
-                        sequencer_patterns: root.sequencer_patterns;
-                        append_song_pattern(p) => { root.append_song_pattern(p); }
-                        remove_last_song_pattern => { root.remove_last_song_pattern(); }
-                        clear_song_patterns => { root.clear_song_patterns(); }
                     }
                 }
             }
@@ -286,7 +202,7 @@ export MainWindow := Window {
                 play_button := Button {
                     text: root.playing ? "⏹" : "▶";
                     clicked => {
-                        root.play_clicked(!root.playing);
+                        GlobalEngine.play_clicked(!root.playing);
                     }
                 }
                 record_button := Button {
@@ -294,7 +210,7 @@ export MainWindow := Window {
                     text: toggled ? "⬤" : "◯";
                     clicked => {
                         toggled = !toggled;
-                        root.record_clicked(toggled);
+                        GlobalEngine.record_clicked(toggled);
                     }
                 }
             }

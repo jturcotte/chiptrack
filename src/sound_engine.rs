@@ -5,8 +5,10 @@ use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
 use crate::synth::Synth;
 use crate::utils;
+use crate::GlobalEngine;
 use crate::MainWindow;
 use crate::Settings;
+use slint::Global;
 use slint::Model;
 use slint::Weak;
 use std::path::PathBuf;
@@ -130,7 +132,7 @@ impl SoundEngine {
                         }
                     }
                 }
-                let instruments_model = handle.get_instruments();
+                let instruments_model = GlobalEngine::get(&handle).get_instruments();
                 let mut row_data = instruments_model.row_data(instrument as usize).unwrap();
                 row_data.active = pressed;
                 instruments_model.set_row_data(instrument as usize, row_data);

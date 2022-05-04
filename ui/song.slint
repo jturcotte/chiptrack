@@ -9,8 +9,9 @@ import {
 
 import {
     SongPatternData,
-    PatternData
-} from "data.slint";
+    PatternData,
+    GlobalEngine
+} from "globals.slint";
 
 import {
     SequencerPattern
@@ -41,16 +42,10 @@ SongPattern := Rectangle {
 }
 
 export SongPanel := VerticalBox {
-    property<[SongPatternData]> sequencer_song_patterns;
-    property<[PatternData]> sequencer_patterns;
-    callback append_song_pattern(int);
-    callback remove_last_song_pattern();
-    callback clear_song_patterns();
-
     HorizontalLayout {
         spacing: 2px;
 
-        for pattern[idx] in sequencer_song_patterns:
+        for pattern[idx] in GlobalEngine.sequencer_song_patterns:
         SongPattern {
             number: pattern.number;
             highlighted: pattern.active;
@@ -60,12 +55,12 @@ export SongPanel := VerticalBox {
     HorizontalLayout {
         spacing: 2px;
 
-        for pattern[idx] in sequencer_patterns:
+        for pattern[idx] in GlobalEngine.sequencer_patterns:
         SequencerPattern {
             number: idx;
             highlighted: pattern.active;
             empty: pattern.empty;
-            clicked => { root.append_song_pattern(idx); }
+            clicked => { GlobalEngine.append_song_pattern(idx); }
         }
     }
     HorizontalBox {
@@ -74,11 +69,11 @@ export SongPanel := VerticalBox {
 
         Button {
             text: "⌫";
-            clicked => { root.remove_last_song_pattern(); }
+            clicked => { GlobalEngine.remove_last_song_pattern(); }
         }
         Button {
             text: "Clear";
-            clicked => { root.clear_song_patterns(); }
+            clicked => { GlobalEngine.clear_song_patterns(); }
         }
     }
 }
