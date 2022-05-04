@@ -1,0 +1,81 @@
+import {
+    Button,
+    HorizontalBox,
+    VerticalBox
+} from "std-widgets.slint";
+
+import {
+    SongPatternData,
+    PatternData
+} from "data.slint";
+
+import {
+    SequencerPattern
+} from "patterns.slint";
+
+SongPattern := Rectangle {
+    callback clicked();
+    property<int> number: 0;
+    property<bool> highlighted;
+    background: white;
+    border_width: 1px;
+    border_color: highlighted ? black : #a0a0a0;
+    border_radius: width/8;
+    Text {
+        text: "P" + (number + 1);
+        width: 100%;
+        height: 100%;
+        font_size: min(width, height) / 2.5;
+        color: highlighted ? #505050 : #a0a0a0;
+        horizontal_alignment: center;
+        vertical_alignment: center;
+    }
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.clicked(); }
+    }
+}
+
+export SongPanel := VerticalBox {
+    property<[SongPatternData]> sequencer_song_patterns;
+    property<[PatternData]> sequencer_patterns;
+    callback append_song_pattern(int);
+    callback remove_last_song_pattern();
+    callback clear_song_patterns();
+
+    HorizontalLayout {
+        spacing: 2px;
+
+        for pattern[idx] in sequencer_song_patterns:
+        SongPattern {
+            number: pattern.number;
+            highlighted: pattern.active;
+            // width: (parent.width - (parent.spacing * 15)) / 16;
+        }
+    }
+    HorizontalLayout {
+        spacing: 2px;
+
+        for pattern[idx] in sequencer_patterns:
+        SequencerPattern {
+            number: idx;
+            highlighted: pattern.active;
+            empty: pattern.empty;
+            clicked => { root.append_song_pattern(idx); }
+        }
+    }
+    HorizontalBox {
+        height: 25%;
+        padding: 0;
+
+        Button {
+            text: "⌫";
+            clicked => { root.remove_last_song_pattern(); }
+        }
+        Button {
+            text: "Clear";
+            clicked => { root.clear_song_patterns(); }
+        }
+    }
+}
