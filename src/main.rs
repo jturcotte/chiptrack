@@ -219,11 +219,11 @@ pub fn main() {
     }
 
     let window = MainWindow::new();
+    window.set_notes(slint::ModelRc::from(note_model.clone()));
     let global_engine = GlobalEngine::get(&window);
     global_engine.set_sequencer_song_patterns(slint::ModelRc::from(sequencer_song_model.clone()));
     global_engine.set_sequencer_patterns(slint::ModelRc::from(sequencer_pattern_model.clone()));
     global_engine.set_sequencer_steps(slint::ModelRc::from(sequencer_step_model.clone()));
-    window.set_notes(slint::ModelRc::from(note_model.clone()));
 
     let (sound_send, sound_recv) = mpsc::channel();
     let (notify_send, notify_recv) = mpsc::channel();
@@ -348,9 +348,56 @@ pub fn main() {
         }
     }));
 
-    window.global::<GlobalUtils>().on_get_midi_note_name(|note| MidiNote(note).name());
+    let window_weak = window.as_weak();
+    window.on_octave_increased(move |octave_delta| {
+        let window = window_weak.clone().upgrade().unwrap();
+        let first_note = window.get_first_note();
+        if first_note <= 24 && octave_delta < 0 || first_note >= 96 && octave_delta > 0 {
+            return;
+        }
+        window.set_first_note(first_note + octave_delta * 12);
+        let model = window.get_notes();
+        for row in 0..model.row_count() {
+            let mut row_data = model.row_data(row).unwrap();
+            row_data.note_number += octave_delta * 12;
+            // The note_number changed and thus the sequencer release events
+            // won't see that note anymore, so release it already while we're here here.
+            row_data.active = false;
+            model.set_row_data(row, row_data);
+        }
+    });
 
-    window.global::<GlobalUtils>().on_mod(|x, y| x % y);
+    // KeyEvent doesn't expose yet whether a press event is due to auto-repeat.
+    // Do the deduplication natively until such an API exists.
+    let already_pressed = Rc::new(RefCell::new(HashSet::new()));
+    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
+    window.on_global_key_event(move |text, pressed| {
+        if let Some(code) = text.as_str().chars().next() {
+            if pressed {
+                if !already_pressed.borrow().contains(&code) {
+                    already_pressed.borrow_mut().insert(code.to_owned());
+                    match code {
+                        // Keys.Backspace
+                        '\u{8}' => {
+                            Lazy::force(&*cloned_context);
+                            cloned_sound_send.send(SoundMsg::SetErasing(true)).unwrap();
+                        }
+                        _ => (),
+                    }
+                }
+            } else {
+                match code {
+                    // Keys.Backspace
+                    '\u{8}' => {
+                        cloned_sound_send.send(SoundMsg::SetErasing(false)).unwrap();
+                    }
+                    _ => (),
+                };
+                already_pressed.borrow_mut().remove(&code);
+            }
+        }
+    });
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
@@ -395,25 +442,6 @@ pub fn main() {
                 cloned_sound_send2.send(SoundMsg::ReleaseNote(note as u32)).unwrap();
             }),
         );
-    });
-
-    let window_weak = window.as_weak();
-    window.on_octave_increased(move |octave_delta| {
-        let window = window_weak.clone().upgrade().unwrap();
-        let first_note = window.get_first_note();
-        if first_note <= 24 && octave_delta < 0 || first_note >= 96 && octave_delta > 0 {
-            return;
-        }
-        window.set_first_note(first_note + octave_delta * 12);
-        let model = window.get_notes();
-        for row in 0..model.row_count() {
-            let mut row_data = model.row_data(row).unwrap();
-            row_data.note_number += octave_delta * 12;
-            // The note_number changed and thus the sequencer release events
-            // won't see that note anymore, so release it already while we're here here.
-            row_data.active = false;
-            model.set_row_data(row, row_data);
-        }
     });
 
     let cloned_context = context.clone();
@@ -502,38 +530,6 @@ pub fn main() {
         cloned_sound_send.send(SoundMsg::MuteInstruments).unwrap();
     });
 
-    // KeyEvent doesn't expose yet whether a press event is due to auto-repeat.
-    // Do the deduplication natively until such an API exists.
-    let already_pressed = Rc::new(RefCell::new(HashSet::new()));
-    let cloned_context = context.clone();
-    let cloned_sound_send = sound_send.clone();
-    window.on_global_key_event(move |text, pressed| {
-        if let Some(code) = text.as_str().chars().next() {
-            if pressed {
-                if !already_pressed.borrow().contains(&code) {
-                    already_pressed.borrow_mut().insert(code.to_owned());
-                    match code {
-                        // Keys.Backspace
-                        '\u{8}' => {
-                            Lazy::force(&*cloned_context);
-                            cloned_sound_send.send(SoundMsg::SetErasing(true)).unwrap();
-                        }
-                        _ => (),
-                    }
-                }
-            } else {
-                match code {
-                    // Keys.Backspace
-                    '\u{8}' => {
-                        cloned_sound_send.send(SoundMsg::SetErasing(false)).unwrap();
-                    }
-                    _ => (),
-                };
-                already_pressed.borrow_mut().remove(&code);
-            }
-        }
-    });
-
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     window.global::<GlobalSettings>().on_settings_changed(move |settings| {
@@ -541,6 +537,11 @@ pub fn main() {
         Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::ApplySettings(settings)).unwrap();
     });
+
+    window
+        .global::<GlobalUtils>()
+        .on_get_midi_note_name(|note| MidiNote(note).name());
+    window.global::<GlobalUtils>().on_mod(|x, y| x % y);
 
     // For WASM we need to wait for the user to trigger the creation of the sound
     // device through an input event. For other platforms, artificially force the
