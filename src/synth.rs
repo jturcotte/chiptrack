@@ -296,10 +296,8 @@ impl Synth {
                     break;
                 }
             }
-            for _ in 0..active_vec_model.row_count() {
-                // FIXME: Keep notes that are still active instead of re-adding?
-                active_vec_model.remove(0);
-            }
+            // FIXME: Keep notes that are still active instead of re-adding?
+            active_vec_model.set_vec(Vec::new());
 
             for (&color, &(freq, vol)) in colors.iter().zip(states.iter()) {
                 if vol > 0 {

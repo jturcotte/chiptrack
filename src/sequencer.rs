@@ -530,9 +530,7 @@ impl Sequencer {
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
             let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-            for _ in 0..vec_model.row_count() {
-                vec_model.remove(0);
-            }
+            vec_model.set_vec(Vec::new());
         });
     }
 
