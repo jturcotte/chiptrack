@@ -18,6 +18,9 @@ use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
 
+#[cfg(target_arch = "wasm32")]
+use crate::utils;
+
 const FRAMES_PER_STEP: u32 = 6;
 const SNAP_AT_STEP_FRAME: u32 = 4;
 
@@ -586,7 +589,8 @@ impl Sequencer {
                     song.step_instruments.resize_with(NUM_PATTERNS, || {
                         [[InstrumentStep {
                             note: 60,
-                            enabled: false,
+                            press: false,
+                            release: false,
                         }; NUM_STEPS]; NUM_INSTRUMENTS]
                     });
                     self.set_song(song);

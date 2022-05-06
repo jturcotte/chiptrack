@@ -939,19 +939,12 @@ impl SynthScript {
 
                 let mut map = instrument.try_cast::<Map>().unwrap();
 
-                // FIXME: Emojis don't seem to show up in the browser,
-                //        use the default number IDs.
-                #[cfg(target_arch = "wasm32")] {
-                    instrument_ids_clone.borrow_mut()[(i - 1) as usize] = i.to_string();
-                }
-                #[cfg(not(target_arch = "wasm32"))] {
-                    instrument_ids_clone.borrow_mut()[(i - 1) as usize] =
-                        if let Some(id) = map.remove("id").map(|o| o.into_string().unwrap()) {
-                            id
-                        } else {
-                            i.to_string()
-                        }
-                }
+                instrument_ids_clone.borrow_mut()[(i - 1) as usize] =
+                    if let Some(id) = map.remove("id").map(|o| o.into_string().unwrap()) {
+                        id
+                    } else {
+                        i.to_string()
+                    };
 
                 instrument_states_clone.borrow_mut()[(i - 1) as usize].release_function = match map.remove("release") {
                     None =>
