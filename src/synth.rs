@@ -10,7 +10,6 @@ use crate::ChannelTraceNote;
 use crate::GlobalEngine;
 use crate::MainWindow;
 use crate::Settings;
-use slint::Color;
 use slint::Global;
 use slint::Model;
 use slint::SharedString;
@@ -268,12 +267,6 @@ impl Synth {
         let mut states = self.dmg.chan_states();
         // Let square channels be rendered on top of the wave channel.
         states.reverse();
-        let colors = [
-            Color::from_rgb_u8(192, 0, 0),
-            Color::from_rgb_u8(0, 192, 0),
-            Color::from_rgb_u8(64, 0, 192),
-            Color::from_rgb_u8(0, 64, 192),
-        ];
 
         self.main_window.clone().upgrade_in_event_loop(move |handle| {
             let global = GlobalEngine::get(&handle);
@@ -288,27 +281,51 @@ impl Synth {
                 .downcast_ref::<VecModel<ChannelActiveNote>>()
                 .unwrap();
 
+            // FIXME: Provide the oldest tick number to the UI or get it from it
+            let visible_ticks = 6 * 16 * 2;
+
+            // First remove traces that would disappear after being shrunk as this affects indices.
             while trace_vec_model.row_count() > 0 {
-                // FIXME: Provide the oldest tick number to the UI or get it from it
-                if frame_number - trace_vec_model.row_data(0).unwrap().tick_number >= 6 * 16 * 2 {
+                let trace = trace_vec_model.row_data(0).unwrap();
+                if frame_number - (trace.start_tick + trace.num_ticks) >= visible_ticks {
                     trace_vec_model.remove(0);
                 } else {
                     break;
                 }
             }
+
+            let mut last_chan_trace_index: [Option<usize>; 4] = [None; 4];
+            for i in 0..trace_vec_model.row_count() {
+                let mut trace = trace_vec_model.row_data(i).unwrap();
+
+                // Remember whether this trace is a candidate to be merged with current channel traces.
+                if trace.start_tick + trace.num_ticks == frame_number {
+                    last_chan_trace_index[trace.channel as usize] = Some(i);
+                }
+
+                // Shrink old traces that span past the trace history range.
+                if frame_number - trace.start_tick >= visible_ticks {
+                    let diff = frame_number - trace.start_tick - visible_ticks;
+                    trace.start_tick += diff;
+                    trace.num_ticks -= diff;
+                    trace_vec_model.set_row_data(i, trace);
+                }
+            }
+
             // FIXME: Keep notes that are still active instead of re-adding?
             active_vec_model.set_vec(Vec::new());
 
-            for (&color, &(freq, vol)) in colors.iter().zip(states.iter()) {
+            for (channel, &(freq, vol)) in states.iter().enumerate() {
                 if vol > 0 {
                     let (trace, active) = if let Some((note, _cents)) = freq.map(MidiNote::from_freq) {
                         let trace = ChannelTraceNote {
-                            tick_number: frame_number,
+                            channel: channel as i32,
+                            start_tick: frame_number,
+                            num_ticks: 1,
                             octave: note.octave(),
                             key_pos: note.key_pos(),
                             is_black: note.is_black(),
                             volume: vol as f32 / 15.0,
-                            color: color,
                         };
                         let active = ChannelActiveNote {
                             trace: trace.clone(),
@@ -317,12 +334,13 @@ impl Synth {
                         (trace, active)
                     } else {
                         let trace = ChannelTraceNote {
-                            tick_number: frame_number,
+                            channel: channel as i32,
+                            start_tick: frame_number,
+                            num_ticks: 1,
                             octave: 0,
                             key_pos: 0,
                             is_black: false,
                             volume: vol as f32 / 15.0,
-                            color: color,
                         };
                         let active = ChannelActiveNote {
                             trace: trace.clone(),
@@ -330,7 +348,25 @@ impl Synth {
                         };
                         (trace, active)
                     };
-                    trace_vec_model.push(trace);
+
+                    let maybe_last_index = last_chan_trace_index[trace.channel as usize];
+                    maybe_last_index
+                        .and_then(|last_index| {
+                            let mut last = trace_vec_model.row_data(last_index).unwrap();
+                            if last.channel == trace.channel
+                                && last.octave == trace.octave
+                                && last.key_pos == trace.key_pos
+                                && last.is_black == trace.is_black
+                                && last.volume == trace.volume
+                            {
+                                last.num_ticks += trace.num_ticks;
+                                Some(trace_vec_model.set_row_data(last_index, last))
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or_else(|| trace_vec_model.push(trace));
+
                     active_vec_model.push(active);
                 }
             }

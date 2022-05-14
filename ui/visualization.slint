@@ -44,6 +44,13 @@ OctaveIndicator := Rectangle {
 }
 
 Visualization := VerticalLayout {
+    property<[color]> chan_colors: [
+        Colors.rgb(192, 0, 0),
+        Colors.rgb(0, 192, 0),
+        Colors.rgb(64, 0, 192),
+        Colors.rgb(0, 64, 192)
+        ];
+
     visualization := Rectangle {
         property<int> visible_octaves: 4;
         property<length> note_height: height / (7 * visible_octaves + 2);
@@ -80,14 +87,14 @@ Visualization := VerticalLayout {
                             )
                         + visualization.note_height / 2 - height / 2;
                     background: white;
-                    border-color: note.trace.color;
+                    border-color: chan_colors[note.trace.channel];
                     border-width: 2px;
                     Text {
                         width: 100%;
                         height: 100%;
                         text: note.note_name;
                         font_size: min(width, height) / 2.5;
-                        color: note.trace.color;
+                        color: chan_colors[note.trace.channel];
                         horizontal_alignment: center;
                         vertical_alignment: center;
                     }
@@ -105,15 +112,15 @@ Visualization := VerticalLayout {
 
                     for note[idx] in GlobalEngine.synth_trace_notes:
                     Rectangle {
-                        width: trace_container.tick_width;
+                        width: trace_container.tick_width * note.num_ticks;
                         height: visualization.note_height * (note.is_black ? 0.8 : 1.0);
-                        x: -note.tick_number * width;
+                        x: -note.start_tick * trace_container.tick_width - width;
                         y: parent.height
                             - (note.octave == 0 && note.key_pos == 0
                                 ? visualization.note_height
                                 : visualization.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + (note.is_black ? 1.5 : 1)) * visualization.note_height
                                 );
-                        background: note.color;
+                        background: chan_colors[note.channel];
                         opacity: note.volume;
                     }
                 }
