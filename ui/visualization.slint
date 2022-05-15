@@ -43,6 +43,37 @@ OctaveIndicator := Rectangle {
     }
 }
 
+ScaleSeparators := Path {
+    viewbox-width: width / 1px;
+    viewbox-height: height / 1px;
+    stroke: #e8e8e8;
+    stroke-width: 1px;
+
+    MoveTo { x: 10; y: viewbox-height * 1 / 7; }
+    LineTo { x: viewbox-width - 10; y: viewbox-height * 1 / 7; }
+    MoveTo { x: 10; y: viewbox-height * 2 / 7; }
+    LineTo { x: viewbox-width - 10; y: viewbox-height * 2 / 7; }
+    MoveTo { x: 10; y: viewbox-height * 3 / 7; }
+    LineTo { x: viewbox-width - 10; y: viewbox-height * 3 / 7; }
+    MoveTo { x: 10; y: viewbox-height * 4 / 7; }
+    LineTo { x: viewbox-width - 10; y: viewbox-height * 4 / 7; }
+    MoveTo { x: 10; y: viewbox-height * 5 / 7; }
+    LineTo { x: viewbox-width - 10; y: viewbox-height * 5 / 7; }
+    MoveTo { x: 10; y: viewbox-height * 6 / 7; }
+    LineTo { x: viewbox-width - 10; y: viewbox-height * 6 / 7; }
+}
+
+OctaveSeparator := Path {
+    viewbox-width: width / 1px;
+    viewbox-height: height / 1px;
+    stroke: #d8d8d8;
+    stroke-width: 2px;
+
+    MoveTo { x: 10; y: viewbox-height + 1; }
+    LineTo { x: viewbox-width - 10; y: viewbox-height + 1; }
+}
+
+
 Visualization := VerticalLayout {
     property<[color]> chan_colors: [
         Colors.rgb(192, 0, 0),
@@ -61,17 +92,32 @@ Visualization := VerticalLayout {
         border_width: 1px;
         border_color: #e8e8e8;
 
+        for i in visualization.visible_octaves:
+        HorizontalLayout {
+            OctaveIndicator {
+                width: 5%;
+                height: visualization.note_height * 7;
+                y: parent.height - visualization.noise_area_height - height * (i + 1);
+            }
+
+            Rectangle {
+                ScaleSeparators {
+                    width: 100%;
+                    height: visualization.note_height * 7;
+                    y: parent.height - visualization.noise_area_height - visualization.note_height * 7 * (i + 1);
+                }
+                OctaveSeparator {
+                    width: 100%;
+                    height: visualization.note_height * 7;
+                    y: parent.height - visualization.noise_area_height - visualization.note_height * 7 * (i + 1);
+                } 
+            }
+        }
+
         HorizontalLayout {
             Rectangle {
                 z: 1;
                 width: 5%;
-
-                for i in visualization.visible_octaves:
-                OctaveIndicator {
-                    width: 100%;
-                    height: visualization.note_height * 7;
-                    y: parent.height - visualization.noise_area_height - height * (i + 1);
-                }
 
                 for note[idx] in GlobalEngine.synth_active_notes:
                 Rectangle {
