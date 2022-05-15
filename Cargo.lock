@@ -54,18 +54,6 @@ checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 
 [[package]]
 name = "alsa"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb213f6b3e4b1480a60931ca2035794aa67b73103d254715b1db7b70dcb3c934"
-dependencies = [
- "alsa-sys",
- "bitflags",
- "libc",
- "nix 0.15.0",
-]
-
-[[package]]
-name = "alsa"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5915f52fe2cf65e83924d037b6c5290b7cee097c6b5c8700746e6168a343fd6b"
@@ -455,7 +443,7 @@ dependencies = [
  "cpal",
  "midir",
  "midly",
- "miniz_oxide 0.5.1",
+ "miniz_oxide",
  "notify",
  "once_cell",
  "rboy",
@@ -464,7 +452,7 @@ dependencies = [
  "serde_json",
  "slint",
  "slint-build",
- "tiny-skia 0.5.1",
+ "tiny-skia",
 ]
 
 [[package]]
@@ -624,16 +612,6 @@ dependencies = [
 
 [[package]]
 name = "core-foundation"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25bfd746d203017f7d5cbd31ee5d8e17f94b6521c7af77ece6c9e4b2d4b16c67"
-dependencies = [
- "core-foundation-sys 0.2.3",
- "libc",
-]
-
-[[package]]
-name = "core-foundation"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57d24c7a13c43e870e37c1556b74555437870a04514f7685f5b354e090567171"
@@ -649,15 +627,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "194a7a9e6de53fa55116934067c844d9d749312f75c6f6d0980e8c252f8c2146"
 dependencies = [
  "core-foundation-sys 0.8.3",
- "libc",
-]
-
-[[package]]
-name = "core-foundation-sys"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "065a5d7ffdcbc8fa145d6f0746f3555025b9097a9e9cda59f7467abae670c78d"
-dependencies = [
  "libc",
 ]
 
@@ -756,23 +725,22 @@ dependencies = [
 
 [[package]]
 name = "coremidi"
-version = "0.4.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99f92de5534f182bad5f91cad85611ab222cb6e237a0555e06c65a24936c3173"
+checksum = "1a7847ca018a67204508b77cb9e6de670125075f7464fff5f673023378fa34f5"
 dependencies = [
- "core-foundation 0.2.3",
- "core-foundation-sys 0.2.3",
+ "core-foundation 0.9.3",
+ "core-foundation-sys 0.8.3",
  "coremidi-sys",
- "time",
 ]
 
 [[package]]
 name = "coremidi-sys"
-version = "2.0.2"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07f05827cebb30dcd539ff1ac9bf6764f574a15fa147f8572f99d7617142f95e"
+checksum = "79a6deed0c97b2d40abbab77e4c97f81d71e162600423382c277dd640019116c"
 dependencies = [
- "core-foundation-sys 0.2.3",
+ "core-foundation-sys 0.8.3",
 ]
 
 [[package]]
@@ -799,7 +767,7 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74117836a5124f3629e4b474eed03e479abaf98988b4bb317e29f08cfe0e4116"
 dependencies = [
- "alsa 0.6.0",
+ "alsa",
  "core-foundation-sys 0.8.3",
  "coreaudio-rs",
  "jni",
@@ -966,16 +934,6 @@ name = "dconf_rs"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7046468a81e6a002061c01e6a7c83139daf91b11c30e66795b13217c2d885c8b"
-
-[[package]]
-name = "deflate"
-version = "0.8.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73770f8e1fe7d64df17ca66ad28994a0a623ea497fa69486e14984e715c5d174"
-dependencies = [
- "adler32",
- "byteorder",
-]
 
 [[package]]
 name = "deflate"
@@ -1172,7 +1130,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14cc0e06fb5f67e5d6beadf3a382fec9baca1aa751c6d5368fdeee7e5932c215"
 dependencies = [
  "bit_field",
- "deflate 1.0.0",
+ "deflate",
  "flume",
  "half",
  "inflate",
@@ -1245,7 +1203,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "crc32fast",
  "libc",
- "miniz_oxide 0.5.1",
+ "miniz_oxide",
 ]
 
 [[package]]
@@ -1657,7 +1615,7 @@ dependencies = [
  "rgb",
  "scoped-tls-hkt",
  "servo-fontconfig",
- "tiny-skia 0.6.3",
+ "tiny-skia",
  "ttf-parser",
  "unicode-script",
  "usvg",
@@ -1715,7 +1673,7 @@ dependencies = [
  "servo-fontconfig",
  "smol_str",
  "thiserror",
- "tiny-skia 0.6.3",
+ "tiny-skia",
  "url",
  "usvg",
 ]
@@ -1798,7 +1756,7 @@ dependencies = [
  "num-iter",
  "num-rational",
  "num-traits",
- "png 0.17.5",
+ "png",
  "scoped_threadpool",
  "tiff",
 ]
@@ -2141,20 +2099,19 @@ dependencies = [
 
 [[package]]
 name = "midir"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25df1e7836ca65078a121efed77049084a434838562b9892d0401bdfb59244cc"
+checksum = "2c1c68e2b589cce71b14a10d7d1599a845673f9decde80fa9e8500fdccd50dca"
 dependencies = [
- "alsa 0.4.3",
+ "alsa",
  "bitflags",
  "coremidi",
  "js-sys",
  "libc",
  "memalloc",
- "nix 0.15.0",
  "wasm-bindgen",
  "web-sys",
- "winapi 0.3.9",
+ "windows",
 ]
 
 [[package]]
@@ -2171,15 +2128,6 @@ name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
-
-[[package]]
-name = "miniz_oxide"
-version = "0.3.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "791daaae1ed6889560f8c4359194f56648355540573244a5448a83ba1ecc7435"
-dependencies = [
- "adler32",
-]
 
 [[package]]
 name = "miniz_oxide"
@@ -2368,19 +2316,6 @@ dependencies = [
  "cfg-if 0.1.10",
  "libc",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "nix"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b2e0b4f3320ed72aaedb9a5ac838690a8047c7b275da22711fddff4f8a14229"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if 0.1.10",
- "libc",
- "void",
 ]
 
 [[package]]
@@ -2735,26 +2670,14 @@ checksum = "1df8c4ec4b0627e53bdf214615ad287367e482558cf84b109250b37464dc03ae"
 
 [[package]]
 name = "png"
-version = "0.16.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c3287920cb847dee3de33d301c463fba14dda99db24214ddf93f83d3021f4c6"
-dependencies = [
- "bitflags",
- "crc32fast",
- "deflate 0.8.6",
- "miniz_oxide 0.3.7",
-]
-
-[[package]]
-name = "png"
 version = "0.17.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc38c0ad57efb786dd57b9864e5b18bae478c00c824dc55a38bbc9da95dde3ba"
 dependencies = [
  "bitflags",
  "crc32fast",
- "deflate 1.0.0",
- "miniz_oxide 0.5.1",
+ "deflate",
+ "miniz_oxide",
 ]
 
 [[package]]
@@ -2906,9 +2829,9 @@ dependencies = [
 
 [[package]]
 name = "rayon"
-version = "1.5.2"
+version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd249e82c21598a9a426a4e00dd7adc1d640b22445ec8545feef801d1a74c221"
+checksum = "bd99e5772ead8baa5215278c9b15bf92087709e9c1b2d1f97cdb5a183c933a7d"
 dependencies = [
  "autocfg",
  "crossbeam-deque",
@@ -2918,9 +2841,9 @@ dependencies = [
 
 [[package]]
 name = "rayon-core"
-version = "1.9.2"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f51245e1e62e1f1629cbfec37b5793bbabcaeb90f30e94d2ba03564687353e4"
+checksum = "258bcdb5ac6dad48491bb2992db6b7cf74878b0384908af124823d118c99683f"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
@@ -3009,11 +2932,11 @@ dependencies = [
  "jpeg-decoder",
  "log",
  "pico-args",
- "png 0.17.5",
+ "png",
  "rgb",
  "svgfilters",
  "svgtypes 0.8.0",
- "tiny-skia 0.6.3",
+ "tiny-skia",
  "usvg",
 ]
 
@@ -3586,9 +3509,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.93"
+version = "1.0.94"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04066589568b72ec65f42d65a1a52436e954b168773148893c020269563decf2"
+checksum = "a07e33e919ebcd69113d5be0e4d70c5707004ff45188910106854f38b960df4a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3670,30 +3593,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "time"
-version = "0.1.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca8a50ef2360fbd1eeb0ecd46795a87a19024eb4b53c5dc916ca1fd95fe62438"
-dependencies = [
- "libc",
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "tiny-skia"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bf81f2900d2e235220e6f31ec9f63ade6a7f59090c556d74fe949bb3b15e9fe"
-dependencies = [
- "arrayref",
- "arrayvec 0.5.2",
- "bytemuck",
- "cfg-if 1.0.0",
- "png 0.16.8",
- "safe_arch",
-]
-
-[[package]]
 name = "tiny-skia"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3703,7 +3602,7 @@ dependencies = [
  "arrayvec 0.5.2",
  "bytemuck",
  "cfg-if 1.0.0",
- "png 0.17.5",
+ "png",
  "safe_arch",
 ]
 
@@ -4160,17 +4059,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
+name = "windows"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbedf6db9096bc2364adce0ae0aa636dcd89f3c3f2cd67947062aaf0ca2a10ec"
+dependencies = [
+ "windows_aarch64_msvc 0.32.0",
+ "windows_i686_gnu 0.32.0",
+ "windows_i686_msvc 0.32.0",
+ "windows_x86_64_gnu 0.32.0",
+ "windows_x86_64_msvc 0.32.0",
+]
+
+[[package]]
 name = "windows-sys"
 version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea04155a16a59f9eab786fe12a4a450e75cdb175f9e0d80da1e17db09f55b8d2"
 dependencies = [
- "windows_aarch64_msvc",
- "windows_i686_gnu",
- "windows_i686_msvc",
- "windows_x86_64_gnu",
- "windows_x86_64_msvc",
+ "windows_aarch64_msvc 0.36.1",
+ "windows_i686_gnu 0.36.1",
+ "windows_i686_msvc 0.36.1",
+ "windows_x86_64_gnu 0.36.1",
+ "windows_x86_64_msvc 0.36.1",
 ]
+
+[[package]]
+name = "windows_aarch64_msvc"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8e92753b1c443191654ec532f14c199742964a061be25d77d7a96f09db20bf5"
 
 [[package]]
 name = "windows_aarch64_msvc"
@@ -4180,9 +4098,21 @@ checksum = "9bb8c3fd39ade2d67e9874ac4f3db21f0d710bee00fe7cab16949ec184eeaa47"
 
 [[package]]
 name = "windows_i686_gnu"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a711c68811799e017b6038e0922cb27a5e2f43a2ddb609fe0b6f3eeda9de615"
+
+[[package]]
+name = "windows_i686_gnu"
 version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "180e6ccf01daf4c426b846dfc66db1fc518f074baa793aa7d9b9aaeffad6a3b6"
+
+[[package]]
+name = "windows_i686_msvc"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "146c11bb1a02615db74680b32a68e2d61f553cc24c4eb5b4ca10311740e44172"
 
 [[package]]
 name = "windows_i686_msvc"
@@ -4192,9 +4122,21 @@ checksum = "e2e7917148b2812d1eeafaeb22a97e4813dfa60a3f8f78ebe204bcc88f12f024"
 
 [[package]]
 name = "windows_x86_64_gnu"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c912b12f7454c6620635bbff3450962753834be2a594819bd5e945af18ec64bc"
+
+[[package]]
+name = "windows_x86_64_gnu"
 version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4dcd171b8776c41b97521e5da127a2d86ad280114807d0b2ab1e462bc764d9e1"
+
+[[package]]
+name = "windows_x86_64_msvc"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "504a2476202769977a040c6364301a3f65d0cc9e3fb08600b2bda150a0488316"
 
 [[package]]
 name = "windows_x86_64_msvc"
@@ -4385,9 +4327,9 @@ dependencies = [
 
 [[package]]
 name = "zvariant"
-version = "3.2.0"
+version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e18ba99d71e03af262953f476071607da0c44e225236cf9b5b9f7f11f1d0b6b0"
+checksum = "cbd1abd8bc2c855412b9c8af9fc11c0d695c73c732ad5a1a1be10f3fd4bf19b2"
 dependencies = [
  "byteorder",
  "enumflags2",
@@ -4399,9 +4341,9 @@ dependencies = [
 
 [[package]]
 name = "zvariant_derive"
-version = "3.2.0"
+version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9042892ebdca35261951a83d17bcbfd4d3d528cb3bde828498a9b306b50d05c0"
+checksum = "abebd57382dfacf3e7bbdd7b7c3d162d6ed0687a78f046263ddef4ddabc275ae"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",

@@ -19,16 +19,16 @@ edition = "2018"
 
 
 [dependencies]
-once_cell = "1.5"
-cpal = { version = "0.13.3", features = ["wasm-bindgen"] }
-tiny-skia = "0.5.1"
-rhai = { version = "1.5", features = ["only_i32"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-notify = "4.0"
-miniz_oxide = "0.5.1"
-base64-url = "1.4.10"
-midir = "0.7"
+once_cell = "1"
+cpal = { version = "0.13", features = ["wasm-bindgen"] }
+tiny-skia = "0.6"
+rhai = { version = "1", features = ["only_i32"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+notify = "4"
+miniz_oxide = "0.5"
+base64-url = "1"
+midir = "0.8"
 midly = "0.5"
 
 [dependencies.slint]
