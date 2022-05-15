@@ -224,6 +224,7 @@ pub fn main() {
     global_engine.set_sequencer_song_patterns(slint::ModelRc::from(sequencer_song_model.clone()));
     global_engine.set_sequencer_patterns(slint::ModelRc::from(sequencer_pattern_model.clone()));
     global_engine.set_sequencer_steps(slint::ModelRc::from(sequencer_step_model.clone()));
+    global_engine.set_synth_trace_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
 
     let (sound_send, sound_recv) = mpsc::channel();
     let (notify_send, notify_recv) = mpsc::channel();
