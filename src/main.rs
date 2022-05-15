@@ -247,25 +247,30 @@ pub fn main() {
 
         let err_fn = |err| elog!("an error occurred on the output audio stream: {}", err);
         let sample_format = config.sample_format();
-        let mut config: cpal::StreamConfig = config.into();
 
         // The sequencer won't produce anything faster than every 1/64th second,
         // and live notes should probably eventually be quantized onto that,
         // so a buffer roughly the size of a frame should work fine.
         #[cfg(not(target_arch = "wasm32"))]
-        let audio_buffer_samples = 512;
+        let wanted_buffer_size = 512;
         // Everything happens on the same thread in wasm32, and is a bit slower,
         // so increase the buffer size there.
         #[cfg(target_arch = "wasm32")]
-        let audio_buffer_samples = 2048;
+        let wanted_buffer_size = 2048;
 
-        config.buffer_size = cpal::BufferSize::Fixed(audio_buffer_samples);
+        let buffer_size = match config.buffer_size() {
+            cpal::SupportedBufferSize::Range { min, max } => wanted_buffer_size.min(*max).max(*min),
+            cpal::SupportedBufferSize::Unknown => wanted_buffer_size,
+        };
+
+        let mut stream_config: cpal::StreamConfig = config.into();
+        stream_config.buffer_size = cpal::BufferSize::Fixed(buffer_size);
 
         let last_waveform_consumed = Arc::new(AtomicBool::new(true));
 
         let stream = match sample_format {
             SampleFormat::F32 => device.build_output_stream(
-                &config,
+                &stream_config,
                 move |dest: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     SOUND_ENGINE.with(|maybe_engine_cell| {
                         let mut maybe_engine = maybe_engine_cell.borrow_mut();
@@ -313,8 +318,8 @@ pub fn main() {
                 err_fn,
             ),
             // FIXME
-            SampleFormat::I16 => device.build_output_stream(&config, write_silence::<i16>, err_fn),
-            SampleFormat::U16 => device.build_output_stream(&config, write_silence::<u16>, err_fn),
+            SampleFormat::I16 => device.build_output_stream(&stream_config, write_silence::<i16>, err_fn),
+            SampleFormat::U16 => device.build_output_stream(&stream_config, write_silence::<u16>, err_fn),
         }
         .unwrap();
 
