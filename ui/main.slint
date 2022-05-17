@@ -201,7 +201,7 @@ export MainWindow := Window {
                 // placeholder to align with the 60% split left pane.
                 Button {}
                 play_button := Button {
-                    text: root.playing ? "⏹" : "▶";
+                    text: root.playing ? "■" : "▶";
                     clicked => {
                         GlobalEngine.play_clicked(!root.playing);
                     }
