@@ -238,7 +238,7 @@ impl Synth {
 
     fn update_instrument_ids(&self) {
         let ids = self.script.instrument_ids();
-        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+        self.main_window.upgrade_in_event_loop(move |handle| {
             let model = GlobalEngine::get(&handle).get_instruments();
             for (i, id) in ids.iter().enumerate() {
                 let mut row_data = model.row_data(i).unwrap();
@@ -268,7 +268,7 @@ impl Synth {
         // Let square channels be rendered on top of the wave channel.
         states.reverse();
 
-        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+        self.main_window.upgrade_in_event_loop(move |handle| {
             let global = GlobalEngine::get(&handle);
             let trace_model = global.get_synth_trace_notes();
             let trace_vec_model = trace_model

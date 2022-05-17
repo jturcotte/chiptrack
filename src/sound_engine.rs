@@ -114,7 +114,7 @@ impl SoundEngine {
                 self.synth.release_instrument(instrument);
             };
 
-            self.main_window.clone().upgrade_in_event_loop(move |handle| {
+            self.main_window.upgrade_in_event_loop(move |handle| {
                 let pressed = typ == NoteEvent::Press;
                 if is_selected_instrument {
                     let notes_model = handle.get_notes();
@@ -147,7 +147,7 @@ impl SoundEngine {
         self.pressed_note = None;
 
         // Release all notes visually that might have been pressed for the previous instrument.
-        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+        self.main_window.upgrade_in_event_loop(move |handle| {
             let model = handle.get_notes();
             for row in 0..model.row_count() {
                 let mut row_data = model.row_data(row).unwrap();
@@ -158,7 +158,7 @@ impl SoundEngine {
     }
 
     fn release_note_visually(&mut self, note: u32) -> () {
-        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+        self.main_window.upgrade_in_event_loop(move |handle| {
             let model = handle.get_notes();
             for row in 0..model.row_count() {
                 let mut row_data = model.row_data(row).unwrap();
@@ -180,7 +180,7 @@ impl SoundEngine {
             self.release_note_visually(note_to_release)
         }
 
-        self.main_window.clone().upgrade_in_event_loop(move |handle| {
+        self.main_window.upgrade_in_event_loop(move |handle| {
             let model = handle.get_notes();
             for row in 0..model.row_count() {
                 let mut row_data = model.row_data(row).unwrap();

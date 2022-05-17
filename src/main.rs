@@ -301,7 +301,7 @@ pub fn main() {
                                     let buffer_viz = std::mem::replace(&mut synth_output.buffer_viz, Vec::new());
                                     last_waveform_consumed.store(false, Ordering::Relaxed);
                                     let consumed_clone = last_waveform_consumed.clone();
-                                    window_weak.clone().upgrade_in_event_loop(move |handle| {
+                                    window_weak.upgrade_in_event_loop(move |handle| {
                                         update_waveform(&handle, buffer_viz, consumed_clone)
                                     });
                                 }
