@@ -423,8 +423,10 @@ pub fn main() {
             .unwrap();
     });
 
+    let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     global_engine.on_note_pressed(move |note| {
+        Lazy::force(&*cloned_context);
         cloned_sound_send.send(SoundMsg::PressNote(note as u32)).unwrap();
     });
 
