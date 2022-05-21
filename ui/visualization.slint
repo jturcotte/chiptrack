@@ -74,101 +74,98 @@ OctaveSeparator := Path {
 }
 
 
-Visualization := VerticalLayout {
+Visualization := Rectangle {
     property<[color]> chan_colors: [
         Colors.rgb(192, 0, 0),
         Colors.rgb(0, 192, 0),
         Colors.rgb(64, 0, 192),
         Colors.rgb(0, 64, 192)
         ];
+    property<int> visible_octaves: 4;
+    property<length> note_height: height / (7 * visible_octaves + 2);
+    // One note spacer, and the real note
+    property<length> noise_area_height: note_height * 2;
 
-    visualization := Rectangle {
-        property<int> visible_octaves: 4;
-        property<length> note_height: height / (7 * visible_octaves + 2);
-        // One note spacer, and the real note
-        property<length> noise_area_height: note_height * 2;
+    background: #f8f8f8;
+    border_width: 1px;
+    border_color: #e8e8e8;
 
-        background: #f8f8f8;
-        border_width: 1px;
-        border_color: #e8e8e8;
-
-        for i in visualization.visible_octaves:
-        HorizontalLayout {
-            OctaveIndicator {
-                width: 5%;
-                height: visualization.note_height * 7;
-                y: parent.height - visualization.noise_area_height - height * (i + 1);
-            }
-
-            Rectangle {
-                ScaleSeparators {
-                    width: 100%;
-                    height: visualization.note_height * 7;
-                    y: parent.height - visualization.noise_area_height - visualization.note_height * 7 * (i + 1);
-                }
-                OctaveSeparator {
-                    width: 100%;
-                    height: visualization.note_height * 7;
-                    y: parent.height - visualization.noise_area_height - visualization.note_height * 7 * (i + 1);
-                } 
-            }
+    for i in root.visible_octaves:
+    HorizontalLayout {
+        OctaveIndicator {
+            width: 5%;
+            height: root.note_height * 7;
+            y: parent.height - root.noise_area_height - height * (i + 1);
         }
 
-        HorizontalLayout {
-            Rectangle {
-                z: 1;
-                width: 5%;
+        Rectangle {
+            ScaleSeparators {
+                width: 100%;
+                height: root.note_height * 7;
+                y: parent.height - root.noise_area_height - root.note_height * 7 * (i + 1);
+            }
+            OctaveSeparator {
+                width: 100%;
+                height: root.note_height * 7;
+                y: parent.height - root.noise_area_height - root.note_height * 7 * (i + 1);
+            } 
+        }
+    }
 
-                for note[idx] in GlobalEngine.synth_active_notes:
-                Rectangle {
-                    border-radius: width;
-                    width: height;
-                    height: visualization.note_height * 3;
-                    x: (note.trace.is_black ? parent.width * 0.6 : parent.width) - width / 2;
-                    y: parent.height
-                        - (note.trace.octave == 0 && note.trace.key_pos == 0
-                            ? visualization.note_height
-                            : visualization.noise_area_height
-                                + ((note.trace.octave - 2) * 7 + note.trace.key_pos + (note.trace.is_black ? 1.5 : 1)) * visualization.note_height
-                            )
-                        + visualization.note_height / 2 - height / 2;
-                    background: white;
-                    border-color: chan_colors[note.trace.channel];
-                    border-width: 2px;
-                    Text {
-                        width: 100%;
-                        height: 100%;
-                        text: note.note_name;
-                        font_size: min(width, height) / 2.5;
-                        color: chan_colors[note.trace.channel];
-                        horizontal_alignment: center;
-                        vertical_alignment: center;
-                    }
+    HorizontalLayout {
+        Rectangle {
+            z: 1;
+            width: 5%;
+
+            for note[idx] in GlobalEngine.synth_active_notes:
+            Rectangle {
+                border-radius: width;
+                width: height;
+                height: root.note_height * 3;
+                x: (note.trace.is_black ? parent.width * 0.6 : parent.width) - width / 2;
+                y: parent.height
+                    - (note.trace.octave == 0 && note.trace.key_pos == 0
+                        ? root.note_height
+                        : root.noise_area_height
+                            + ((note.trace.octave - 2) * 7 + note.trace.key_pos + (note.trace.is_black ? 1.5 : 1)) * root.note_height
+                        )
+                    + root.note_height / 2 - height / 2;
+                background: white;
+                border-color: chan_colors[note.trace.channel];
+                border-width: 2px;
+                Text {
+                    width: 100%;
+                    height: 100%;
+                    text: note.note_name;
+                    font_size: min(width, height) / 2.5;
+                    color: chan_colors[note.trace.channel];
+                    horizontal_alignment: center;
+                    vertical_alignment: center;
                 }
             }
-            trace_container := Rectangle {
-                property<length> tick_width: width / (6 * 16 * 2);
-                Rectangle {
-                    // FIXME: current_tick_number is updated 64x per second, so this will cause jitter
-                    //        of the scroll animation when we scroll 2 ticks over a frame.
-                    //        Ideally we should animate this to scroll 64 ticks over a whole
-                    //        second instead, but I don't know any way to do this with the
-                    //        current API.
-                    x: GlobalEngine.current_tick_number * trace_container.tick_width;
+        }
+        trace_container := Rectangle {
+            property<length> tick_width: width / (6 * 16 * 2);
+            Rectangle {
+                // FIXME: current_tick_number is updated 64x per second, so this will cause jitter
+                //        of the scroll animation when we scroll 2 ticks over a frame.
+                //        Ideally we should animate this to scroll 64 ticks over a whole
+                //        second instead, but I don't know any way to do this with the
+                //        current API.
+                x: GlobalEngine.current_tick_number * trace_container.tick_width;
 
-                    for note[idx] in GlobalEngine.synth_trace_notes:
-                    Rectangle {
-                        width: trace_container.tick_width * note.num_ticks;
-                        height: visualization.note_height * (note.is_black ? 0.8 : 1.0);
-                        x: -note.start_tick * trace_container.tick_width - width;
-                        y: parent.height
-                            - (note.octave == 0 && note.key_pos == 0
-                                ? visualization.note_height
-                                : visualization.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + (note.is_black ? (1.5 - (1.0 - 0.8) / 2) : 1)) * visualization.note_height
-                                );
-                        background: chan_colors[note.channel];
-                        opacity: note.volume;
-                    }
+                for note[idx] in GlobalEngine.synth_trace_notes:
+                Rectangle {
+                    width: trace_container.tick_width * note.num_ticks;
+                    height: root.note_height * (note.is_black ? 0.8 : 1.0);
+                    x: -note.start_tick * trace_container.tick_width - width;
+                    y: parent.height
+                        - (note.octave == 0 && note.key_pos == 0
+                            ? root.note_height
+                            : root.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + (note.is_black ? (1.5 - (1.0 - 0.8) / 2) : 1)) * root.note_height
+                            );
+                    background: chan_colors[note.channel];
+                    opacity: note.volume;
                 }
             }
         }
