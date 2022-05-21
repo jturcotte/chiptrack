@@ -200,7 +200,9 @@ export MainWindow := Window {
                     }
                 }
                 // placeholder to align with the 60% split left pane.
-                Button {}
+                Button {
+                    enabled: false;
+                }
                 play_button := Button {
                     text: root.playing ? "■" : "▶";
                     clicked => {
