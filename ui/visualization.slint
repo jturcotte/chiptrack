@@ -164,7 +164,7 @@ Visualization := VerticalLayout {
                         y: parent.height
                             - (note.octave == 0 && note.key_pos == 0
                                 ? visualization.note_height
-                                : visualization.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + (note.is_black ? 1.5 : 1)) * visualization.note_height
+                                : visualization.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + (note.is_black ? (1.5 - (1.0 - 0.8) / 2) : 1)) * visualization.note_height
                                 );
                         background: chan_colors[note.channel];
                         opacity: note.volume;
