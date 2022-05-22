@@ -146,13 +146,21 @@ Visualization := Rectangle {
         }
         trace_container := Rectangle {
             property<length> tick_width: width / (6 * 16 * 2);
+            // The animated current_tick_number won't exactly match with the time when old traces
+            // are going to be removed from the model from the sequencer and then reach the UI
+            // thread. So clip the container.
+            clip: true;
             Rectangle {
-                // FIXME: current_tick_number is updated 64x per second, so this will cause jitter
-                //        of the scroll animation when we scroll 2 ticks over a frame.
-                //        Ideally we should animate this to scroll 64 ticks over a whole
-                //        second instead, but I don't know any way to do this with the
-                //        current API.
-                x: GlobalEngine.current_tick_number * trace_container.tick_width;
+                // current_tick_number is updated 64x per second, so this could cause jitter
+                // of the scroll animation when we scroll 2 ticks over a frame.
+                // To cope with this, whenever the sequencer changes it, animate this value
+                // plus 1/4th second worth of ticks over the next 1/4th second.
+                // This causes some noticeable visual effects when switching to the song mode,
+                // but at least this is smoother and is simpler than trying to predict the
+                // exact rendering time of a tick in the future.
+                property<float> anim_tick: GlobalEngine.current_tick_number + 16;
+                animate anim_tick { duration: 250ms; }
+                x: anim_tick * trace_container.tick_width;
 
                 for note[idx] in GlobalEngine.synth_trace_notes:
                 Rectangle {
