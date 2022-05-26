@@ -220,11 +220,19 @@ pub fn main() {
 
     let window = MainWindow::new();
     window.set_notes(slint::ModelRc::from(note_model.clone()));
+
+    #[cfg(target_arch = "wasm32")]
+    if !web_sys::window().unwrap().location().search().unwrap().is_empty() {
+        // Show the UI directly in song mode if the URL might contain a song.
+        window.set_in_song_mode(true);
+    }
+
     let global_engine = GlobalEngine::get(&window);
     global_engine.set_sequencer_song_patterns(slint::ModelRc::from(sequencer_song_model.clone()));
     global_engine.set_sequencer_patterns(slint::ModelRc::from(sequencer_pattern_model.clone()));
     global_engine.set_sequencer_steps(slint::ModelRc::from(sequencer_step_model.clone()));
     global_engine.set_synth_trace_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
+    global_engine.set_synth_active_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
 
     let (sound_send, sound_recv) = mpsc::channel();
     let (notify_send, notify_recv) = mpsc::channel();
