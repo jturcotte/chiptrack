@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 import {
-    Button,
     ComboBox,
     GridBox,
     HorizontalBox,
@@ -27,6 +26,30 @@ export {
     GlobalSettings,
     GlobalEngine,
     GlobalUtils
+}
+
+ToolbarButton := Rectangle {
+    callback clicked();
+    property text <=> t.text;
+    property text_color <=> t.color;
+    property<bool> enabled: true;
+    background: !ta.pressed && enabled ? white : #f4f4f4;
+    border_width: 1px;
+    border_color: enabled ? #a0a0a0 : transparent;
+    border_radius: width/16;
+    width: height * 2 / 3;
+    t := Text {
+        width: 100%;
+        height: 100%;
+        font_size: width / 2.5;
+        horizontal_alignment: center;
+        vertical_alignment: center;
+    }
+    ta := TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.clicked(); }
+    }
 }
 
 export MainWindow := Window {
@@ -186,13 +209,13 @@ export MainWindow := Window {
                 width: min_width;
                 padding: 0;
 
-                settings_button := Button {
+                settings_button := ToolbarButton {
                     text: "⚙";
                     clicked => {
                         root.show_settings = true;
                     }
                 }
-                song_mode_button := Button {
+                song_mode_button := ToolbarButton {
                     property<bool> toggled: false;
                     text: toggled ? "▦" : "▤";
                     clicked => {
@@ -200,18 +223,20 @@ export MainWindow := Window {
                     }
                 }
                 // placeholder to align with the 60% split left pane.
-                Button {
+                ToolbarButton {
                     enabled: false;
+                    text: " ";
                 }
-                play_button := Button {
+                play_button := ToolbarButton {
                     text: root.playing ? "■" : "▶";
                     clicked => {
                         GlobalEngine.play_clicked(!root.playing);
                     }
                 }
-                record_button := Button {
+                record_button := ToolbarButton {
                     property<bool> toggled: true;
                     text: toggled ? "⬤" : "◯";
+                    text_color: toggled ? darkred : black;
                     clicked => {
                         toggled = !toggled;
                         GlobalEngine.record_clicked(toggled);
