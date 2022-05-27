@@ -1,6 +1,10 @@
-# chiptrack
+# Chiptrack
 
-chiptrack is a cross-platform sequencer that internally uses a Game Boy emulator to synthesize the sound.
+A cross-platform sequencer using a Game Boy emulator for sound synthesis.
+
+[![image](https://user-images.githubusercontent.com/839935/145720892-27b514ab-c255-40ff-933d-da44df1650d8.png)](https://jturcotte.github.io/chiptrack)
+
+[Try the WebAssembly version.](https://jturcotte.github.io/chiptrack)
 
 It uses:
 
@@ -9,18 +13,15 @@ It uses:
 - [CPAL](https://github.com/RustAudio/cpal) for the audio output
 - [Rhai](https://github.com/rhaiscript/rhai) for the [instruments scripting](res/default-instruments.rhai)
 
-![image](https://user-images.githubusercontent.com/839935/145720892-27b514ab-c255-40ff-933d-da44df1650d8.png)
-
-[Try the WebAssembly version.](https://jturcotte.github.io/chiptrack)
-
-## Build and run
+## Install using Cargo
 
 ```bash
 # On Linux you might need CPAL local dependencies:
 # sudo apt install libasound2-dev
 # OR
 # sudo yum install alsa-lib-devel
-cargo run --release
+
+cargo install --git https://github.com/jturcotte/chiptrack
 ```
 
 ## License
@@ -28,7 +29,7 @@ cargo run --release
 The source code is available under the terms of the MIT license
 (See [LICENSE-MIT](LICENSE-MIT) for details).
 
-However, because of the use of GPL dependencies, chiptrack compiled binaries
+However, because of the use of GPL dependencies, Chiptrack compiled binaries
 are licensed under the terms of the GPLv3 (See [LICENSE-GPL](LICENSE-GPL)).
 
 *"Game Boy" is registered trademark of Nintendo*
