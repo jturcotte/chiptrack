@@ -15,7 +15,9 @@
     }
 
     canvas {
-      box-sizing: border-box;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;    
     }
 
     canvas:focus {
@@ -30,12 +32,18 @@
       * {
         margin: 0;
         padding: 0;
-        overflow: hidden;
       }
 
       canvas {
         width: 100vw !important;
         height: 100vh !important;
+      }
+
+      @supports (-webkit-touch-callout: none) {
+        canvas {
+          /* Mobile Safari doesn't seem to allow pushing the toolbar up by scrolling with 100vh. */
+          height: 101vh !important;
+        }
       }
     }
   </style>
