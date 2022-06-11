@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex};
 
 // The pass-through channel is otherwise too loud compared to mixed content.
 const SYNC_GAIN: f32 = 1.0 / 3.0;
+const VBLANK_CYCLES: u32 = 70224;
 
 enum PulseState {
     Zero,
@@ -180,10 +181,9 @@ impl Synth {
         output_data.sync_pulse.enabled = settings.sync_enabled;
     }
 
-    // The Gameboy APU has 512 frames per second where various registers are read,
-    // but all registers are eventually read at least once every 8 of those frames.
-    // So clock our frame generation at 64hz, thus this function is expected
-    // to be called 64x per second.
+    // GameBoy games seem to use the main loop clocked to the screen's refresh rate
+    // to also drive the sound chip. To keep the song timing, also use the same 59.73hz
+    // frame refresh rate.
     pub fn advance_frame(&mut self, step_change: Option<u32>) {
         {
             let i = self.settings_ring_index();
@@ -212,8 +212,8 @@ impl Synth {
         }
 
         // Generate one frame of mixed output.
-        // For 44100hz audio, this will put 44100/64 audio samples in self.buffer.
-        self.dmg.do_cycle(rboy::CLOCKS_PER_SECOND / 64);
+        // For 44100hz audio, this will put 44100/59.73 audio samples in self.buffer.
+        self.dmg.do_cycle(VBLANK_CYCLES);
 
         self.update_ui_channel_states();
         self.frame_number += 1;

@@ -256,9 +256,8 @@ pub fn main() {
         let err_fn = |err| elog!("an error occurred on the output audio stream: {}", err);
         let sample_format = config.sample_format();
 
-        // The sequencer won't produce anything faster than every 1/64th second,
-        // and live notes should probably eventually be quantized onto that,
-        // so a buffer roughly the size of a frame should work fine.
+        // The sequencer won't produce anything faster than every 1/60th second,
+        // so a buffer roughly the size of a frame should work fine for now.
         #[cfg(not(target_arch = "wasm32"))]
         let wanted_buffer_size = 512;
         // Everything happens on the same thread in wasm32, and is a bit slower,
