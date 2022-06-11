@@ -1,15 +1,15 @@
 # Chiptrack
 
-A cross-platform sequencer using a Game Boy emulator for sound synthesis.
+A cross-platform sequencer and synthesizer based on the emulation of the Game Boy sound chip.
 
-[![image](https://user-images.githubusercontent.com/839935/145720892-27b514ab-c255-40ff-933d-da44df1650d8.png)](https://jturcotte.github.io/chiptrack)
+[![image](https://user-images.githubusercontent.com/839935/173205865-e4ce44f0-75d3-4c26-8230-6d04aaa9dcdd.png)](https://jturcotte.github.io/chiptrack)
 
 [Try the WebAssembly version.](https://jturcotte.github.io/chiptrack)
 
 It uses:
 
-- [Slint](https://github.com/slint-ui/slint) for the UI.
-- [RBoy](https://github.com/mvdnes/rboy) for the sound synthesizer
+- [Slint](https://github.com/slint-ui/slint) for the UI
+- [RBoy](https://github.com/mvdnes/rboy) for the sound chip emulation
 - [CPAL](https://github.com/RustAudio/cpal) for the audio output
 - [Rhai](https://github.com/rhaiscript/rhai) for the [instruments scripting](res/default-instruments.rhai)
 
