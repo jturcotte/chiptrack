@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Chiptrack (Web Assembly version)</title>
+  <style>
+    body {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      -o-user-select: none;
+      user-select: none;
+    }
+
+    canvas {
+      display: block;
+      margin-left: auto;
+      margin-right: auto;    
+    }
+
+    canvas:focus {
+      outline: none;
+    }
+
+    @media screen and (max-width: 992px) and (orientation: landscape) {
+      .hide-in-mobile-landscape {
+        display: none;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+      }
+
+      canvas {
+        width: 100vw !important;
+        height: 100vh !important;
+      }
+
+      @supports (-webkit-touch-callout: none) {
+        canvas {
+          /* Mobile Safari doesn't seem to allow pushing the toolbar up by scrolling with 100vh. */
+          height: 101vh !important;
+        }
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas" width="640" height="480" unselectable="on"></canvas>
+  <script type="module">
+    import init from './chiptrack.js';
+    // The song is stored in the URL.
+    // If no song is provided, load the demo song.
+    if (location.search === '')
+      location.search = 'p=tetris&s=7d3RbtpIGAXgez-F1etcBIIx7KtEURRt2VWlhkaBXlV996WBtt4oqZyQyczPfDelatoP99hwNGOY-da07YfN6vPq7-3q4_Wn9WZ7__V2td5--Ks9P3v42Zf1v9d3N9vt6n692f3p5e4P2_3P2nayf5juHy72D7P9Q7d_mO8f-rOj_t1i_7A8_POfzMGZHKDJQZocqEm3e7ja_ze2q7vBf-_3_2T_6-_Htv3263e7f7f-sl3t_m5_eKbDn97drzY_iJ22-t8P7ndJ3mxWhx_9-sn3sz_q8_Mn9X9uPm-e4x9-Vo2_CJ3-MvLRx77y-3nKo-9nSbMJfd2U_po9_O7qbNT7v3doPp_PP1VfH_D5fD5fH_D5fD7_dX2Qdt7R2TjpOetp6KOfufJdO6f5ujUm4PP5fL4-4PP5fL4-4PP5fP7r-2B2_tLZr6Li6qahD1_60pe-9PP3gN7k8_l84wJ58fl8vj6QF5_P5-uDCvLyiXHpSz9F-s5tiHS0AJ_P5_P1AZ_P5_P1AZ_P5_Of6oNm0ArjdjeYW7Mlp79M7PdZjt9qS_lWzLFS1yns7LEwQuDz-Xy-GSM-n8_n6wM-n8_nZ-yD2PuTnuZdA7Pu73H0dvfImX7ou5WlX_nGBHw-n8_XB3w-n8_XB3w-n88_Yo-DLvZK433sdd6lL33pSz97D-hNPp_PNy6QF5_P5-sDefH5fL4-qCAvnxiXvvQjpu_otQCfz-fz9QGfz-fz9QGfz-fzk_VBM2iFkXscLDKs1f1Weuz9GRahjz72Okux19ePvlJR6FWujA60M5_P5-sD54PP5_P1gfPB5_P5p9wH5k75tc79xl5jP_y1Y3-JgnpAXnw-n68P5MXn8_n6QF58Pp-vD4bPN3vx3GlZK43PQx--9LOmfx47_an0pW9cwOeX78_kw9cHfD6fz9cHfD6fz9cHhfg-tSx96adI37m1x4FXGp_P5xsVOB98Pp-vD5wPPp_PD9sHzaAVRu5xEHqt-hP9PKL0pc_nGyXw-Xw-Xx_w-Xw-Xx_w-Xw-P99eB3Yqzem7byN96cvHyIDP5_P5-oDP5_P5-oDP5_P5pe120MVec7yPveK79KVfa_rBD39R-OEbF_D5fD5fH_D5fD5fH_D5fD5fHzzyfWpc-tKPmL6j1wJ8Pp_P1wd8Pp_P1wd8Pp_PT9YHzaAVxu120MWex-vMYGf0Q6_5k3a1ri700SfWJ6FftYVf9cYGfD6fz9cHfD6fz9cHfD6fz6-3D3o73OZMv4-c_iL2vHX0ayf23abCr3yjAj6fz-frAz6fz-frAz6fz-e_vg9e_i2DouK6WJj4lb70I24QEHt3idmk8MOva1zwzIvBm4X8-Xy-eSI-n8_n6wM-n8_n64PW1LX0pZ84fefW_gZeaXw-n29U4Hzw-Xy-PnA--Hw-P2wfNINWGLe_wTz0ijP8zH7s1aJiX_tp1_tJm03sfUkKv-qNDvh8Pp-vD_h8Pp-vD_h8Pp__-j7o5-4Y8Mvclzf50bv2c6Yf-m5T6Ve-UQGfz-fz9QGfz-fz9QGfz-fzX98HFy-eOS1rnXFr7IdKv6xVuYNf-xeVHb6XrnHBC9-KvFXzj-kC-eRtA_noAz6fz-frAz6fz-frgxS-2Ufp1zpXFPvad_RagM_n8_n6gM_n8_n6gM_n8_nJ-qAZtMLIHQ5if3Q_9gr7sbNfRj76fuLKyZZ96FWuSs_e2IDP5_P5-oDP5_P5-oDP5_P5R-xvEHveNPoa76HTD767Qex7TdGv_LR7S8y0wEtawNXK5_P5-kBefD6frw_kxefz-fpg-HyzPvQi6V3oj7pH96WfNf3YH9aPnn7pm2PUNS545q3I5Sr_mstAPvwq-4DP5_P5-oDP5_P5-sD-BtKXfob0nVv7G3il8fl8vlGB88Hn8_n6wPng8_n8sH3QDFph5P4GST88nnhFmxndK6LCfTGkL32jAz6fz-frAz6fz-frAz6fz-en2eHAgic5fYv9SN87Hd_IgM_n8_n6gM_n8_n6gM_n8_ml7XLQFb5Y91uv9F7U4Utf-ny-oQGfz-fz9QGfz-fz9QGfz-fz9YGl9qUvfek7ei3A5_P5fH3A5_P5fH3A5_P5_Hfvg2bQCpe6gc_n83XDsWMFX8jh1-B3vcufrw3kxefz-fpAXnw-n68P5MXn8_n64Knnm5k-5fNd_nxtIC8-n8_XB_Li8_l8fXAqH7aLPdklfelLX_r5e0Bv8vl8vnGBvPh8Pl8fyIvP5_P1QQV5WXdf-tJPkb5za9cDrzQ-n883KnA--Hw-Xx84H3w-nx-2D5pBK9j1gM_n83VDO_6baEsLt_Dr3fVg7vLnawN58fl8vj6QF5_P5-sDefH5fL4-eOr5pqZP-fXePXDzjK8N5MXn8_n6QF58Pp-vDx4_X_QP2wVf-V360pe-9LP3gN7k8_l84wJ58fl8vj6QF5_P5-uDCvKyNrv0pR8xfUevBfh8Pp-vD_h8Pp-vD_h8Pp-frA-aQSvY9YDP5_N1Qzv-m2i9hVv49a5bZNkuvjaQF5_P5-sDefH5fL4-kBefz-frg7f5XoXTwT-duwdunvG1gbz4fD5fH8iLz-fz9cHj54s-XA6-8rv0pS996WfvAb3J5_P5xgXy4vP5fH0gLz6fz9cHFeRl3X3pSz9F-s6tXQ-80vh8Pt-owPng8_l8feB88Pl8ftg-aAatYNcDPp_P1w3t-G-iWfadX_G6RUuXfyzfbWsTR3w-n8_XB3w-n8_XB3w-n89_nz7o5mZP-Xx-nps3c3cPCmoDefH5fL4-kBefz-frg1OZLQq-8Htt6Rvq8_llVoG8-AnaQD58vj7g8_l8vj7g8_l8vj4ozTd7LX3pR0zf0WsBPp_P5-sDPp_P5-sDPp_P5yfrg2bQCvY94PP5fN3QHjtWsHQRvwa_613-fG0gLz6fz9cH8uLz-Xx9IC8-n8_XB089X-y14Pj8BL7Ln19lGzgffD6frw_kxefz-frgRD5sF3zjA-lLX_rSz94DepPP5_ONC-TF5_P5-kBefD6frw8qyMu6-9KXfor0nVu7Hnil8fl8vlGB88Hn8_n6wPng8_n8sH3QDFrBrgd8Pp-vG9rx30RbWriFX--uB3OXP18byIvP5_P1gbz4fD5fH8iLz-fz9cFTzzc1fcqv9-6Bm2d8bSAvPp_P1wfy4vP5fH3w-Pmif9gu-Mrv0pe-9KWfvQf0Jp_P5xsXyIvP5_P1gbz4fD5fH1SQl7XZpS_9iOk7ei3A5_P5fH3A5_P5fH3A5_P5_GR90Axawa4HfD6frxva8d9E6y3cUp4vfl8n4vNNHPH5fD5fH_D5fD5fH_D5fD6_vD4wfWr2ugbfngd8ZSAvPp_P1wfy4vP5fH3w-Pmif9I0-Lrv0pe-9KWfvQf0Jp_P5xsXyIvP5_P1gbz4fD5fH1SQl1X3pS_9FOk7t_Y88Erj8_l8owLng8_n8_WB88Hn8_lh-6AZtII9D_h8Pl83tOPHClMLt8Ty3bfj8_lmjvh8Pp-vD_h8Pp-vD_h8Pp-fvA8W7h7w-eN9d2_4RgfOB5_P5-sD54PP5_NPvQ-6ubXH8x1-dembauHzy6wCefETtIF8-Hx9wOfz-Xx9wOfz-Xx9UJpv9lr60o-YvqPXAnw-n8_XB3w-n8_XB3w-n89P1gfNz18fmuHD7dft6uP1p_VmN3t1u1pvf6iXV833_wA&i=vZPNTsJAEMfvPkWDF0wI6faDr8aTcDAxelE8bhY6lI21hd1tCREewate9a4n38gncWubkJaWFKnsZdvOv7Mzv_0PB4GpxwULHsETddRQTp9OFLmo3VNq3y8ftcbv64wB5z1l5fkCGsqEwXylxMJoOaMmnweEAWragVgq5_JLr9e_u8UaNqxElKcGL8RcECbkL4ZVpLApS1IOroe4P7goVM6AUd-WYj1XEtUtg9GWGxeMOg6w-lkcXTdO1vKRpxlpWUafx2OkV8lIrYhRtDFwgXD43-7VKrtHFTokaxEza5G3_Syi7QVJS0HqWEWKMpC0NCQjV7IbklZujFpZRu_HY2RWyUitiNFeY3RI92qV3aMKHZK1SDdrka-yFlmQEJozlyyp50R1EJeDtSUQZOSCDNdUpOmG2Wp3umQ0tmEyAXs8It1Ou2UauobUmrUjuaw2J3fou7KJhObw5gojVd1WFXGKy_urRfILOPz4vDtCeuaSXp_LXpLnUw4pZ6J0jRvBbmNudAW2jAVj1x8_YD6lk-0pSBR-4AlgeEFtMU0OvL_sY2QWprNpSLnPChImDGVCMcUueI6Y1ltpoD8';
+    init();
+  </script>
+</body>
+
+</html>
