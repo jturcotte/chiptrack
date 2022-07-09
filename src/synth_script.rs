@@ -94,7 +94,7 @@ trait ScriptChannel {
     fn previous_settings_range(&mut self) -> &mut Option<Range<usize>>;
     fn active_settings_range(&mut self) -> &mut Option<Range<usize>>;
 
-    fn note_pressed(&mut self) {
+    fn end_script_run(&mut self) {
         *self.previous_settings_range() = self.active_settings_range().take()
     }
 
@@ -498,11 +498,11 @@ impl GbBindings {
     fn set_frame_number(&mut self, v: usize) {
         *self.frame_number.borrow_mut() = v;
     }
-    fn note_pressed(&mut self) {
-        self.square1.borrow_mut().note_pressed();
-        self.square2.borrow_mut().note_pressed();
-        self.wave.borrow_mut().note_pressed();
-        self.noise.borrow_mut().note_pressed();
+    fn end_script_run(&mut self) {
+        self.square1.borrow_mut().end_script_run();
+        self.square2.borrow_mut().end_script_run();
+        self.wave.borrow_mut().end_script_run();
+        self.noise.borrow_mut().end_script_run();
     }
 }
 
@@ -569,8 +569,9 @@ pub mod gb_api {
     pub fn wait_frames(gb: &mut SharedGbBindings, frames: i32) -> Result<(), Box<EvalAltResult>> {
         let this = gb.borrow_mut();
         let len = this.settings_ring.borrow().len();
-        runtime_check!(frames >= 0, "frames must be >= 0, got {}", frames);
-        runtime_check!((frames as usize) < len, "frames must be < {}, got {}", len, frames);
+        // FIXME: Check that this isn't going back past the current frame
+        // runtime_check!(frames >= 0, "frames must be >= 0, got {}", frames);
+        runtime_check!(frames < len as i32, "frames must be < {}, got {}", len, frames);
         let mut frame_number = this.frame_number.borrow_mut();
         *frame_number = *frame_number + frames as usize;
         Ok(())
@@ -1027,11 +1028,11 @@ impl SynthScript {
         self.instrument_ids.borrow().clone()
     }
 
-    fn load_default_instruments(&mut self) {
+    fn load_default_instruments(&mut self, frame_number: usize) {
         self.script_engine
             .compile(SynthScript::DEFAULT_INSTRUMENTS)
             .map_err(|e| Box::new(e) as Box<dyn Error>)
-            .and_then(|ast| self.set_instruments_ast(ast).map_err(|e| e as Box<dyn Error>))
+            .and_then(|ast| self.set_instruments_ast(ast, frame_number).map_err(|e| e as Box<dyn Error>))
             .expect("Error loading default instruments.");
     }
 
@@ -1068,12 +1069,12 @@ impl SynthScript {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load(&mut self, project_instruments_path: &std::path::Path) {
+    pub fn load(&mut self, project_instruments_path: &std::path::Path, frame_number: usize) {
         if project_instruments_path.exists() {
             let maybe_ast = self
                 .script_engine
                 .compile_file(project_instruments_path.to_path_buf())
-                .and_then(|ast| self.set_instruments_ast(ast));
+                .and_then(|ast| self.set_instruments_ast(ast, frame_number));
 
             match maybe_ast {
                 Ok(_) => {
@@ -1085,7 +1086,7 @@ impl SynthScript {
                         project_instruments_path,
                         e
                     );
-                    self.load_default_instruments();
+                    self.load_default_instruments(frame_number);
                 }
             }
         } else {
@@ -1093,7 +1094,7 @@ impl SynthScript {
                 "Project instruments file {:?} doesn't exist, using default instruments.",
                 project_instruments_path
             );
-            self.load_default_instruments();
+            self.load_default_instruments(frame_number);
         }
     }
 
@@ -1102,7 +1103,7 @@ impl SynthScript {
             let mut gb = self.script_context.borrow_mut();
             // The script themselves are modifying this state, so reset it.
             gb.set_frame_number(frame_number);
-            gb.note_pressed();
+            gb.end_script_run();
         }
 
         let state = &mut self.instrument_states.borrow_mut()[instrument as usize];
@@ -1136,8 +1137,16 @@ impl SynthScript {
         }
     }
 
-    fn set_instruments_ast(&mut self, ast: AST) -> Result<(), std::boxed::Box<rhai::EvalAltResult>> {
+    fn set_instruments_ast(&mut self, ast: AST, frame_number: usize) -> Result<(), std::boxed::Box<rhai::EvalAltResult>> {
         self.script_ast = ast;
+
+        // The script might also contain sound settings directly in the its root.
+        {
+            let mut gb = self.script_context.borrow_mut();
+            gb.set_frame_number(frame_number);
+            gb.end_script_run();
+            // FIXME: Also reset the gb states somewhere like gbsplay does
+        }
 
         let mut scope = Scope::new();
         scope.push("gb", self.script_context.clone());

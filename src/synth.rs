@@ -254,7 +254,7 @@ impl Synth {
     }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load(&mut self, project_instruments_path: &std::path::Path) {
-        self.script.load(project_instruments_path);
+        self.script.load(project_instruments_path, self.frame_number);
         self.update_instrument_ids();
     }
 
