@@ -924,7 +924,8 @@ impl RegSettings {
 struct InstrumentState {
     press_function: Option<FnPtr>,
     release_function: Option<FnPtr>,
-    pressed_note: Option<u32>,
+    frame_function: Option<FnPtr>,
+    pressed_note_and_frame: Option<(u32, usize)>,
 }
 
 pub struct SynthScript {
@@ -944,7 +945,8 @@ impl SynthScript {
             InstrumentState {
                 press_function: None,
                 release_function: None,
-                pressed_note: None
+                frame_function: None,
+                pressed_note_and_frame: None
             };
             NUM_INSTRUMENTS
         ]));
@@ -975,7 +977,9 @@ impl SynthScript {
                         i.to_string()
                     };
 
-                instrument_states_clone.borrow_mut()[(i - 1) as usize].release_function = match map.remove("release") {
+                let state = &mut instrument_states_clone.borrow_mut()[(i - 1) as usize];
+
+                state.release_function = match map.remove("release") {
                     None =>
                         None,
 
@@ -988,6 +992,21 @@ impl SynthScript {
                         Some(f)
                     }
                 };
+
+                state.frame_function = match map.remove("frame") {
+                    None =>
+                        None,
+
+                    Some(f_dyn) => {
+                        runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(),
+                            "set_instrument: The \"frame\" property must be a function pointer or an anonymous function, got a {}",
+                            f_dyn.type_name());
+
+                        let f = f_dyn.try_cast::<FnPtr>().unwrap();
+                        Some(f)
+                    }
+                };
+
                 match map.remove("press") {
                     None =>
                         Err(format!("set_instrument: The instrument must have a \"press\" property").into()),
@@ -998,7 +1017,7 @@ impl SynthScript {
                             f_dyn.type_name());
 
                         let f = f_dyn.try_cast::<FnPtr>().unwrap();
-                        instrument_states_clone.borrow_mut()[(i - 1) as usize].press_function = Some(f);
+                        state.press_function = Some(f);
                         Ok(())
                     },
                 }
@@ -1060,7 +1079,10 @@ impl SynthScript {
         self.script_engine
             .compile(SynthScript::DEFAULT_INSTRUMENTS)
             .map_err(|e| Box::new(e) as Box<dyn Error>)
-            .and_then(|ast| self.set_instruments_ast(ast, frame_number).map_err(|e| e as Box<dyn Error>))
+            .and_then(|ast| {
+                self.set_instruments_ast(ast, frame_number)
+                    .map_err(|e| e as Box<dyn Error>)
+            })
             .expect("Error loading default instruments.");
     }
 
@@ -1136,7 +1158,7 @@ impl SynthScript {
 
         let state = &mut self.instrument_states.borrow_mut()[instrument as usize];
         if let Some(f) = &state.press_function {
-            state.pressed_note = Some(note);
+            state.pressed_note_and_frame = Some((note, frame_number));
             let result: Result<(), _> = f.call(
                 &self.script_engine,
                 &self.script_ast,
@@ -1153,7 +1175,7 @@ impl SynthScript {
         self.script_context.borrow_mut().set_frame_number(frame_number);
 
         let state = &mut self.instrument_states.borrow_mut()[instrument as usize];
-        if let (Some(f), Some(note)) = (&state.release_function, state.pressed_note.take()) {
+        if let (Some(f), Some((note, _))) = (&state.release_function, state.pressed_note_and_frame.take()) {
             let result: Result<(), _> = f.call(
                 &self.script_engine,
                 &self.script_ast,
@@ -1165,7 +1187,34 @@ impl SynthScript {
         }
     }
 
-    fn set_instruments_ast(&mut self, ast: AST, frame_number: usize) -> Result<(), std::boxed::Box<rhai::EvalAltResult>> {
+    pub fn advance_frame(&mut self, frame_number: usize) {
+        for state in &*self.instrument_states.borrow_mut() {
+            // Only run the frame function on instruments currently pressed.
+            if let (Some(f), Some((note, pressed_frame))) = (&state.frame_function, state.pressed_note_and_frame) {
+                // The script themselves are modifying this state, so reset it.
+                self.script_context.borrow_mut().set_frame_number(frame_number);
+
+                let result: Result<(), _> = f.call(
+                    &self.script_engine,
+                    &self.script_ast,
+                    (
+                        note as i32,
+                        Self::note_to_freq(note),
+                        (frame_number - pressed_frame) as i32,
+                    ),
+                );
+                if let Err(e) = result {
+                    elog!("{}", e)
+                }
+            }
+        }
+    }
+
+    fn set_instruments_ast(
+        &mut self,
+        ast: AST,
+        frame_number: usize,
+    ) -> Result<(), std::boxed::Box<rhai::EvalAltResult>> {
         self.script_ast = ast;
 
         // The script might also contain sound settings directly in the its root.

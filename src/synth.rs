@@ -185,6 +185,8 @@ impl Synth {
     // to also drive the sound chip. To keep the song timing, also use the same 59.73hz
     // frame refresh rate.
     pub fn advance_frame(&mut self, step_change: Option<u32>) {
+        self.script.advance_frame(self.frame_number);
+
         {
             let i = self.settings_ring_index();
             let mut settings_ring = self.settings_ring.borrow_mut();
