@@ -206,9 +206,9 @@ impl GbSquare {
         Ok(())
     }
 
-    pub fn set_freq(&mut self, index: usize, freq: f64) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(freq >= 64.0, "freq must be >= 64, got {}", freq);
-        let gb_freq = GbSquare::to_gb_freq(freq);
+    pub fn set_gb_freq(&mut self, index: usize, gb_freq: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(gb_freq >= 0, "gb_freq must be >= 0, got {}", gb_freq);
+        runtime_check!(gb_freq < 2048, "gb_freq must be < 2048, got {}", gb_freq);
         self.orit_at_index(
             index,
             self.channel as u16 + 3,
@@ -222,6 +222,11 @@ impl GbSquare {
             RegSetter::new(0x07, (gb_freq >> 8) as u8),
         );
         Ok(())
+    }
+
+    pub fn set_freq(&mut self, index: usize, freq: f64) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(freq >= 64.0, "freq must be >= 64, got {}", freq);
+        self.set_gb_freq(index, GbSquare::to_gb_freq(freq))
     }
 
     pub fn trigger_with_length(&mut self, length: i32) -> Result<(), Box<EvalAltResult>> {
@@ -318,9 +323,9 @@ impl GbWave {
         Ok(())
     }
 
-    pub fn set_freq(&mut self, index: usize, freq: f64) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(freq >= 32.0, "freq must be >= 32, got {}", freq);
-        let gb_freq = GbWave::to_gb_freq(freq);
+    pub fn set_gb_freq(&mut self, index: usize, gb_freq: i32) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(gb_freq >= 0, "gb_freq must be >= 0, got {}", gb_freq);
+        runtime_check!(gb_freq < 2048, "gb_freq must be < 2048, got {}", gb_freq);
         self.orit_at_index(
             index,
             Wave as u16 + 3,
@@ -334,6 +339,11 @@ impl GbWave {
             RegSetter::new(0x07, (gb_freq >> 8) as u8),
         );
         Ok(())
+    }
+
+    pub fn set_freq(&mut self, index: usize, freq: f64) -> Result<(), Box<EvalAltResult>> {
+        runtime_check!(freq >= 32.0, "freq must be >= 32, got {}", freq);
+        self.set_gb_freq(index, GbWave::to_gb_freq(freq))
     }
 
     pub fn trigger_with_length(&mut self, length: i32) -> Result<(), Box<EvalAltResult>> {
@@ -545,7 +555,7 @@ pub mod gb_api {
 
     #[rhai_fn(global)]
     pub fn to_wave_gb_freq(freq: f64) -> i32 {
-        GbSquare::to_gb_freq(freq)
+        GbWave::to_gb_freq(freq)
     }
 
     #[rhai_fn(get = "square1", pure)]
@@ -643,6 +653,15 @@ pub mod gb_api {
         set_multi!(this_rc, values, i32, set_env_period)
     }
 
+    #[rhai_fn(set = "gb_freq", pure, return_raw)]
+    pub fn set_square_gb_freq(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
+        set!(this_rc, v, set_gb_freq)
+    }
+    #[rhai_fn(set = "gb_freq", pure, return_raw)]
+    pub fn set_multi_square_gb_freq(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
+        set_multi!(this_rc, values, i32, set_gb_freq)
+    }
+
     #[rhai_fn(set = "freq", pure, return_raw)]
     pub fn set_square_freq(this_rc: &mut SharedGbSquare, v: f64) -> Result<(), Box<EvalAltResult>> {
         set!(this_rc, v, set_freq)
@@ -701,6 +720,15 @@ pub mod gb_api {
     #[rhai_fn(set = "table", pure, return_raw)]
     pub fn set_multi_table(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
         set_multi!(this_rc, values, String, set_table)
+    }
+
+    #[rhai_fn(set = "gb_freq", pure, return_raw)]
+    pub fn set_wave_gb_freq(this_rc: &mut SharedGbWave, v: i32) -> Result<(), Box<EvalAltResult>> {
+        set!(this_rc, v, set_gb_freq)
+    }
+    #[rhai_fn(set = "gb_freq", pure, return_raw)]
+    pub fn set_multi_wave_gb_freq(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
+        set_multi!(this_rc, values, i32, set_gb_freq)
     }
 
     #[rhai_fn(set = "freq", pure, return_raw)]
