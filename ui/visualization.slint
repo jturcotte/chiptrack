@@ -151,16 +151,7 @@ Visualization := Rectangle {
             // thread. So clip the container.
             clip: true;
             Rectangle {
-                // current_tick_number is updated 64x per second, so this could cause jitter
-                // of the scroll animation when we scroll 2 ticks over a frame.
-                // To cope with this, whenever the sequencer changes it, animate this value
-                // plus 1/4th second worth of ticks over the next 1/4th second.
-                // This causes some noticeable visual effects when switching to the song mode,
-                // but at least this is smoother and is simpler than trying to predict the
-                // exact rendering time of a tick in the future.
-                property<float> anim_tick: GlobalEngine.current_tick_number + 16;
-                animate anim_tick { duration: 250ms; }
-                x: anim_tick * trace_container.tick_width;
+                x: GlobalEngine.current_tick_number * trace_container.tick_width;
 
                 for note[idx] in GlobalEngine.synth_trace_notes:
                 Rectangle {
