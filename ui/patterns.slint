@@ -13,10 +13,10 @@ import {
 
 SequencerPattern := Rectangle {
     callback clicked();
-    property<int> number: 0;
+    property<int> number;
     property<bool> highlighted;
-    property<bool> empty;
-    background: empty ? white : #c0c0c0;
+    property<bool> fill;
+    background: fill ? #c0c0c0 : white;
     border_width: 1px;
     border_color: highlighted ? black : #a0a0a0;
     border_radius: width/8;
@@ -80,18 +80,23 @@ SequencerStep := Rectangle {
     }
 }
 
+PatternsList := HorizontalLayout {
+    callback clicked(int);
+    spacing: 2px;
+
+    for pattern[idx] in GlobalEngine.sequencer_patterns:
+    SequencerPattern {
+        number: idx;
+        highlighted: pattern.active;
+        fill: !pattern.empty;
+        clicked => { root.clicked(idx); }
+    }
+}
+
 PatternsPanel := GridBox {
     Row {
-        HorizontalLayout {
-            spacing: 2px;
-
-            for pattern[idx] in GlobalEngine.sequencer_patterns:
-            SequencerPattern {
-                number: idx;
-                highlighted: pattern.active;
-                empty: pattern.empty;
-                clicked => { GlobalEngine.pattern_clicked(idx); }
-            }
+        PatternsList {
+            clicked(idx) => { GlobalEngine.pattern_clicked(idx); }
         }
     }
     Row {
@@ -112,4 +117,4 @@ PatternsPanel := GridBox {
     }
 }
 
-export { SequencerPattern, PatternsPanel }
+export { SequencerPattern, PatternsList, PatternsPanel }

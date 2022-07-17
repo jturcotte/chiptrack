@@ -14,14 +14,16 @@ import {
 } from "globals.slint";
 
 import {
+    PatternsList,
     SequencerPattern
 } from "patterns.slint";
 
-SongPattern := Rectangle {
+SequencerPattern := Rectangle {
     callback clicked();
-    property<int> number: 0;
+    property<int> number;
     property<bool> highlighted;
-    background: white;
+    property<bool> fill;
+    background: fill ? #c0c0c0 : white;
     border_width: 1px;
     border_color: highlighted ? black : #a0a0a0;
     border_radius: width/8;
@@ -46,21 +48,13 @@ export SongPanel := VerticalBox {
         spacing: 2px;
 
         for pattern[idx] in GlobalEngine.sequencer_song_patterns:
-        SongPattern {
+        SequencerPattern {
             number: pattern.number;
             highlighted: pattern.active;
         }
     }
-    HorizontalLayout {
-        spacing: 2px;
-
-        for pattern[idx] in GlobalEngine.sequencer_patterns:
-        SequencerPattern {
-            number: idx;
-            highlighted: pattern.active;
-            empty: pattern.empty;
-            clicked => { GlobalEngine.append_song_pattern(idx); }
-        }
+    PatternsList {
+        clicked(idx) => { GlobalEngine.append_song_pattern(idx); }
     }
     HorizontalBox {
         height: 25%;
