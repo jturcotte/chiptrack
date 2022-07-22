@@ -44,6 +44,7 @@ SequencerPattern := Rectangle {
 }
 
 export SongPanel := VerticalBox {
+    property<length> scroll_gutter_width <=> patterns_list.scroll_gutter_width;
     HorizontalLayout {
         spacing: 2px;
 
@@ -53,7 +54,7 @@ export SongPanel := VerticalBox {
             highlighted: pattern.active;
         }
     }
-    PatternsList {
+    patterns_list := PatternsList {
         clicked(idx) => { GlobalEngine.append_song_pattern(idx); }
     }
     HorizontalBox {

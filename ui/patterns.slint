@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import {
+    Button,
     GridBox
 } from "std-widgets.slint";
 
@@ -10,6 +11,8 @@ import {
     StepData,
     GlobalEngine
 } from "globals.slint";
+
+import { PageBar } from "widgets.slint";
 
 SequencerPattern := Rectangle {
     callback clicked();
@@ -80,22 +83,33 @@ SequencerStep := Rectangle {
     }
 }
 
-PatternsList := HorizontalLayout {
+PatternsList := Rectangle {
+    property<length> scroll_gutter_width <=> page_bar.width;
     callback clicked(int);
-    spacing: 2px;
 
-    for pattern[idx] in GlobalEngine.sequencer_patterns:
-    SequencerPattern {
-        number: idx;
-        highlighted: pattern.active;
-        fill: !pattern.empty;
-        clicked => { root.clicked(idx); }
+    HorizontalLayout {
+        spacing: 2px;
+
+        for pos in 16:
+        SequencerPattern {
+            number: page_bar.current_page * 16 + pos;
+            property<PatternData> pattern: GlobalEngine.sequencer_patterns[number];
+            highlighted: pattern.active;
+            fill: !pattern.empty;
+            clicked => { root.clicked(number); }
+        }
+    }
+
+    page_bar := PageBar {
+        // Float to the right of the parent, in the gutter.
+        x: parent.width + 1px;
     }
 }
 
 PatternsPanel := GridBox {
+    property<length> scroll_gutter_width <=> patterns_list.scroll_gutter_width;
     Row {
-        PatternsList {
+        patterns_list := PatternsList {
             clicked(idx) => { GlobalEngine.pattern_clicked(idx); }
         }
     }

@@ -41,7 +41,7 @@ struct InstrumentStep {
 pub struct SequencerSong {
     pub selected_instrument: u32,
     song_patterns: Vec<usize>,
-    step_instruments: Vec<[[InstrumentStep; NUM_STEPS]; NUM_INSTRUMENTS]>,
+    step_instruments: Vec<Vec<[InstrumentStep; NUM_STEPS]>>,
     #[serde(default)]
     muted_instruments: HashSet<u32>,
 }
@@ -53,11 +53,14 @@ impl Default for SequencerSong {
             song_patterns: Vec::new(),
             // Initialize all notes to C5
             step_instruments: vec![
-                [[InstrumentStep {
-                    note: 60,
-                    press: false,
-                    release: false
-                }; NUM_STEPS]; NUM_INSTRUMENTS];
+                vec![
+                    [InstrumentStep {
+                        note: 60,
+                        press: false,
+                        release: false
+                    }; NUM_STEPS];
+                    NUM_INSTRUMENTS
+                ];
                 NUM_PATTERNS
             ],
             muted_instruments: HashSet::new(),
@@ -617,12 +620,24 @@ impl Sequencer {
                 Ok(mut song) => {
                     log!("Loaded project song from file {:?}", project_song_path);
                     // Expand the song in memory again.
+                    for i in &mut song.step_instruments {
+                        i.resize_with(NUM_INSTRUMENTS, || {
+                            [InstrumentStep {
+                                note: 60,
+                                press: false,
+                                release: false,
+                            }; NUM_STEPS]
+                        });
+                    }
                     song.step_instruments.resize_with(NUM_PATTERNS, || {
-                        [[InstrumentStep {
-                            note: 60,
-                            press: false,
-                            release: false,
-                        }; NUM_STEPS]; NUM_INSTRUMENTS]
+                        vec![
+                            [InstrumentStep {
+                                note: 60,
+                                press: false,
+                                release: false,
+                            }; NUM_STEPS];
+                            NUM_INSTRUMENTS
+                        ]
                     });
                     self.set_song(song);
                 }

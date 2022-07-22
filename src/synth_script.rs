@@ -961,8 +961,8 @@ impl SynthScript {
             .register_type::<SharedGbSquare>();
         engine.register_result_fn("set_instrument",
             move |i: i32, instrument: Dynamic| {
-                runtime_check!(i >= 1 && i <= 16,
-                    "set_instrument: index must be 1 <= i <= 16, got {}",
+                runtime_check!(i >= 1 && i <= 64,
+                    "set_instrument: index must be 1 <= i <= 64, got {}",
                     i);
                 runtime_check!(instrument.type_id() == TypeId::of::<Map>(),
                     "set_instrument: The instrument must be an object map, got {}",

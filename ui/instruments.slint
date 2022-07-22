@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import { InstrumentData, GlobalEngine, GlobalUtils } from "globals.slint";
+import { PageBar } from "widgets.slint";
 
 InstrumentButton := Rectangle {
     callback pressed();
@@ -43,18 +44,27 @@ InstrumentsPanel := Rectangle {
     property<length> spacing: 5px;
     property<int> grid_size: 4;
     property<length> item_size: (width - (spacing * (grid_size - 1))) / grid_size;
+    property<length> scroll_gutter_width <=> page_bar.width;
     vertical-stretch: (grid_size / (grid_size + 1));
     width: height;
-    for instrument[idx] in GlobalEngine.instruments:
+
+    for pos in 16:
     InstrumentButton {
+        property<int> idx: page_bar.current_page * 16 + pos;
+        property<InstrumentData> instrument: GlobalEngine.instruments[idx];
         id: instrument.id;
         highlighted: instrument.selected;
         active: instrument.active;
         muted: instrument.muted;
         pressed => { GlobalEngine.select_instrument(idx); }
         right_pressed => { GlobalEngine.toggle_mute_instrument(idx); }
-        x: GlobalUtils.mod(idx, 4) * (width + parent.spacing);
-        y: floor(idx / 4) * (height + parent.spacing);
+        x: GlobalUtils.mod(pos, 4) * (width + parent.spacing);
+        y: floor(pos / 4) * (height + parent.spacing);
         height: parent.item_size;
+    }
+
+    page_bar := PageBar {
+        // Float to the right of the parent, in the gutter.
+        x: parent.width + 1px;
     }
 }
