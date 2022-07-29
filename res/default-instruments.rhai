@@ -7,6 +7,25 @@ fn three_semitones_steps(timeline, start) {
     }))
 }
 
+fn arpeggio_fn(chan, semitones) {
+    |note, freq, frame| {
+        chan.freq = freq * 1.0594630943592953 ** semitones[frame % semitones.len]
+    }
+}
+
+fn vibrato_fn(chan) {
+    |note, freq, frame| {
+        if frame < 24 {
+            return;
+        }
+        // Use half a semitone amplitude and a period of 8 frames for the triangle wave.
+        let a = 1 - 1.0594630943592953 ** 0.5;
+        let factor = 1 + a/2 * abs((((frame-2)%8)+8)%8 - 4) - a;
+
+        chan.freq = freq * factor;
+    }
+}
+
 set_instrument(1, #{
     id: "□",
     press: |note, freq| {
@@ -49,6 +68,8 @@ set_instrument(2, #{
         gb.square1.env_dir = gb::ENV_INC;
         gb.square1.env_period = 0;
     },
+    frame: vibrato_fn(gb.square1),
+    frames_after_release: 7,
 });
 
 set_instrument(3, #{
@@ -73,8 +94,24 @@ set_instrument(3, #{
 set_instrument(4, #{
     id: "▦",
     press: |note, freq| {
-        let t = [0, 2, 2, 2, 2, 2, 2, 2, 2];
-        gb.square1.duty = t.frames([
+        gb.square1.duty = gb::DUT_1_4;
+        gb.square1.env_start = 0xf;
+        gb.square1.env_dir = gb::ENV_DEC;
+        gb.square1.env_period = 0;
+        gb.square1.sweep_time = 0;
+        gb.square1.sweep_dir = gb::SWE_DEC;
+        gb.square1.sweep_shift = 0;
+        gb.square1.freq = freq;
+        gb.square1.trigger();
+    },
+    release: |note, freq| {
+        let t =                         [0,   1,   3,   2,   1];
+        gb.square1.env_start = t.frames([0xd, 0xd, 0x6, 0x1, 0x0]);
+        gb.square1.env_dir = gb::ENV_INC;
+        gb.square1.env_period = 0;
+    },
+    frame: |note, freq, frame| {
+        let duties = [
             gb::DUT_1_4,
             gb::DUT_3_4,
             gb::DUT_1_8,
@@ -83,16 +120,8 @@ set_instrument(4, #{
             gb::DUT_3_4,
             gb::DUT_1_4,
             gb::DUT_3_4,
-            gb::DUT_1_8]);
-
-        gb.square1.env_start = [0, 16].frames([0xf, 0x0]);
-        gb.square1.env_dir = gb::ENV_DEC;
-        gb.square1.env_period = 0;
-        gb.square1.sweep_time = 0;
-        gb.square1.sweep_dir = gb::SWE_DEC;
-        gb.square1.sweep_shift = 0;
-        gb.square1.freq = freq;
-        gb.square1.trigger();
+            gb::DUT_1_8];
+		gb.square1.duty = duties[frame % duties.len];
     },
 });
 
@@ -267,6 +296,8 @@ set_instrument(11, #{
         let t = [0, 1, 1];
         gb.wave.volume = t.frames([gb::VOL_50, gb::VOL_25, gb::VOL_0]);
     },
+    frame: arpeggio_fn(gb.wave, [0, 3, 5, 12]),
+    frames_after_release: 2,
 });
 
 set_instrument(12, #{
