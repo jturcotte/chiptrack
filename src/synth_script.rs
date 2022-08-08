@@ -1127,11 +1127,7 @@ impl SynthScript {
                     log!("Loaded the project instruments from the URL.");
                 }
                 Err(e) => {
-                    elog!(
-                        "Couldn't load the project instruments from the URL, using default instruments.\n\tError: {:?}",
-                        e
-                    );
-                    self.load_default_instruments();
+                    elog!("Couldn't load the project instruments from the URL.\n\tError: {:?}", e);
                 }
             }
         } else {
@@ -1154,11 +1150,10 @@ impl SynthScript {
                 }
                 Err(e) => {
                     elog!(
-                        "Couldn't load project instruments from file {:?}, using default instruments.\n\tError: {:?}",
+                        "Couldn't load project instruments from file {:?}.\n\tError: {:?}",
                         project_instruments_path,
                         e
                     );
-                    self.load_default_instruments(frame_number);
                 }
             }
         } else {
