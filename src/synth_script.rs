@@ -948,7 +948,7 @@ impl SynthScript {
     const DEFAULT_INSTRUMENTS: &'static str = include_str!("../res/default-instruments.rhai");
 
     pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
-        let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(vec!["".to_string(); NUM_INSTRUMENTS]));
+        let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(vec![Default::default(); NUM_INSTRUMENTS]));
         let instrument_states = Rc::new(RefCell::new(vec![
             InstrumentState {
                 press_function: None,
@@ -1097,6 +1097,18 @@ impl SynthScript {
         self.instrument_ids.borrow().clone()
     }
 
+    fn reset_instruments(&mut self) {
+        for state in &mut *self.instrument_states.borrow_mut() {
+            state.press_function = None;
+            state.release_function = None;
+            state.frame_function = None;
+            state.frames_after_release = 0;
+        }
+        for id in &mut *self.instrument_ids.borrow_mut() {
+            *id = Default::default();
+        }
+    }
+
     fn load_default_instruments(&mut self, frame_number: usize) {
         self.script_engine
             .compile(SynthScript::DEFAULT_INSTRUMENTS)
@@ -1117,6 +1129,8 @@ impl SynthScript {
 
     #[cfg(target_arch = "wasm32")]
     pub fn load(&mut self, maybe_base64: Option<String>) {
+        self.reset_instruments();
+
         if let Some(base64) = maybe_base64 {
             let maybe_ast = self
                 .deserialize_instruments(base64)
@@ -1138,6 +1152,8 @@ impl SynthScript {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load(&mut self, project_instruments_path: &std::path::Path, frame_number: usize) {
+        self.reset_instruments();
+
         if project_instruments_path.exists() {
             let maybe_ast = self
                 .script_engine
