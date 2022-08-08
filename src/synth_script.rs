@@ -583,7 +583,7 @@ pub mod gb_api {
         // runtime_check!(frames >= 0, "frames must be >= 0, got {}", frames);
         runtime_check!(frames < len as i32, "frames must be < {}, got {}", len, frames);
         let mut frame_number = this.frame_number.borrow_mut();
-        *frame_number = *frame_number + frames as usize;
+        *frame_number = (*frame_number as i64 + frames as i64) as usize;
         Ok(())
     }
 
