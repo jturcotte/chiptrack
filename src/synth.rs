@@ -319,13 +319,24 @@ impl Synth {
 
             for (channel, &(freq, vol)) in states.iter().enumerate() {
                 if vol > 0 {
-                    let (trace, active) = if let Some((note, _cents)) = freq.map(MidiNote::from_freq) {
+                    let (trace, active) = if let Some((note, cent_adj)) = freq.map(MidiNote::from_freq) {
+                        let semitone = note.semitone();
+                        // Stretch the between-notes range for white notes not followed by a black note.
+                        let cent_factor = if (semitone == 4 || semitone == 11) && cent_adj > 0.0
+                            || (semitone == 5 || semitone == 0) && cent_adj < 0.0
+                        {
+                            1.0
+                        } else {
+                            0.5
+                        };
+
                         let trace = ChannelTraceNote {
                             channel: channel as i32,
                             start_tick: frame_number,
                             num_ticks: 1,
                             octave: note.octave(),
                             key_pos: note.key_pos(),
+                            cent_adj: cent_adj * cent_factor,
                             is_black: note.is_black(),
                             volume: vol as f32 / 15.0,
                         };
@@ -341,6 +352,7 @@ impl Synth {
                             num_ticks: 1,
                             octave: 0,
                             key_pos: 0,
+                            cent_adj: 0.0,
                             is_black: false,
                             volume: vol as f32 / 15.0,
                         };
@@ -358,6 +370,7 @@ impl Synth {
                             if last.channel == trace.channel
                                 && last.octave == trace.octave
                                 && last.key_pos == trace.key_pos
+                                && last.cent_adj == trace.cent_adj
                                 && last.is_black == trace.is_black
                                 && last.volume == trace.volume
                             {

@@ -36,12 +36,13 @@ impl MidiNote {
         format!("{}{}{}", note_name, sharp_char, self.octave()).into()
     }
 
-    pub fn from_freq(freq: f64) -> (MidiNote, u32) {
+    pub fn from_freq(freq: f64) -> (MidiNote, f32) {
         let freq_a4 = 440.0;
         let f_c4_semi_tones = 12.0 * (freq / freq_a4).log2() + 9.0;
         let c4_semi_tones = f_c4_semi_tones.round() as i32;
-        let cents = ((f_c4_semi_tones - c4_semi_tones as f64) * 100.0).round() as u32;
-        (MidiNote(c4_semi_tones + 60), cents)
+        // Cents, but just returned as [-0.5, 0.5].
+        let cent_adj = (f_c4_semi_tones - c4_semi_tones as f64) as f32;
+        (MidiNote(c4_semi_tones + 60), cent_adj)
     }
 }
 

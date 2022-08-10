@@ -122,12 +122,12 @@ Visualization := Rectangle {
                 border-radius: width;
                 width: height;
                 height: root.note_height * 3;
-                x: (note.trace.is_black ? parent.width * 0.6 : parent.width) - width / 2;
+                x: parent.width - width / 2;
                 y: parent.height
                     - (note.trace.octave == 0 && note.trace.key_pos == 0
                         ? root.note_height
                         : root.noise_area_height
-                            + ((note.trace.octave - 2) * 7 + note.trace.key_pos + (note.trace.is_black ? 1.5 : 1)) * root.note_height
+                            + ((note.trace.octave - 2) * 7 + note.trace.key_pos + note.trace.cent_adj + (note.trace.is_black ? 1.5 : 1)) * root.note_height
                         )
                     + root.note_height / 2 - height / 2;
                 background: white;
@@ -161,7 +161,7 @@ Visualization := Rectangle {
                     y: parent.height
                         - (note.octave == 0 && note.key_pos == 0
                             ? root.note_height
-                            : root.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + (note.is_black ? (1.5 - (1.0 - 0.8) / 2) : 1)) * root.note_height
+                            : root.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + note.cent_adj + (note.is_black ? (1.5 - (1.0 - 0.8) / 2) : 1)) * root.note_height
                             );
                     background: chan_colors[note.channel];
                     opacity: note.volume;
