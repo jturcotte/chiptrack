@@ -94,22 +94,26 @@ trait ScriptChannel {
     fn previous_settings_range(&mut self) -> &mut Option<Range<usize>>;
     fn active_settings_range(&mut self) -> &mut Option<Range<usize>>;
 
+    fn register_addresses(&self) -> std::iter::Chain<Range<u16>, Range<u16>> {
+        let base = self.base();
+        (base..base + 5).into_iter().chain((0..0).into_iter())
+    }
+
     fn end_script_run(&mut self) {
         *self.previous_settings_range() = self.active_settings_range().take()
     }
 
     fn reset_previous_settings_range(&mut self) {
-        if let Some(mut range) = self.previous_settings_range().take() {
-            let base = self.base();
+        if let Some(mut frame_range) = self.previous_settings_range().take() {
+            let reg_addrs = self.register_addresses();
             // Only clear reg settings in the present or future.
-            range.start = range.start.max(*self.frame_number());
+            frame_range.start = frame_range.start.max(*self.frame_number());
             let mut settings = self.settings_ring();
             let len = settings.len();
 
-            // FIXME: Also clear the wave table register settings for the wave channel.
-            for i in range {
-                for a in base..base + 5 {
-                    settings[i % len].clear_reg(a)
+            for f in frame_range {
+                for a in reg_addrs.clone() {
+                    settings[f % len].clear_reg(a)
                 }
             }
         }
@@ -383,6 +387,13 @@ impl ScriptChannel for GbWave {
     fn base(&self) -> u16 {
         self.channel as u16
     }
+
+    fn register_addresses(&self) -> std::iter::Chain<Range<u16>, Range<u16>> {
+        let base = self.base();
+        // Also reset the wave table registers when the wave channel is stolen.
+        (base..base + 5).into_iter().chain((0xff30..0xff40).into_iter())
+    }
+
     fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> {
         self.settings_ring.borrow_mut()
     }
