@@ -156,12 +156,12 @@ Visualization := Rectangle {
                 for note[idx] in GlobalEngine.synth_trace_notes:
                 Rectangle {
                     width: trace_container.tick_width * note.num_ticks;
-                    height: root.note_height * (note.is_black ? 0.8 : 1.0);
+                    height: root.note_height * 0.8;
                     x: -note.start_tick * trace_container.tick_width - width;
                     y: parent.height
                         - (note.octave == 0 && note.key_pos == 0
                             ? root.note_height
-                            : root.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + note.cent_adj + (note.is_black ? (1.5 - (1.0 - 0.8) / 2) : 1)) * root.note_height
+                            : root.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + note.cent_adj + (note.is_black ? 1.5 : 1) - 0.1) * root.note_height
                             );
                     background: chan_colors[note.channel];
                     opacity: note.volume;
