@@ -537,8 +537,30 @@ impl Sequencer {
         });
     }
 
-    fn set_song(&mut self, song: SequencerSong) {
+    fn set_song(&mut self, mut song: SequencerSong) {
+        // Expand the song in memory again.
+        for i in &mut song.step_instruments {
+            i.resize_with(NUM_INSTRUMENTS, || {
+                [InstrumentStep {
+                    note: 60,
+                    press: false,
+                    release: false,
+                }; NUM_STEPS]
+            });
+        }
+        song.step_instruments.resize_with(NUM_PATTERNS, || {
+            vec![
+                [InstrumentStep {
+                    note: 60,
+                    press: false,
+                    release: false,
+                }; NUM_STEPS];
+                NUM_INSTRUMENTS
+            ]
+        });
+
         self.song = song;
+
         self.current_song_pattern = if self.song.song_patterns.is_empty() {
             None
         } else {
@@ -571,42 +593,20 @@ impl Sequencer {
         self.update_patterns();
     }
 
-    #[cfg(target_arch = "wasm32")]
-    fn deserialize_song(base64: String) -> Result<SequencerSong, Box<dyn std::error::Error>> {
-        let decoded = utils::decode_string(&base64)?;
-        let deserialized = serde_json::from_str(&decoded)?;
-        Ok(deserialized)
-    }
+    pub fn load_from_gist(&mut self, encoded: &str) {
+        let parsed: Result<SequencerSong, serde_json::Error> = serde_json::from_str(encoded);
 
-    #[cfg(target_arch = "wasm32")]
-    pub fn load(&mut self, maybe_base64: Option<String>) {
-        if let Some(base64) = maybe_base64 {
-            let parsed = Sequencer::deserialize_song(base64);
-
-            match parsed {
-                Ok(mut song) => {
-                    log!("Loaded the project song from the URL.");
-                    // Expand the song in memory again.
-                    song.step_instruments.resize_with(NUM_PATTERNS, || {
-                        [[InstrumentStep {
-                            note: 60,
-                            press: false,
-                            release: false,
-                        }; NUM_STEPS]; NUM_INSTRUMENTS]
-                    });
-                    self.set_song(song);
-                }
-                Err(e) => {
-                    elog!(
-                        "Couldn't load the project song from the URL, starting from scratch.\n\tError: {:?}",
-                        e
-                    );
-                    self.set_song(Default::default());
-                }
+        match parsed {
+            Ok(song) => {
+                self.set_song(song);
             }
-        } else {
-            log!("No song provided in the URL, starting from scratch.");
-            self.set_song(Default::default());
+            Err(e) => {
+                elog!(
+                    "Couldn't load the project song from the URL, starting from scratch.\n\tError: {:?}",
+                    e
+                );
+                self.set_song(Default::default());
+            }
         }
     }
 
@@ -617,28 +617,7 @@ impl Sequencer {
                 File::open(project_song_path).and_then(|f| serde_json::from_reader(f).map_err(|e| e.into()));
 
             match parsed {
-                Ok(mut song) => {
-                    log!("Loaded project song from file {:?}", project_song_path);
-                    // Expand the song in memory again.
-                    for i in &mut song.step_instruments {
-                        i.resize_with(NUM_INSTRUMENTS, || {
-                            [InstrumentStep {
-                                note: 60,
-                                press: false,
-                                release: false,
-                            }; NUM_STEPS]
-                        });
-                    }
-                    song.step_instruments.resize_with(NUM_PATTERNS, || {
-                        vec![
-                            [InstrumentStep {
-                                note: 60,
-                                press: false,
-                                release: false,
-                            }; NUM_STEPS];
-                            NUM_INSTRUMENTS
-                        ]
-                    });
+                Ok(song) => {
                     self.set_song(song);
                 }
                 Err(e) => {

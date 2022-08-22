@@ -32,6 +32,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
 use tiny_skia::*;
+use url::Url;
 
 slint::include_modules!();
 
@@ -53,6 +54,8 @@ enum SoundMsg {
     AppendSongPattern(u32),
     RemoveLastSongPattern,
     ClearSongPatterns,
+    LoadProjectName(String),
+    LoadProjectFromGist(serde_json::Value),
     SaveProject,
     MuteInstruments,
     ApplySettings(Settings),
@@ -116,31 +119,30 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
     }
 }
 
-fn check_if_project_changed(
-    project_name: &str,
-    notify_recv: &mpsc::Receiver<DebouncedEvent>,
-    engine: &mut SoundEngine,
-) -> () {
+fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) -> () {
     while let Ok(msg) = notify_recv.try_recv() {
-        let instruments_path = SoundEngine::project_instruments_path(&project_name);
-        let instruments = instruments_path.file_name();
-        let reload = match msg {
-            DebouncedEvent::Write(path) if path.file_name() == instruments => true,
-            DebouncedEvent::Create(path) if path.file_name() == instruments => true,
-            DebouncedEvent::Remove(path) if path.file_name() == instruments => true,
-            DebouncedEvent::Rename(from, to) if from.file_name() == instruments || to.file_name() == instruments => {
-                true
+        if let Some(instruments_path) = engine.instruments_path() {
+            let instruments = instruments_path.file_name();
+            let reload = match msg {
+                DebouncedEvent::Write(path) if path.file_name() == instruments => true,
+                DebouncedEvent::Create(path) if path.file_name() == instruments => true,
+                DebouncedEvent::Remove(path) if path.file_name() == instruments => true,
+                DebouncedEvent::Rename(from, to)
+                    if from.file_name() == instruments || to.file_name() == instruments =>
+                {
+                    true
+                }
+                _ => false,
+            };
+            if reload {
+                #[cfg(not(target_arch = "wasm32"))]
+                engine.synth.load(&instruments_path);
             }
-            _ => false,
-        };
-        if reload {
-            #[cfg(not(target_arch = "wasm32"))]
-            engine.synth.load(instruments_path.as_path());
         }
     }
 }
 
-fn process_audio_messages(project_name: &str, sound_recv: &mpsc::Receiver<SoundMsg>, engine: &mut SoundEngine) -> () {
+fn process_audio_messages(sound_recv: &mpsc::Receiver<SoundMsg>, engine: &mut SoundEngine) -> () {
     while let Ok(msg) = sound_recv.try_recv() {
         match msg {
             SoundMsg::PressNote(note) => engine.press_note(note),
@@ -157,7 +159,9 @@ fn process_audio_messages(project_name: &str, sound_recv: &mpsc::Receiver<SoundM
             SoundMsg::AppendSongPattern(pattern_num) => engine.sequencer.append_song_pattern(pattern_num),
             SoundMsg::RemoveLastSongPattern => engine.sequencer.remove_last_song_pattern(),
             SoundMsg::ClearSongPatterns => engine.sequencer.clear_song_patterns(),
-            SoundMsg::SaveProject => engine.save_project(&project_name),
+            SoundMsg::LoadProjectName(project_name) => engine.load(project_name),
+            SoundMsg::LoadProjectFromGist(files) => engine.load_project_from_gist(files),
+            SoundMsg::SaveProject => engine.save_project(),
             SoundMsg::MuteInstruments => engine.synth.mute_instruments(),
             SoundMsg::ApplySettings(settings) => engine.apply_settings(settings),
         }
@@ -171,7 +175,34 @@ pub fn main() {
     #[cfg(all(debug_assertions, target_arch = "wasm32"))]
     console_error_panic_hook::set_once();
 
-    let project_name = env::args().nth(1).unwrap_or("default".to_owned());
+    #[cfg(not(target_arch = "wasm32"))]
+    let (maybe_project_name, maybe_gist_path) = match env::args().nth(1).map(|u| Url::parse(&u)) {
+        None => (None, None),
+        Some(Ok(url)) => {
+            if url.host_str().map_or(false, |h| h == "gist.github.com") {
+                (None, Some(url.path().trim_start_matches('/').to_owned()))
+            } else {
+                elog!(
+                    "Found a URL parameter but it wasn't for gist.github.com: {:?}",
+                    url.to_string()
+                );
+                (None, None)
+            }
+        }
+        Some(Err(_)) =>
+        // This isn't a URL, assume it's a project name.
+        {
+            (Some(env::args().nth(1).unwrap()), None)
+        }
+    };
+    #[cfg(target_arch = "wasm32")]
+    let (maybe_project_name, maybe_gist_path) = {
+        let window = web_sys::window().unwrap();
+        let query_string = window.location().search().unwrap();
+        let search_params = web_sys::UrlSearchParams::new_with_str(&query_string).unwrap();
+
+        (None, search_params.get("gist"))
+    };
 
     let sequencer_pattern_model = Rc::new(slint::VecModel::<_>::from(vec![
         PatternData {
@@ -236,6 +267,43 @@ pub fn main() {
     let (sound_send, sound_recv) = mpsc::channel();
     let (notify_send, notify_recv) = mpsc::channel();
 
+    let cloned_sound_send = sound_send.clone();
+    if let Some(gist_path) = maybe_gist_path {
+        let api_url = "https://api.github.com/gists/".to_owned() + gist_path.splitn(2, '/').last().unwrap();
+        log!("Loading the project from gist API URL {}", api_url.to_string());
+        ehttp::fetch(
+            ehttp::Request::get(&api_url),
+            move |result: ehttp::Result<ehttp::Response>| {
+                result
+                    .and_then(|res| {
+                        if res.ok {
+                            let decoded: serde_json::Value =
+                                serde_json::from_slice(&res.bytes).expect("JSON was not well-formatted");
+                            cloned_sound_send.send(SoundMsg::LoadProjectFromGist(decoded)).unwrap();
+                            Ok(())
+                        } else {
+                            Err(format!("{} - {}", res.status, res.status_text))
+                        }
+                    })
+                    .unwrap_or_else(|err| {
+                        elog!("Error fetching the project from {}: {}", api_url.to_string(), err);
+                        // FIXME: We need some Save As function to avoid having to load the default project on error.
+                        cloned_sound_send
+                            .send(SoundMsg::LoadProjectName(
+                                maybe_project_name.unwrap_or("default".to_owned()),
+                            ))
+                            .unwrap();
+                    });
+            },
+        );
+    } else {
+        cloned_sound_send
+            .send(SoundMsg::LoadProjectName(
+                maybe_project_name.unwrap_or("default".to_owned()),
+            ))
+            .unwrap()
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     let mut watcher = notify::watcher(notify_send, Duration::from_millis(500)).unwrap();
     #[cfg(not(target_arch = "wasm32"))]
@@ -283,15 +351,14 @@ pub fn main() {
                         if let None = *maybe_engine {
                             *maybe_engine = Some(SoundEngine::new(
                                 sample_rate,
-                                &project_name,
                                 window_weak.clone(),
                                 initial_settings.clone(),
                             ));
                         }
                         let engine = maybe_engine.as_mut().unwrap();
 
-                        check_if_project_changed(&project_name, &notify_recv, engine);
-                        process_audio_messages(&project_name, &sound_recv, engine);
+                        check_if_project_changed(&notify_recv, engine);
+                        process_audio_messages(&sound_recv, engine);
 
                         let len = dest.len();
                         let mut di = 0;

@@ -4,7 +4,6 @@
 use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
 use crate::synth::Synth;
-use crate::utils;
 use crate::GlobalEngine;
 use crate::MainWindow;
 use crate::Settings;
@@ -28,36 +27,20 @@ pub struct SoundEngine {
     pub synth: Synth,
     main_window: Weak<MainWindow>,
     pressed_note: Option<NoteSource>,
+    project_name: Option<String>,
 }
 
 impl SoundEngine {
-    pub fn new(sample_rate: u32, project_name: &str, main_window: Weak<MainWindow>, settings: Settings) -> SoundEngine {
-        let mut sequencer = Sequencer::new(main_window.clone());
-        let mut synth = Synth::new(main_window.clone(), sample_rate, settings);
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let song_path = SoundEngine::project_song_path(project_name);
-            let instruments_path = SoundEngine::project_instruments_path(project_name);
-            sequencer.load(song_path.as_path());
-            synth.load(instruments_path.as_path());
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            let window = web_sys::window().unwrap();
-            let query_string = window.location().search().unwrap();
-            let search_params = web_sys::UrlSearchParams::new_with_str(&query_string).unwrap();
-
-            sequencer.load(search_params.get("s"));
-            synth.load(search_params.get("i"));
-        }
+    pub fn new(sample_rate: u32, main_window: Weak<MainWindow>, settings: Settings) -> SoundEngine {
+        let sequencer = Sequencer::new(main_window.clone());
+        let synth = Synth::new(main_window.clone(), sample_rate, settings);
 
         SoundEngine {
             sequencer: sequencer,
             synth: synth,
             main_window: main_window,
             pressed_note: None,
+            project_name: None,
         }
     }
 
@@ -202,23 +185,80 @@ impl SoundEngine {
         }
     }
 
-    pub fn save_project(&self, project_name: &str) {
-        let path = SoundEngine::project_song_path(project_name);
-        self.sequencer.save(path.as_path());
+    pub fn load(&mut self, project_name: String) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let song_path = SoundEngine::project_song_path(&project_name);
+            let instruments_path = SoundEngine::project_instruments_path(&project_name);
+            log!("Loading the project song from file {:?}", song_path);
+            self.sequencer.load(song_path.as_path());
+            log!("Loading project instruments from file {:?}", instruments_path);
+            self.synth.load(instruments_path.as_path());
+        }
 
-        // Until a better export function is available, just print this on the console when saving.
-        let encoded_song = utils::encode_file(SoundEngine::project_song_path(project_name));
-        let encoded_instruments = utils::encode_file(SoundEngine::project_instruments_path(project_name));
-        println!(
-            "Online player URL: http://localhost:8080?p={}&s={}&i={}",
-            project_name, encoded_song, encoded_instruments
-        );
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Loading a project file isn't supported on wasm, just load the default instruments.
+            self.synth.load_default_instruments();
+        }
+    }
+
+    pub fn load_project_from_gist(&mut self, json: serde_json::Value) {
+        self.load_project_from_gist_internal(json)
+            .unwrap_or_else(|err| elog!("Error extracting project from gist: {}", err));
+    }
+
+    fn load_project_from_gist_internal(&mut self, json: serde_json::Value) -> Result<(), String> {
+        let files = json
+            .get("files")
+            .ok_or("JSON should have a files property")?
+            .as_object()
+            .ok_or("The files property should be an object")?;
+
+        let song = files
+            .iter()
+            .find(|(name, _)| name.ends_with("-song.json"))
+            .ok_or("should have a file for the song named <project>-song.json")?
+            .1
+            .get("content")
+            .ok_or("The file should have a content property")?
+            .as_str()
+            .ok_or("content should be a string")?;
+        self.sequencer.load_from_gist(song);
+
+        let instruments = files
+            .iter()
+            .find(|(name, _)| name.ends_with("-instruments.rhai"))
+            .ok_or("should have a file for instruments named <project>-instruments.rhai")?
+            .1
+            .get("content")
+            .ok_or("The file should have a content property")?
+            .as_str()
+            .ok_or("content should be a string")?;
+        self.synth.load_from_gist(instruments);
+
+        Ok(())
+    }
+
+    pub fn save_project(&self) {
+        if let Some(project_name) = &self.project_name {
+            let path = SoundEngine::project_song_path(&project_name);
+            self.sequencer.save(path.as_path());
+        } else {
+            elog!("Can't save a project loaded from a gist URL.");
+        }
     }
 
     pub fn project_song_path(project_name: &str) -> PathBuf {
         let mut path = PathBuf::new();
         path.push(project_name.to_owned() + "-song.json");
         path
+    }
+
+    pub fn instruments_path(&self) -> Option<PathBuf> {
+        self.project_name
+            .as_ref()
+            .map(|p| SoundEngine::project_instruments_path(&p))
     }
 
     pub fn project_instruments_path(project_name: &str) -> PathBuf {

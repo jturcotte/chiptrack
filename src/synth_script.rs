@@ -1120,7 +1120,7 @@ impl SynthScript {
         }
     }
 
-    fn load_default_instruments(&mut self, frame_number: usize) {
+    pub fn load_default_instruments(&mut self, frame_number: usize) {
         self.script_engine
             .compile(SynthScript::DEFAULT_INSTRUMENTS)
             .map_err(|e| Box::new(e) as Box<dyn Error>)
@@ -1131,34 +1131,17 @@ impl SynthScript {
             .expect("Error loading default instruments.");
     }
 
-    #[cfg(target_arch = "wasm32")]
-    fn deserialize_instruments(&self, base64: String) -> Result<AST, Box<dyn Error>> {
-        let decoded = crate::utils::decode_string(&base64)?;
-        let ast = self.script_engine.compile(&decoded)?;
-        Ok(ast)
+    fn load_instruments(&mut self, encoded: &str, frame_number: usize) -> Result<(), Box<dyn Error>> {
+        let ast = self.script_engine.compile(encoded)?;
+        self.set_instruments_ast(ast, frame_number)?;
+        Ok(())
     }
 
-    #[cfg(target_arch = "wasm32")]
-    pub fn load(&mut self, maybe_base64: Option<String>) {
+    pub fn load_from_gist(&mut self, encoded: &str, frame_number: usize) {
         self.reset_instruments();
 
-        if let Some(base64) = maybe_base64 {
-            let maybe_ast = self
-                .deserialize_instruments(base64)
-                .and_then(|ast| self.set_instruments_ast(ast).map_err(|e| e as Box<dyn Error>));
-
-            match maybe_ast {
-                Ok(ast) => {
-                    log!("Loaded the project instruments from the URL.");
-                }
-                Err(e) => {
-                    elog!("Couldn't load the project instruments from the URL.\n\tError: {:?}", e);
-                }
-            }
-        } else {
-            log!("No instruments provided in the URL, using default instruments.");
-            self.load_default_instruments();
-        }
+        self.load_instruments(encoded, frame_number)
+            .unwrap_or_else(|e| elog!("Couldn't load the project instruments from the URL.\n\tError: {:?}", e))
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1166,23 +1149,16 @@ impl SynthScript {
         self.reset_instruments();
 
         if project_instruments_path.exists() {
-            let maybe_ast = self
-                .script_engine
+            self.script_engine
                 .compile_file(project_instruments_path.to_path_buf())
-                .and_then(|ast| self.set_instruments_ast(ast, frame_number));
-
-            match maybe_ast {
-                Ok(_) => {
-                    log!("Loaded project instruments from file {:?}", project_instruments_path);
-                }
-                Err(e) => {
+                .and_then(|ast| self.set_instruments_ast(ast, frame_number))
+                .unwrap_or_else(|e| {
                     elog!(
                         "Couldn't load project instruments from file {:?}.\n\tError: {:?}",
                         project_instruments_path,
                         e
-                    );
-                }
-            }
+                    )
+                });
         } else {
             log!(
                 "Project instruments file {:?} doesn't exist, using default instruments.",

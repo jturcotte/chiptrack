@@ -249,14 +249,20 @@ impl Synth {
             }
         });
     }
-    #[cfg(target_arch = "wasm32")]
-    pub fn load(&mut self, maybe_base64: Option<String>) {
-        self.script.load(maybe_base64);
+
+    pub fn load_from_gist(&mut self, encoded: &str) {
+        self.script.load_from_gist(encoded, self.frame_number);
         self.update_instrument_ids();
     }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn load(&mut self, project_instruments_path: &std::path::Path) {
         self.script.load(project_instruments_path, self.frame_number);
+        self.update_instrument_ids();
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn load_default_instruments(&mut self) {
+        self.script.load_default_instruments(self.frame_number);
         self.update_instrument_ids();
     }
 
