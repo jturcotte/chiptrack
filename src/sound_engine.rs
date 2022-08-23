@@ -201,6 +201,8 @@ impl SoundEngine {
             // Loading a project file isn't supported on wasm, just load the default instruments.
             self.synth.load_default_instruments();
         }
+
+        self.project_name = Some(project_name);
     }
 
     pub fn load_project_from_gist(&mut self, json: serde_json::Value) {
