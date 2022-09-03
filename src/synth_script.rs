@@ -1104,8 +1104,8 @@ impl SynthScript {
         }
     }
 
-    pub fn instrument_ids(&self) -> Vec<String> {
-        self.instrument_ids.borrow().clone()
+    pub fn instrument_ids<'a>(&'a self) -> Ref<'a, Vec<String>> {
+        self.instrument_ids.borrow()
     }
 
     fn reset_instruments(&mut self) {
@@ -1168,7 +1168,7 @@ impl SynthScript {
         }
     }
 
-    pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u32, note: u32) -> () {
+    pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u8, note: u32) -> () {
         {
             let mut gb = self.script_context.borrow_mut();
             // The script themselves are modifying this state, so reset it.
@@ -1194,7 +1194,7 @@ impl SynthScript {
         }
     }
 
-    pub fn release_instrument(&mut self, frame_number: usize, instrument: u32) -> () {
+    pub fn release_instrument(&mut self, frame_number: usize, instrument: u8) -> () {
         // The script themselves are modifying this state, so reset it.
         self.script_context.borrow_mut().set_frame_number(frame_number);
 

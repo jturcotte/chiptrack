@@ -1,22 +1,26 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-use crate::utils::MidiNote;
-use crate::GlobalEngine;
-use crate::MainWindow;
-use crate::SongPatternData;
-use serde::{Deserialize, Serialize};
-use slint::Global;
-use slint::Model;
-use slint::VecModel;
-use slint::Weak;
-use std::collections::HashSet;
-use std::fs::File;
-use std::path::Path;
+mod markdown;
 
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
+use crate::utils::MidiNote;
+use crate::GlobalEngine;
+use crate::MainWindow;
+use crate::SongPatternData;
+use markdown::parse_markdown_song;
+use markdown::save_markdown_song;
+
+use slint::Global;
+use slint::Model;
+use slint::VecModel;
+use slint::Weak;
+
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::path::Path;
 
 #[cfg(target_arch = "wasm32")]
 use crate::utils;
@@ -24,46 +28,156 @@ use crate::utils;
 const FRAMES_PER_STEP: u32 = 6;
 const SNAP_AT_STEP_FRAME: u32 = 4;
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NoteEvent {
     Press,
     Release,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
 struct InstrumentStep {
     note: u32,
     press: bool,
     release: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Debug)]
+struct Instrument {
+    id: String,
+    synth_index: Option<u8>,
+    steps: [InstrumentStep; NUM_STEPS],
+}
+
+#[derive(Clone, Debug)]
+struct Pattern {
+    instruments: Vec<Instrument>,
+}
+
+impl Pattern {
+    fn is_empty(&self) -> bool {
+        self.instruments.is_empty()
+    }
+
+    fn get_steps<'a>(&'a self, instrument: u8) -> Option<&'a [InstrumentStep; NUM_STEPS]> {
+        self.instruments
+            .iter()
+            .find(|i| i.synth_index == Some(instrument))
+            .map(|i| &i.steps)
+    }
+
+    fn get_steps_mut<'a>(
+        &'a mut self,
+        instrument_id: &str,
+        synth_index: Option<u8>,
+    ) -> &'a mut [InstrumentStep; NUM_STEPS] {
+        let ii = match self.instruments.iter().position(|i| i.id == instrument_id) {
+            Some(ii) => ii,
+            None => {
+                self.instruments.push(Instrument {
+                    id: instrument_id.to_owned(),
+                    synth_index: synth_index,
+                    steps: Default::default(),
+                });
+                self.instruments.len() - 1
+            }
+        };
+        &mut self.instruments[ii].steps
+    }
+
+    fn set_step_events(
+        &mut self,
+        instrument: u8,
+        instrument_id: &str,
+        step_num: usize,
+        set_press: Option<bool>,
+        set_release: Option<bool>,
+        set_note: Option<u32>,
+    ) -> bool {
+        let mut step = &mut self.get_steps_mut(instrument_id, Some(instrument))[step_num];
+        if set_press.map_or(true, |v| v == step.press)
+            && set_release.map_or(true, |v| v == step.release)
+            && set_note.map_or(true, |v| v == step.note)
+        {
+            return false;
+        }
+
+        if let Some(press) = set_press {
+            step.press = press;
+        }
+        if let Some(release) = set_release {
+            step.release = release;
+        }
+        if let Some(note) = set_note {
+            step.note = note;
+        }
+
+        let pattern_empty = if set_press.unwrap_or(false) || set_release.unwrap_or(false) {
+            false
+        } else {
+            // FIXME: Remove empty instruments instead and get the caller to use is_empty()
+            self.instruments
+                .iter()
+                .all(|i| i.steps.iter().all(|step| !step.press && !step.release))
+        };
+        pattern_empty
+    }
+
+    fn update_synth_index(&mut self, new_instrument_ids: &Vec<String>) {
+        let mut instrument_by_id: HashMap<String, Instrument> =
+            self.instruments.drain(..).map(|i| (i.id.clone(), i)).collect();
+        self.instruments = new_instrument_ids
+            .iter()
+            .enumerate()
+            .flat_map(|(synth_index, id)| {
+                let mut maybe_i = instrument_by_id.remove(id);
+                match maybe_i.as_mut() {
+                    Some(i) => i.synth_index = Some(synth_index as u8),
+                    None => (),
+                }
+                maybe_i
+            })
+            .collect();
+
+        // Append any remaining sequencer instruments not available in the synth instruments
+        // until the synth is maybe updated.
+        self.instruments.extend(instrument_by_id.into_values().map(|mut i| {
+            i.synth_index = None;
+            i
+        }))
+    }
+}
+
+#[derive(Debug)]
 pub struct SequencerSong {
-    pub selected_instrument: u32,
     song_patterns: Vec<usize>,
-    step_instruments: Vec<Vec<[InstrumentStep; NUM_STEPS]>>,
-    #[serde(default)]
-    muted_instruments: HashSet<u32>,
+    patterns: Vec<Pattern>,
+    markdown_header: String,
+    instruments_file: String,
+}
+
+impl Default for InstrumentStep {
+    fn default() -> Self {
+        // Initialize all notes to C5
+        InstrumentStep {
+            note: 60,
+            press: false,
+            release: false,
+        }
+    }
 }
 
 impl Default for SequencerSong {
     fn default() -> Self {
         SequencerSong {
-            selected_instrument: 0,
             song_patterns: Vec::new(),
-            // Initialize all notes to C5
-            step_instruments: vec![
-                vec![
-                    [InstrumentStep {
-                        note: 60,
-                        press: false,
-                        release: false
-                    }; NUM_STEPS];
-                    NUM_INSTRUMENTS
-                ];
+            patterns: vec![
+                Pattern {
+                    instruments: Vec::new(),
+                };
                 NUM_PATTERNS
             ],
-            muted_instruments: HashSet::new(),
+            markdown_header: String::new(),
+            instruments_file: String::new(),
         }
     }
 }
@@ -74,11 +188,14 @@ pub struct Sequencer {
     current_step: usize,
     current_song_pattern: Option<usize>,
     selected_pattern: usize,
+    pub selected_instrument: u8,
     playing: bool,
     recording: bool,
     erasing: bool,
     last_press_frame: Option<u32>,
     just_recorded_over_next_step: bool,
+    muted_instruments: HashSet<u8>,
+    synth_instrument_ids: Vec<String>,
     main_window: Weak<MainWindow>,
 }
 
@@ -90,11 +207,14 @@ impl Sequencer {
             current_step: 0,
             current_song_pattern: None,
             selected_pattern: 0,
+            selected_instrument: 0,
             playing: false,
             recording: true,
             erasing: false,
             last_press_frame: None,
             just_recorded_over_next_step: false,
+            muted_instruments: HashSet::new(),
+            synth_instrument_ids: vec![String::new(); NUM_INSTRUMENTS],
             main_window: main_window.clone(),
         }
     }
@@ -154,9 +274,9 @@ impl Sequencer {
             model.set_row_data(step as usize, row_data);
         });
     }
-    pub fn select_instrument(&mut self, instrument: u32) -> () {
-        let old_instrument = self.song.selected_instrument as usize;
-        self.song.selected_instrument = instrument;
+    pub fn select_instrument(&mut self, instrument: u8) -> () {
+        let old_instrument = self.selected_instrument as usize;
+        self.selected_instrument = instrument;
 
         self.update_steps();
 
@@ -172,10 +292,10 @@ impl Sequencer {
         });
     }
 
-    pub fn toggle_mute_instrument(&mut self, instrument: u32) -> () {
-        let was_muted = self.song.muted_instruments.take(&instrument).is_some();
+    pub fn toggle_mute_instrument(&mut self, instrument: u8) -> () {
+        let was_muted = self.muted_instruments.take(&instrument).is_some();
         if !was_muted {
-            self.song.muted_instruments.insert(instrument);
+            self.muted_instruments.insert(instrument);
         }
 
         self.main_window.upgrade_in_event_loop(move |handle| {
@@ -188,14 +308,7 @@ impl Sequencer {
 
     fn update_patterns(&mut self) -> () {
         let non_empty_patterns: Vec<usize> = (0..NUM_PATTERNS)
-            .filter(|p| {
-                (0..NUM_INSTRUMENTS).any(|i| {
-                    (0..NUM_STEPS).any(|s| {
-                        let step = self.song.step_instruments[*p][i][s];
-                        step.press || step.release
-                    })
-                })
-            })
+            .filter(|&p| !self.song.patterns[p].is_empty())
             .collect();
 
         self.main_window.upgrade_in_event_loop(move |handle| {
@@ -209,25 +322,24 @@ impl Sequencer {
     }
 
     fn update_steps(&mut self) -> () {
-        let steps: Vec<InstrumentStep> = (0..NUM_STEPS)
-            .map(|i| self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize][i])
-            .collect();
+        let maybe_steps = self.song.patterns[self.selected_pattern]
+            .get_steps(self.selected_instrument)
+            .map(|s| s.clone());
         self.main_window.upgrade_in_event_loop(move |handle| {
             let model = GlobalEngine::get(&handle).get_sequencer_steps();
-            for (i, step) in steps.iter().enumerate() {
+            for (i, step) in maybe_steps.unwrap_or_default().iter().enumerate() {
                 let mut row_data = model.row_data(i).unwrap();
                 row_data.press = step.press;
                 row_data.release = step.release;
-                row_data.note_name = MidiNote(step.note as i32).name();
+                row_data.note_name = MidiNote(step.note as i32).name().into();
                 model.set_row_data(i, row_data);
             }
         });
     }
 
     pub fn toggle_step(&mut self, step_num: u32) -> () {
-        let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize]
-            [step_num as usize];
-        let toggled = !step.press;
+        let maybe_steps = self.song.patterns[self.selected_pattern].get_steps(self.selected_instrument);
+        let toggled = !maybe_steps.map_or(false, |ss| ss[step_num as usize].press);
         self.set_step_events(
             step_num as usize,
             self.selected_pattern,
@@ -245,9 +357,8 @@ impl Sequencer {
     }
 
     pub fn toggle_step_release(&mut self, step_num: u32) -> () {
-        let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize]
-            [step_num as usize];
-        let toggled = !step.release;
+        let maybe_steps = self.song.patterns[self.selected_pattern].get_steps(self.selected_instrument);
+        let toggled = !maybe_steps.map_or(false, |ss| ss[step_num as usize].release);
         self.set_step_events(step_num as usize, self.selected_pattern, None, Some(toggled), None);
 
         // We don't yet have a separate concept of step cursor independent of the
@@ -284,34 +395,15 @@ impl Sequencer {
         set_release: Option<bool>,
         set_note: Option<u32>,
     ) -> () {
-        let mut step = &mut self.song.step_instruments[pattern][self.song.selected_instrument as usize][step_num];
-        if set_press.map_or(true, |v| v == step.press)
-            && set_release.map_or(true, |v| v == step.release)
-            && set_note.map_or(true, |v| v == step.note)
-        {
-            return;
-        }
-
-        if let Some(press) = set_press {
-            step.press = press;
-        }
-        if let Some(release) = set_release {
-            step.release = release;
-        }
-        if let Some(note) = set_note {
-            step.note = note;
-        }
-
-        let pattern_empty = if set_press.unwrap_or(false) || set_release.unwrap_or(false) {
-            false
-        } else {
-            (0..NUM_INSTRUMENTS).all(|i| {
-                (0..NUM_STEPS).all(|s| {
-                    let step = self.song.step_instruments[self.selected_pattern][i][s];
-                    !step.press && !step.release
-                })
-            })
-        };
+        let instrument_id = &self.synth_instrument_ids[self.selected_instrument as usize];
+        let pattern_empty = self.song.patterns[pattern].set_step_events(
+            self.selected_instrument,
+            instrument_id,
+            step_num,
+            set_press,
+            set_release,
+            set_note,
+        );
 
         let selected_pattern = self.selected_pattern;
         self.main_window.upgrade_in_event_loop(move |handle| {
@@ -329,7 +421,7 @@ impl Sequencer {
                 step_row_data.release = release;
             }
             if let Some(note) = set_note {
-                step_row_data.note_name = MidiNote(note as i32).name();
+                step_row_data.note_name = MidiNote(note as i32).name().into();
             }
             steps.set_row_data(step_num, step_row_data);
         });
@@ -349,8 +441,8 @@ impl Sequencer {
         // Already remove the current step.
         self.set_step_events(self.current_step, self.selected_pattern, Some(false), Some(false), None);
     }
-    pub fn advance_frame(&mut self) -> (Option<u32>, Vec<(u32, NoteEvent, u32)>) {
-        let mut note_events: Vec<(u32, NoteEvent, u32)> = Vec::new();
+    pub fn advance_frame(&mut self) -> (Option<u32>, Vec<(u8, NoteEvent, u32)>) {
+        let mut note_events: Vec<(u8, NoteEvent, u32)> = Vec::new();
 
         if !self.playing {
             return (None, note_events);
@@ -361,22 +453,33 @@ impl Sequencer {
         if self.current_frame % FRAMES_PER_STEP == 0 {
             // Release are at then end of a step, so start by triggering any release of the
             // previous frame.
-            for i in 0..NUM_INSTRUMENTS {
-                if self.song.muted_instruments.contains(&(i as u32)) {
+            for instrument in &self.song.patterns[self.selected_pattern].instruments {
+                let i = match instrument.synth_index {
+                    Some(i) => i,
+                    None => {
+                        elog!("The song is attempting to release instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
+                        continue;
+                    }
+                };
+                if self.muted_instruments.contains(&i) {
                     continue;
                 }
-                if self.just_recorded_over_next_step && i as u32 == self.song.selected_instrument {
+                if self.just_recorded_over_next_step && i == self.selected_instrument {
                     // Let the press loop further down reset the flag.
                     continue;
                 }
-                let InstrumentStep {
+                if let Some(InstrumentStep {
                     note,
                     press: _,
                     release,
-                } = self.song.step_instruments[self.selected_pattern][i][self.current_step];
-                if release {
-                    println!("➖ Instrument release {:?} note {:?}", i, note);
-                    note_events.push((i as u32, NoteEvent::Release, note));
+                }) = self.song.patterns[self.selected_pattern]
+                    .get_steps(i)
+                    .map(|ss| ss[self.current_step])
+                {
+                    if release {
+                        println!("➖ Instrument release {:?} note {:?}", i, note);
+                        note_events.push((i, NoteEvent::Release, note));
+                    }
                 }
             }
 
@@ -385,22 +488,33 @@ impl Sequencer {
                 self.set_step_events(self.current_step, self.selected_pattern, Some(false), Some(false), None);
             }
 
-            for i in 0..NUM_INSTRUMENTS {
-                if self.song.muted_instruments.contains(&(i as u32)) {
+            for instrument in &self.song.patterns[self.selected_pattern].instruments {
+                let i = match instrument.synth_index {
+                    Some(i) => i,
+                    None => {
+                        elog!("The song is attempting to press instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
+                        continue;
+                    }
+                };
+                if self.muted_instruments.contains(&i) {
                     continue;
                 }
-                if self.just_recorded_over_next_step && i as u32 == self.song.selected_instrument {
+                if self.just_recorded_over_next_step && i == self.selected_instrument {
                     self.just_recorded_over_next_step = false;
                     continue;
                 }
-                let InstrumentStep {
+                if let Some(InstrumentStep {
                     note,
                     press,
                     release: _,
-                } = self.song.step_instruments[self.selected_pattern][i][self.current_step];
-                if press {
-                    println!("➕ Instrument press {:?} note {:?}", i, note);
-                    note_events.push((i as u32, NoteEvent::Press, note));
+                }) = self.song.patterns[self.selected_pattern]
+                    .get_steps(i)
+                    .map(|ss| ss[self.current_step])
+                {
+                    if press {
+                        println!("➕ Instrument press {:?} note {:?}", i, note);
+                        note_events.push((i, NoteEvent::Press, note));
+                    }
                 }
             }
             (Some(self.current_step as u32), note_events)
@@ -416,9 +530,10 @@ impl Sequencer {
 
         let (press, release, (step, pattern, _)) = match event {
             NoteEvent::Press if !self.playing => {
-                let step = self.song.step_instruments[self.selected_pattern][self.song.selected_instrument as usize]
-                    [self.current_step as usize];
-                if !step.press {
+                let pressed = self.song.patterns[self.selected_pattern]
+                    .get_steps(self.selected_instrument)
+                    .map_or(false, |ss| ss[self.current_step as usize].press);
+                if !pressed {
                     // If the step isn't already pressed, set both the press and the release it.
                     (Some(true), Some(true), (self.current_step, self.selected_pattern, None))
                 } else {
@@ -537,28 +652,7 @@ impl Sequencer {
         });
     }
 
-    fn set_song(&mut self, mut song: SequencerSong) {
-        // Expand the song in memory again.
-        for i in &mut song.step_instruments {
-            i.resize_with(NUM_INSTRUMENTS, || {
-                [InstrumentStep {
-                    note: 60,
-                    press: false,
-                    release: false,
-                }; NUM_STEPS]
-            });
-        }
-        song.step_instruments.resize_with(NUM_PATTERNS, || {
-            vec![
-                [InstrumentStep {
-                    note: 60,
-                    press: false,
-                    release: false,
-                }; NUM_STEPS];
-                NUM_INSTRUMENTS
-            ]
-        });
-
+    fn set_song(&mut self, song: SequencerSong) {
         self.song = song;
 
         self.current_song_pattern = if self.song.song_patterns.is_empty() {
@@ -589,16 +683,18 @@ impl Sequencer {
                 .map(|i| self.song.song_patterns.get(i).unwrap())
                 .unwrap_or(&0_usize) as u32,
         );
-        self.select_instrument(self.song.selected_instrument as u32);
+        self.select_instrument(self.selected_instrument);
         self.update_patterns();
     }
 
-    pub fn load_from_gist(&mut self, encoded: &str) {
-        let parsed: Result<SequencerSong, serde_json::Error> = serde_json::from_str(encoded);
+    pub fn load_from_gist(&mut self, markdown: &str) -> String {
+        let parsed = parse_markdown_song(markdown);
 
         match parsed {
             Ok(song) => {
+                let instruments_file = song.instruments_file.clone();
                 self.set_song(song);
+                instruments_file
             }
             Err(e) => {
                 elog!(
@@ -606,19 +702,24 @@ impl Sequencer {
                     e
                 );
                 self.set_song(Default::default());
+                // FIXME: This should propagate the error up instead
+                "default-instruments.rhai".into()
             }
         }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load(&mut self, project_song_path: &Path) {
+    pub fn load(&mut self, project_song_path: &Path) -> String {
         if project_song_path.exists() {
-            let parsed: Result<SequencerSong, std::io::Error> =
-                File::open(project_song_path).and_then(|f| serde_json::from_reader(f).map_err(|e| e.into()));
+            let parsed: Result<SequencerSong, Box<dyn std::error::Error>> = std::fs::read_to_string(project_song_path)
+                .map_err(Into::into)
+                .and_then(|md| parse_markdown_song(&md));
 
             match parsed {
                 Ok(song) => {
+                    let instruments_file = song.instruments_file.clone();
                     self.set_song(song);
+                    instruments_file
                 }
                 Err(e) => {
                     elog!(
@@ -627,21 +728,35 @@ impl Sequencer {
                         e
                     );
                     self.set_song(Default::default());
+                    // FIXME: This should propagate the error up instead
+                    "default-instruments.rhai".into()
                 }
             }
         } else {
+            // FIXME: Remove the project name thing, either a song file was requested
+            // on the command line, or there wasn't and the default song should be loaded then.
+            // Saving the default song should show the save dialog to save the song and
+            // default instruments should be saved that once too using the song file name.
             log!(
                 "Project song file {:?} doesn't exist, starting from scratch.",
                 project_song_path
             );
             self.set_song(Default::default());
+            "default-instruments.rhai".into()
         }
     }
 
     pub fn save(&self, project_song_path: &Path) {
-        println!("Saving project song to file {:?}.", project_song_path);
-        let f = File::create(project_song_path).expect("Unable to create project file");
-        serde_json::to_writer_pretty(&f, &self.song).unwrap()
+        save_markdown_song(&self.song, project_song_path).unwrap_or_else(|e| elog!("Error saving the project: {}", e))
+    }
+
+    pub fn set_synth_instrument_ids(&mut self, instrument_ids: &Vec<String>) {
+        for p in &mut self.song.patterns {
+            p.update_synth_index(instrument_ids);
+        }
+        self.update_steps();
+
+        self.synth_instrument_ids = instrument_ids.clone();
     }
 
     fn next_step_and_pattern_and_song_pattern(&self, forwards: bool) -> (usize, usize, Option<usize>) {

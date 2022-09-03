@@ -42,8 +42,8 @@ thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine>> = RefCell::new(
 enum SoundMsg {
     PressNote(u32),
     ReleaseNote(u32),
-    SelectInstrument(u32),
-    ToggleMuteInstrument(u32),
+    SelectInstrument(u8),
+    ToggleMuteInstrument(u8),
     SelectPattern(u32),
     ToggleStep(u32),
     ToggleStepRelease(u32),
@@ -121,9 +121,9 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
 
 fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) -> () {
     while let Ok(msg) = notify_recv.try_recv() {
-        if let Some(instruments_path) = engine.instruments_path() {
+        let reload = if let Some(instruments_path) = engine.instruments_path() {
             let instruments = instruments_path.file_name();
-            let reload = match msg {
+            match msg {
                 DebouncedEvent::Write(path) if path.file_name() == instruments => true,
                 DebouncedEvent::Create(path) if path.file_name() == instruments => true,
                 DebouncedEvent::Remove(path) if path.file_name() == instruments => true,
@@ -133,11 +133,12 @@ fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine
                     true
                 }
                 _ => false,
-            };
-            if reload {
-                #[cfg(not(target_arch = "wasm32"))]
-                engine.synth.load(&instruments_path);
             }
+        } else {
+            false
+        };
+        if reload {
+            engine.reload_instruments_from_file();
         }
     }
 }
@@ -483,7 +484,7 @@ pub fn main() {
     global_engine.on_select_instrument(move |instrument| {
         Lazy::force(&*cloned_context);
         cloned_sound_send
-            .send(SoundMsg::SelectInstrument(instrument as u32))
+            .send(SoundMsg::SelectInstrument(instrument as u8))
             .unwrap();
     });
 
@@ -492,7 +493,7 @@ pub fn main() {
     global_engine.on_toggle_mute_instrument(move |instrument| {
         Lazy::force(&*cloned_context);
         cloned_sound_send
-            .send(SoundMsg::ToggleMuteInstrument(instrument as u32))
+            .send(SoundMsg::ToggleMuteInstrument(instrument as u8))
             .unwrap();
     });
 
@@ -621,7 +622,7 @@ pub fn main() {
 
     window
         .global::<GlobalUtils>()
-        .on_get_midi_note_name(|note| MidiNote(note).name());
+        .on_get_midi_note_name(|note| MidiNote(note).name().into());
     window.global::<GlobalUtils>().on_mod(|x, y| x % y);
 
     // For WASM we need to wait for the user to trigger the creation of the sound

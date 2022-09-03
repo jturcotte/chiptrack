@@ -10,11 +10,14 @@ use crate::ChannelTraceNote;
 use crate::GlobalEngine;
 use crate::MainWindow;
 use crate::Settings;
+
 use slint::Global;
 use slint::Model;
 use slint::SharedString;
 use slint::VecModel;
 use slint::Weak;
+
+use std::cell::Ref;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -221,11 +224,11 @@ impl Synth {
         self.frame_number += 1;
     }
 
-    pub fn press_instrument_note(&mut self, instrument: u32, note: u32) -> () {
+    pub fn press_instrument_note(&mut self, instrument: u8, note: u32) -> () {
         self.script.press_instrument_note(self.frame_number, instrument, note);
     }
 
-    pub fn release_instrument(&mut self, instrument: u32) -> () {
+    pub fn release_instrument(&mut self, instrument: u8) -> () {
         self.script.release_instrument(self.frame_number, instrument);
     }
 
@@ -238,8 +241,12 @@ impl Synth {
         self.dmg.wb(Channel::Noise as u16 + 2, 0);
     }
 
+    pub fn instrument_ids<'a>(&'a self) -> Ref<'a, Vec<String>> {
+        self.script.instrument_ids()
+    }
+
     fn update_instrument_ids(&self) {
-        let ids = self.script.instrument_ids();
+        let ids = self.script.instrument_ids().clone();
         self.main_window.upgrade_in_event_loop(move |handle| {
             let model = GlobalEngine::get(&handle).get_instruments();
             for (i, id) in ids.iter().enumerate() {
@@ -348,7 +355,7 @@ impl Synth {
                         };
                         let active = ChannelActiveNote {
                             trace: trace.clone(),
-                            note_name: note.name(),
+                            note_name: note.name().into(),
                         };
                         (trace, active)
                     } else {

@@ -7,9 +7,12 @@ use crate::synth::Synth;
 use crate::GlobalEngine;
 use crate::MainWindow;
 use crate::Settings;
+
 use slint::Global;
 use slint::Model;
 use slint::Weak;
+
+use std::path::Path;
 use std::path::PathBuf;
 
 pub const NUM_INSTRUMENTS: usize = 64;
@@ -28,6 +31,7 @@ pub struct SoundEngine {
     main_window: Weak<MainWindow>,
     pressed_note: Option<NoteSource>,
     project_name: Option<String>,
+    instruments_path: Option<PathBuf>,
 }
 
 impl SoundEngine {
@@ -41,6 +45,7 @@ impl SoundEngine {
             main_window: main_window,
             pressed_note: None,
             project_name: None,
+            instruments_path: None,
         }
     }
 
@@ -80,7 +85,7 @@ impl SoundEngine {
     pub fn advance_frame(&mut self) -> () {
         let (step_change, note_events) = self.sequencer.advance_frame();
         for (instrument, typ, note) in note_events {
-            let is_selected_instrument = instrument == self.sequencer.song.selected_instrument;
+            let is_selected_instrument = instrument == self.sequencer.selected_instrument;
 
             let note_to_release = if is_selected_instrument {
                 self.singularize_note_release(NoteSource::Sequencer(note), NoteEvent::Press)
@@ -124,7 +129,7 @@ impl SoundEngine {
         self.synth.advance_frame(step_change);
     }
 
-    pub fn select_instrument(&mut self, instrument: u32) -> () {
+    pub fn select_instrument(&mut self, instrument: u8) -> () {
         self.sequencer.select_instrument(instrument);
 
         self.pressed_note = None;
@@ -155,7 +160,7 @@ impl SoundEngine {
 
     pub fn press_note(&mut self, note: u32) -> () {
         self.synth
-            .press_instrument_note(self.sequencer.song.selected_instrument, note);
+            .press_instrument_note(self.sequencer.selected_instrument, note);
         self.sequencer.record_press(note);
 
         // Check which not
@@ -179,7 +184,7 @@ impl SoundEngine {
         // Instruments are monophonic, ignore any note release, either sequenced or live,
         // for the current instrument if it wasn't the last pressed one.
         if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), NoteEvent::Release) {
-            self.synth.release_instrument(self.sequencer.song.selected_instrument);
+            self.synth.release_instrument(self.sequencer.selected_instrument);
             self.sequencer.record_release(note);
             self.release_note_visually(note_to_release);
         }
@@ -189,17 +194,23 @@ impl SoundEngine {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let song_path = SoundEngine::project_song_path(&project_name);
-            let instruments_path = SoundEngine::project_instruments_path(&project_name);
             log!("Loading the project song from file {:?}", song_path);
-            self.sequencer.load(song_path.as_path());
-            log!("Loading project instruments from file {:?}", instruments_path);
-            self.synth.load(instruments_path.as_path());
+            let instruments_file = self.sequencer.load(song_path.as_path());
+            // Assume that it's in the current directory for now.
+            self.instruments_path = Some(PathBuf::from(instruments_file));
+            log!(
+                "Loading project instruments from file {:?}",
+                self.instruments_path.as_ref().unwrap()
+            );
+            self.synth.load(self.instruments_path.as_ref().unwrap().as_path());
+            self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
         }
 
         #[cfg(target_arch = "wasm32")]
         {
             // Loading a project file isn't supported on wasm, just load the default instruments.
             self.synth.load_default_instruments();
+            self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
         }
 
         self.project_name = Some(project_name);
@@ -219,25 +230,25 @@ impl SoundEngine {
 
         let song = files
             .iter()
-            .find(|(name, _)| name.ends_with("-song.json"))
-            .ok_or("should have a file for the song named <project>-song.json")?
+            .find(|(name, _)| name.ends_with(".ct.md"))
+            .ok_or("should have a file for the song with the extension 'ct.md'")?
             .1
             .get("content")
             .ok_or("The file should have a content property")?
             .as_str()
             .ok_or("content should be a string")?;
-        self.sequencer.load_from_gist(song);
+        let instruments_file = self.sequencer.load_from_gist(song);
 
         let instruments = files
-            .iter()
-            .find(|(name, _)| name.ends_with("-instruments.rhai"))
-            .ok_or("should have a file for instruments named <project>-instruments.rhai")?
-            .1
+            .get(&instruments_file)
+            .ok_or_else(|| format!("The gist should have a file named {}", instruments_file))?
             .get("content")
             .ok_or("The file should have a content property")?
             .as_str()
             .ok_or("content should be a string")?;
+
         self.synth.load_from_gist(instruments);
+        self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
 
         Ok(())
     }
@@ -253,19 +264,17 @@ impl SoundEngine {
 
     pub fn project_song_path(project_name: &str) -> PathBuf {
         let mut path = PathBuf::new();
-        path.push(project_name.to_owned() + "-song.json");
+        path.push(project_name.to_owned() + ".ct.md");
         path
     }
 
-    pub fn instruments_path(&self) -> Option<PathBuf> {
-        self.project_name
-            .as_ref()
-            .map(|p| SoundEngine::project_instruments_path(&p))
+    pub fn instruments_path(&self) -> Option<&Path> {
+        self.instruments_path.as_deref()
     }
 
-    pub fn project_instruments_path(project_name: &str) -> PathBuf {
-        let mut path = PathBuf::new();
-        path.push(project_name.to_owned() + "-instruments.rhai");
-        path
+    pub fn reload_instruments_from_file(&mut self) {
+        if let Some(path) = &self.instruments_path {
+            self.synth.load(&path.as_path());
+        }
     }
 }
