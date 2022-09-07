@@ -19,6 +19,7 @@ use slint::Weak;
 
 use std::cell::Ref;
 use std::cell::RefCell;
+use std::error::Error;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -257,20 +258,27 @@ impl Synth {
         });
     }
 
-    pub fn load_from_gist(&mut self, encoded: &str) {
-        self.script.load_from_gist(encoded, self.frame_number);
-        self.update_instrument_ids();
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn load(&mut self, project_instruments_path: &std::path::Path) {
-        self.script.load(project_instruments_path, self.frame_number);
+    pub fn load_default(&mut self) {
+        self.script.load_default(self.frame_number);
         self.update_instrument_ids();
     }
 
-    #[cfg(target_arch = "wasm32")]
-    pub fn load_default_instruments(&mut self) {
-        self.script.load_default_instruments(self.frame_number);
+    pub fn load_str(&mut self, encoded: &str) -> Result<(), Box<dyn Error>> {
+        self.script.load_str(encoded, self.frame_number)?;
         self.update_instrument_ids();
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_file(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+        self.script.load_file(instruments_path, self.frame_number)?;
+        self.update_instrument_ids();
+        Ok(())
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+        self.script.save_as(instruments_path)
     }
 
     fn settings_ring_index(&self) -> usize {

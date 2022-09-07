@@ -8,10 +8,13 @@ use crate::GlobalEngine;
 use crate::MainWindow;
 use crate::Settings;
 
+use native_dialog::FileDialog;
 use slint::Global;
 use slint::Model;
 use slint::Weak;
 
+use std::error::Error;
+use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -25,13 +28,18 @@ enum NoteSource {
     Sequencer(u32),
 }
 
+enum ProjectSource {
+    New,
+    File((PathBuf, PathBuf)),
+    Gist,
+}
+
 pub struct SoundEngine {
     pub sequencer: Sequencer,
     pub synth: Synth,
     main_window: Weak<MainWindow>,
     pressed_note: Option<NoteSource>,
-    project_name: Option<String>,
-    instruments_path: Option<PathBuf>,
+    project_source: ProjectSource,
 }
 
 impl SoundEngine {
@@ -44,8 +52,7 @@ impl SoundEngine {
             synth: synth,
             main_window: main_window,
             pressed_note: None,
-            project_name: None,
-            instruments_path: None,
+            project_source: ProjectSource::New,
         }
     }
 
@@ -190,38 +197,40 @@ impl SoundEngine {
         }
     }
 
-    pub fn load(&mut self, project_name: String) {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let song_path = SoundEngine::project_song_path(&project_name);
-            log!("Loading the project song from file {:?}", song_path);
-            let instruments_file = self.sequencer.load(song_path.as_path());
-            // Assume that it's in the current directory for now.
-            self.instruments_path = Some(PathBuf::from(instruments_file));
-            log!(
-                "Loading project instruments from file {:?}",
-                self.instruments_path.as_ref().unwrap()
-            );
-            self.synth.load(self.instruments_path.as_ref().unwrap().as_path());
-            self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            // Loading a project file isn't supported on wasm, just load the default instruments.
-            self.synth.load_default_instruments();
-            self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
-        }
-
-        self.project_name = Some(project_name);
+    pub fn load_default(&mut self) {
+        self.sequencer.load_default();
+        self.synth.load_default();
+        self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
     }
 
-    pub fn load_project_from_gist(&mut self, json: serde_json::Value) {
-        self.load_project_from_gist_internal(json)
-            .unwrap_or_else(|err| elog!("Error extracting project from gist: {}", err));
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_file(&mut self, song_path: &Path) {
+        match self.load_file_internal(song_path) {
+            Ok(instruments_path) => self.project_source = ProjectSource::File((song_path.to_owned(), instruments_path)),
+            Err(err) => elog!("Error extracting project from file [{:?}]: {}", song_path, err),
+        }
     }
 
-    fn load_project_from_gist_internal(&mut self, json: serde_json::Value) -> Result<(), String> {
+    pub fn load_gist(&mut self, json: serde_json::Value) {
+        match self.load_gist_internal(json) {
+            Ok(_) => self.project_source = ProjectSource::Gist,
+            Err(err) => elog!("Error extracting project from gist: {}", err),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn load_file_internal(&mut self, song_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
+        log!("Loading the project song from file {:?}", song_path);
+        let instruments_file = self.sequencer.load_file(song_path)?;
+        // Assume that it's in the current directory for now.
+        let instruments_path = PathBuf::from(instruments_file);
+        log!("Loading project instruments from file {:?}", instruments_path);
+        self.synth.load_file(instruments_path.as_path())?;
+        self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
+        Ok(instruments_path)
+    }
+
+    fn load_gist_internal(&mut self, json: serde_json::Value) -> Result<(), Box<dyn Error>> {
         let files = json
             .get("files")
             .ok_or("JSON should have a files property")?
@@ -237,7 +246,7 @@ impl SoundEngine {
             .ok_or("The file should have a content property")?
             .as_str()
             .ok_or("content should be a string")?;
-        let instruments_file = self.sequencer.load_from_gist(song);
+        let instruments_file = self.sequencer.load_str(song)?;
 
         let instruments = files
             .get(&instruments_file)
@@ -247,34 +256,70 @@ impl SoundEngine {
             .as_str()
             .ok_or("content should be a string")?;
 
-        self.synth.load_from_gist(instruments);
+        self.synth.load_str(instruments)?;
         self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
 
         Ok(())
     }
 
-    pub fn save_project(&self) {
-        if let Some(project_name) = &self.project_name {
-            let path = SoundEngine::project_song_path(&project_name);
-            self.sequencer.save(path.as_path());
-        } else {
-            elog!("Can't save a project loaded from a gist URL.");
+    fn save_project_as(&mut self) {
+        || -> Result<(), Box<dyn Error>> {
+            // FIXME: Run on the main thread
+            // FIXME: Ask for confirmation if the file exists
+            if let Some(mut song_path) = FileDialog::new()
+                .set_filename("song.ct.md")
+                .show_save_single_file()
+                .expect("Error showing the save dialog.")
+            {
+                if song_path
+                    .file_name()
+                    .map_or(false, |f| f.to_str().map_or(false, |s| !s.ends_with(".ct.md")))
+                {
+                    song_path.set_extension("ct.md");
+                }
+                let mut instruments_path = song_path.clone();
+                instruments_path.set_file_name(OsString::from(
+                    instruments_path
+                        .file_name()
+                        .unwrap()
+                        .to_str()
+                        .expect("Bad path?")
+                        .replace(".ct.md", "-instruments.rhai"),
+                ));
+                self.synth.save_as(instruments_path.as_path())?;
+                self.sequencer
+                    .save_as(song_path.as_path(), instruments_path.as_path())
+                    .unwrap_or_else(|e| elog!("Error saving the project: {}", e));
+                self.project_source = ProjectSource::File((song_path, instruments_path));
+            }
+            Ok(())
+        }()
+        .unwrap_or_else(|e| elog!("Error saving the project: {}", e))
+    }
+
+    pub fn save_project(&mut self) {
+        match &self.project_source {
+            ProjectSource::New => self.save_project_as(),
+            ProjectSource::File((song_path, _)) => self
+                .sequencer
+                .save(song_path.as_path())
+                .unwrap_or_else(|e| elog!("Error saving the project: {}", e)),
+            ProjectSource::Gist => elog!("Can't save a project loaded from a gist URL."),
         }
     }
 
-    pub fn project_song_path(project_name: &str) -> PathBuf {
-        let mut path = PathBuf::new();
-        path.push(project_name.to_owned() + ".ct.md");
-        path
-    }
-
     pub fn instruments_path(&self) -> Option<&Path> {
-        self.instruments_path.as_deref()
+        match &self.project_source {
+            ProjectSource::File((_, instruments_path)) => Some(instruments_path.as_path()),
+            _ => None,
+        }
     }
 
     pub fn reload_instruments_from_file(&mut self) {
-        if let Some(path) = &self.instruments_path {
-            self.synth.load(&path.as_path());
+        if let ProjectSource::File((_, path)) = &self.project_source {
+            self.synth
+                .load_file(&path.as_path())
+                .unwrap_or_else(|e| elog!("Couldn't reload instruments from file {:?}.\n\tError: {:?}", path, e));
         }
     }
 }

@@ -18,21 +18,24 @@ use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
 use crate::utils::MidiNote;
+
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
 use slint::{Model, Rgba8Pixel, SharedPixelBuffer, Timer, TimerMode};
+use tiny_skia::*;
+use url::Url;
+
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::env;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
-use tiny_skia::*;
-use url::Url;
 
 slint::include_modules!();
 
@@ -54,8 +57,9 @@ enum SoundMsg {
     AppendSongPattern(u32),
     RemoveLastSongPattern,
     ClearSongPatterns,
-    LoadProjectName(String),
-    LoadProjectFromGist(serde_json::Value),
+    LoadDefault,
+    LoadFile(PathBuf),
+    LoadGist(serde_json::Value),
     SaveProject,
     MuteInstruments,
     ApplySettings(Settings),
@@ -160,8 +164,9 @@ fn process_audio_messages(sound_recv: &mpsc::Receiver<SoundMsg>, engine: &mut So
             SoundMsg::AppendSongPattern(pattern_num) => engine.sequencer.append_song_pattern(pattern_num),
             SoundMsg::RemoveLastSongPattern => engine.sequencer.remove_last_song_pattern(),
             SoundMsg::ClearSongPatterns => engine.sequencer.clear_song_patterns(),
-            SoundMsg::LoadProjectName(project_name) => engine.load(project_name),
-            SoundMsg::LoadProjectFromGist(files) => engine.load_project_from_gist(files),
+            SoundMsg::LoadDefault => engine.load_default(),
+            SoundMsg::LoadFile(path) => engine.load_file(path.as_path()),
+            SoundMsg::LoadGist(files) => engine.load_gist(files),
             SoundMsg::SaveProject => engine.save_project(),
             SoundMsg::MuteInstruments => engine.synth.mute_instruments(),
             SoundMsg::ApplySettings(settings) => engine.apply_settings(settings),
@@ -177,7 +182,7 @@ pub fn main() {
     console_error_panic_hook::set_once();
 
     #[cfg(not(target_arch = "wasm32"))]
-    let (maybe_project_name, maybe_gist_path) = match env::args().nth(1).map(|u| Url::parse(&u)) {
+    let (maybe_file_path, maybe_gist_path) = match env::args().nth(1).map(|u| Url::parse(&u)) {
         None => (None, None),
         Some(Ok(url)) => {
             if url.host_str().map_or(false, |h| h == "gist.github.com") {
@@ -191,13 +196,18 @@ pub fn main() {
             }
         }
         Some(Err(_)) =>
-        // This isn't a URL, assume it's a project name.
+        // This isn't a URL, assume it's a file path.
         {
-            (Some(env::args().nth(1).unwrap()), None)
+            let song_path = PathBuf::from(env::args().nth(1).unwrap());
+            if !song_path.exists() {
+                elog!("Error: the provided song path doesn't exist [{:?}]", song_path);
+                std::process::exit(1);
+            }
+            (Some(song_path), None)
         }
     };
     #[cfg(target_arch = "wasm32")]
-    let (maybe_project_name, maybe_gist_path) = {
+    let (maybe_file_path, maybe_gist_path) = {
         let window = web_sys::window().unwrap();
         let query_string = window.location().search().unwrap();
         let search_params = web_sys::UrlSearchParams::new_with_str(&query_string).unwrap();
@@ -280,34 +290,32 @@ pub fn main() {
                         if res.ok {
                             let decoded: serde_json::Value =
                                 serde_json::from_slice(&res.bytes).expect("JSON was not well-formatted");
-                            cloned_sound_send.send(SoundMsg::LoadProjectFromGist(decoded)).unwrap();
+                            cloned_sound_send.send(SoundMsg::LoadGist(decoded)).unwrap();
                             Ok(())
                         } else {
                             Err(format!("{} - {}", res.status, res.status_text))
                         }
                     })
                     .unwrap_or_else(|err| {
-                        elog!("Error fetching the project from {}: {}", api_url.to_string(), err);
-                        // FIXME: We need some Save As function to avoid having to load the default project on error.
-                        cloned_sound_send
-                            .send(SoundMsg::LoadProjectName(
-                                maybe_project_name.unwrap_or("default".to_owned()),
-                            ))
-                            .unwrap();
+                        elog!(
+                            "Error fetching the project from {}: {}. Exiting.",
+                            api_url.to_string(),
+                            err
+                        );
+                        std::process::exit(1);
                     });
             },
         );
+    } else if let Some(file_path) = maybe_file_path {
+        cloned_sound_send.send(SoundMsg::LoadFile(file_path)).unwrap()
     } else {
-        cloned_sound_send
-            .send(SoundMsg::LoadProjectName(
-                maybe_project_name.unwrap_or("default".to_owned()),
-            ))
-            .unwrap()
+        cloned_sound_send.send(SoundMsg::LoadDefault).unwrap()
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     let mut watcher = notify::watcher(notify_send, Duration::from_millis(500)).unwrap();
     #[cfg(not(target_arch = "wasm32"))]
+    // FIXME: Watch the song file's folder, and update it when saving as.
     watcher.watch(".", RecursiveMode::NonRecursive).unwrap();
 
     let window_weak = window.as_weak();

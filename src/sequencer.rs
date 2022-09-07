@@ -20,6 +20,7 @@ use slint::Weak;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::error::Error;
 use std::path::Path;
 
 #[cfg(target_arch = "wasm32")]
@@ -687,67 +688,46 @@ impl Sequencer {
         self.update_patterns();
     }
 
-    pub fn load_from_gist(&mut self, markdown: &str) -> String {
-        let parsed = parse_markdown_song(markdown);
+    pub fn load_default(&mut self) {
+        self.set_song(Default::default());
+    }
 
-        match parsed {
-            Ok(song) => {
-                let instruments_file = song.instruments_file.clone();
-                self.set_song(song);
-                instruments_file
-            }
-            Err(e) => {
-                elog!(
-                    "Couldn't load the project song from the URL, starting from scratch.\n\tError: {:?}",
-                    e
-                );
-                self.set_song(Default::default());
-                // FIXME: This should propagate the error up instead
-                "default-instruments.rhai".into()
-            }
+    pub fn load_str(&mut self, markdown: &str) -> Result<String, Box<dyn Error>> {
+        let song = parse_markdown_song(markdown)?;
+
+        let instruments_file = song.instruments_file.clone();
+        self.set_song(song);
+        Ok(instruments_file)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_file(&mut self, song_path: &Path) -> Result<String, Box<dyn Error>> {
+        if song_path.exists() {
+            let md = std::fs::read_to_string(song_path)?;
+            let song = parse_markdown_song(&md)?;
+
+            let instruments_file = song.instruments_file.clone();
+            self.set_song(song);
+            Ok(instruments_file)
+        } else {
+            return Err(format!("Project song file {:?} doesn't exist.", song_path).into());
         }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load(&mut self, project_song_path: &Path) -> String {
-        if project_song_path.exists() {
-            let parsed: Result<SequencerSong, Box<dyn std::error::Error>> = std::fs::read_to_string(project_song_path)
-                .map_err(Into::into)
-                .and_then(|md| parse_markdown_song(&md));
-
-            match parsed {
-                Ok(song) => {
-                    let instruments_file = song.instruments_file.clone();
-                    self.set_song(song);
-                    instruments_file
-                }
-                Err(e) => {
-                    elog!(
-                        "Couldn't load project song from file {:?}, starting from scratch.\n\tError: {:?}",
-                        project_song_path,
-                        e
-                    );
-                    self.set_song(Default::default());
-                    // FIXME: This should propagate the error up instead
-                    "default-instruments.rhai".into()
-                }
-            }
-        } else {
-            // FIXME: Remove the project name thing, either a song file was requested
-            // on the command line, or there wasn't and the default song should be loaded then.
-            // Saving the default song should show the save dialog to save the song and
-            // default instruments should be saved that once too using the song file name.
-            log!(
-                "Project song file {:?} doesn't exist, starting from scratch.",
-                project_song_path
-            );
-            self.set_song(Default::default());
-            "default-instruments.rhai".into()
-        }
+    pub fn save(&self, song_path: &Path) -> Result<(), Box<dyn Error>> {
+        save_markdown_song(&self.song, song_path)
     }
 
-    pub fn save(&self, project_song_path: &Path) {
-        save_markdown_song(&self.song, project_song_path).unwrap_or_else(|e| elog!("Error saving the project: {}", e))
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn save_as(&mut self, song_path: &Path, instruments_path: &Path) -> Result<(), Box<dyn Error>> {
+        self.song.instruments_file = instruments_path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .expect("Bad path?")
+            .to_owned();
+        save_markdown_song(&self.song, song_path)
     }
 
     pub fn set_synth_instrument_ids(&mut self, instrument_ids: &Vec<String>) {

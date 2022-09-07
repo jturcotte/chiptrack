@@ -32,7 +32,6 @@ enum Section {
 }
 
 struct MarkdownSongParser<'a, 'b> {
-    /// Iterator supplying events.
     source: &'a str,
     iter: OffsetIter<'a, 'b>,
 
@@ -43,13 +42,6 @@ struct MarkdownSongParser<'a, 'b> {
     table_instrument_ids: Vec<String>,
     found_known_section_heading: bool,
     out: SequencerSong,
-    // Whether or not the last write wrote a newline.
-    // end_newline: bool,
-
-    // table_state: TableState,
-    // table_alignments: Vec<Alignment>,
-    // table_cell_index: usize,
-    // numbers: HashMap<CowStr<'a>, usize>,
 }
 
 impl<'a, 'b> MarkdownSongParser<'a, 'b> {
@@ -64,11 +56,6 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
             table_instrument_ids: Vec::new(),
             found_known_section_heading: false,
             out: Default::default(),
-            // end_newline: true,
-            // table_state: TableState::Head,
-            // table_alignments: vec![],
-            // table_cell_index: 0,
-            // numbers: HashMap::new(),
         }
     }
 
@@ -77,12 +64,6 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
         let setting_re = Regex::new(r"(\w+): (.*)").unwrap();
 
         while let Some((event, tag_range)) = self.iter.next() {
-            // println!(
-            //     "{:?}: {:?} ({:?})",
-            //     tag_range.clone(),
-            //     event,
-            //     &self.source[tag_range.clone()]
-            // );
             match event {
                 Start(tag) => {
                     match tag {
@@ -105,7 +86,6 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                             if self.tag_stack.contains(&TableHead) {
                                 if matches!(self.section, Section::Pattern(_)) {
                                     let text = &self.source[tag_range].trim();
-                                    // println!("🔥 Instrument {:?}", text);
                                     self.table_instrument_ids.push((*text).to_owned());
                                 }
                             } else if self.tag_stack.contains(&TableRow) {
@@ -116,7 +96,6 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                                 // the cell in the Start tag event instead for now.
                                 if let Section::Pattern(pattern_idx) = self.section {
                                     let text = &self.source[tag_range].trim();
-                                    // println!("🔥 Instrument Step note {:?}", text);
                                     let instrument_id = &self.table_instrument_ids[self.table_column.unwrap()];
                                     let mut step = &mut self.out.patterns[pattern_idx]
                                         .get_steps_mut(instrument_id, None)[self.table_row.unwrap()];
@@ -165,10 +144,8 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                 }
                 Text(text) => {
                     if matches!(self.tag_stack.last(), Some(Heading(..))) {
-                        // println!("🔥 HEADING {:?}", text);
                         self.section = if let Some(pattern_cap) = pattern_re.captures(&*text) {
                             let num: usize = pattern_cap.get(1).unwrap().as_str().parse()?;
-                            // println!("=> {:?} {:?}", pattern_cap.get(1), num);
                             if num == 0 || num > NUM_PATTERNS {
                                 return Err(format!("Pattern headings must be >= 1 and <= 64: [{}]", &*text).into());
                             }
@@ -186,14 +163,12 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                             }
                         };
                     } else if self.section == Section::Song && self.tag_stack.contains(&Item) {
-                        // println!("🔥 Song pattern {:?}", text);
                         let caps = pattern_re
                             .captures(&*text)
                             .ok_or_else(|| format!("Invalid song pattern name: [{}]", &*text))?;
                         let parsed: usize = caps.get(1).unwrap().as_str().parse()?;
                         self.out.song_patterns.push(parsed - 1);
                     } else if self.section == Section::Settings && self.tag_stack.contains(&Item) {
-                        // println!("🔥 SETTING {:?}", text);
                         let caps = setting_re.captures(&*text).ok_or_else(|| {
                             format!("Invalid setting format: [{}]. Should be [SettingName: Value].", &*text)
                         })?;
@@ -209,7 +184,6 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
             }
         }
 
-        // println!("SONG {:?}", self.out);
         if self.out.instruments_file.is_empty() {
             Err(format!(
                 "The song must contain a Settings section containing a value for the {} setting",
@@ -227,20 +201,15 @@ pub fn parse_markdown_song(markdown: &str) -> Result<SequencerSong, Box<dyn std:
     options.insert(Options::ENABLE_TABLES);
     let events = Parser::new_ext(markdown, options).into_offset_iter();
 
-    // for e in Parser::new_ext(&md, options) {
-    //     println!("{:?}", e);
-    // }
     MarkdownSongParser::new(markdown, events).run()
 }
 
 pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let mut path = project_song_path.to_owned();
-    path.set_extension("ct.md");
-    log!("Saving project song to file {:?}.", path);
-    let f = File::create(path).expect("Unable to create project file");
+    log!("Saving project song to file {:?}.", project_song_path);
+    let f = File::create(project_song_path)?;
     let mut f = BufWriter::new(f);
 
-    f.write(song.markdown_header.as_bytes())?;
+    f.write_all(song.markdown_header.as_bytes())?;
 
     if !song.song_patterns.is_empty() {
         write!(f, "## Song\n\n")?;

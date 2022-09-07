@@ -32,6 +32,7 @@ ehttp = "0.2"
 bit-set = "0.5"
 pulldown-cmark = "0.9"
 regex = "1"
+native-dialog = "0.6"
 
 [dependencies.slint]
 version = "0.2"

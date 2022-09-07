@@ -2,12 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 use crate::synth_script::Channel::*;
+
 use rhai::plugin::*;
 use rhai::{Array, Dynamic, Engine, FnPtr, Map, Scope, AST, INT};
+
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
 use std::error::Error;
+use std::fs::File;
+use std::io::Write;
 use std::ops::BitOr;
 use std::ops::BitOrAssign;
 use std::ops::Range;
@@ -1120,7 +1124,7 @@ impl SynthScript {
         }
     }
 
-    pub fn load_default_instruments(&mut self, frame_number: usize) {
+    pub fn load_default(&mut self, frame_number: usize) {
         self.script_engine
             .compile(SynthScript::DEFAULT_INSTRUMENTS)
             .map_err(|e| Box::new(e) as Box<dyn Error>)
@@ -1131,41 +1135,33 @@ impl SynthScript {
             .expect("Error loading default instruments.");
     }
 
-    fn load_instruments(&mut self, encoded: &str, frame_number: usize) -> Result<(), Box<dyn Error>> {
+    pub fn load_str(&mut self, encoded: &str, frame_number: usize) -> Result<(), Box<dyn Error>> {
+        self.reset_instruments();
+
         let ast = self.script_engine.compile(encoded)?;
         self.set_instruments_ast(ast, frame_number)?;
         Ok(())
     }
 
-    pub fn load_from_gist(&mut self, encoded: &str, frame_number: usize) {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_file(&mut self, instruments_path: &std::path::Path, frame_number: usize) -> Result<(), Box<dyn Error>> {
         self.reset_instruments();
 
-        self.load_instruments(encoded, frame_number)
-            .unwrap_or_else(|e| elog!("Couldn't load the project instruments from the URL.\n\tError: {:?}", e))
+        if instruments_path.exists() {
+            let ast = self.script_engine.compile_file(instruments_path.to_path_buf())?;
+            self.set_instruments_ast(ast, frame_number)?;
+            Ok(())
+        } else {
+            return Err(format!("Project instruments file {:?} doesn't exist.", instruments_path).into());
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load(&mut self, project_instruments_path: &std::path::Path, frame_number: usize) {
-        self.reset_instruments();
-
-        if project_instruments_path.exists() {
-            self.script_engine
-                .compile_file(project_instruments_path.to_path_buf())
-                .and_then(|ast| self.set_instruments_ast(ast, frame_number))
-                .unwrap_or_else(|e| {
-                    elog!(
-                        "Couldn't load project instruments from file {:?}.\n\tError: {:?}",
-                        project_instruments_path,
-                        e
-                    )
-                });
-        } else {
-            log!(
-                "Project instruments file {:?} doesn't exist, using default instruments.",
-                project_instruments_path
-            );
-            self.load_default_instruments(frame_number);
-        }
+    pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+        let mut f = File::create(instruments_path)?;
+        f.write_all(SynthScript::DEFAULT_INSTRUMENTS.as_bytes())?;
+        f.flush()?;
+        Ok(())
     }
 
     pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u8, note: u32) -> () {
