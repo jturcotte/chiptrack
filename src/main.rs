@@ -41,30 +41,6 @@ slint::include_modules!();
 
 thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine>> = RefCell::new(None);}
 
-#[derive(Debug)]
-enum SoundMsg {
-    PressNote(u32),
-    ReleaseNote(u32),
-    SelectInstrument(u8),
-    ToggleMuteInstrument(u8),
-    SelectPattern(u32),
-    ToggleStep(u32),
-    ToggleStepRelease(u32),
-    ManuallyAdvanceStep(bool),
-    SetPlaying(bool),
-    SetRecording(bool),
-    SetErasing(bool),
-    AppendSongPattern(u32),
-    RemoveLastSongPattern,
-    ClearSongPatterns,
-    LoadDefault,
-    LoadFile(PathBuf),
-    LoadGist(serde_json::Value),
-    SaveProject,
-    MuteInstruments,
-    ApplySettings(Settings),
-}
-
 fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicBool>) {
     let was_non_zero = !window.get_waveform_is_zero();
     let res_divider = 2.;
@@ -143,33 +119,6 @@ fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine
         };
         if reload {
             engine.reload_instruments_from_file();
-        }
-    }
-}
-
-fn process_audio_messages(sound_recv: &mpsc::Receiver<SoundMsg>, engine: &mut SoundEngine) -> () {
-    while let Ok(msg) = sound_recv.try_recv() {
-        match msg {
-            SoundMsg::PressNote(note) => engine.press_note(note),
-            SoundMsg::ReleaseNote(note) => engine.release_note(note),
-            SoundMsg::SelectInstrument(instrument) => engine.select_instrument(instrument),
-            SoundMsg::ToggleMuteInstrument(instrument) => engine.sequencer.toggle_mute_instrument(instrument),
-            SoundMsg::SelectPattern(pattern_num) => engine.sequencer.select_pattern(pattern_num),
-            SoundMsg::ToggleStep(toggled) => engine.sequencer.toggle_step(toggled),
-            SoundMsg::ToggleStepRelease(toggled) => engine.sequencer.toggle_step_release(toggled),
-            SoundMsg::ManuallyAdvanceStep(forwards) => engine.sequencer.manually_advance_step(forwards),
-            SoundMsg::SetPlaying(toggled) => engine.sequencer.set_playing(toggled),
-            SoundMsg::SetRecording(toggled) => engine.sequencer.set_recording(toggled),
-            SoundMsg::SetErasing(toggled) => engine.sequencer.set_erasing(toggled),
-            SoundMsg::AppendSongPattern(pattern_num) => engine.sequencer.append_song_pattern(pattern_num),
-            SoundMsg::RemoveLastSongPattern => engine.sequencer.remove_last_song_pattern(),
-            SoundMsg::ClearSongPatterns => engine.sequencer.clear_song_patterns(),
-            SoundMsg::LoadDefault => engine.load_default(),
-            SoundMsg::LoadFile(path) => engine.load_file(path.as_path()),
-            SoundMsg::LoadGist(files) => engine.load_gist(files),
-            SoundMsg::SaveProject => engine.save_project(),
-            SoundMsg::MuteInstruments => engine.synth.mute_instruments(),
-            SoundMsg::ApplySettings(settings) => engine.apply_settings(settings),
         }
     }
 }
@@ -275,7 +224,7 @@ pub fn main() {
     global_engine.set_synth_trace_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
     global_engine.set_synth_active_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
 
-    let (sound_send, sound_recv) = mpsc::channel();
+    let (sound_send, sound_recv) = mpsc::channel::<Box<dyn FnOnce(&mut SoundEngine) + Send>>();
     let (notify_send, notify_recv) = mpsc::channel();
 
     let cloned_sound_send = sound_send.clone();
@@ -290,7 +239,9 @@ pub fn main() {
                         if res.ok {
                             let decoded: serde_json::Value =
                                 serde_json::from_slice(&res.bytes).expect("JSON was not well-formatted");
-                            cloned_sound_send.send(SoundMsg::LoadGist(decoded)).unwrap();
+                            cloned_sound_send
+                                .send(Box::new(move |se| se.load_gist(decoded)))
+                                .unwrap();
                             Ok(())
                         } else {
                             Err(format!("{} - {}", res.status, res.status_text))
@@ -307,9 +258,11 @@ pub fn main() {
             },
         );
     } else if let Some(file_path) = maybe_file_path {
-        cloned_sound_send.send(SoundMsg::LoadFile(file_path)).unwrap()
+        cloned_sound_send
+            .send(Box::new(move |se| se.load_file(&file_path)))
+            .unwrap();
     } else {
-        cloned_sound_send.send(SoundMsg::LoadDefault).unwrap()
+        cloned_sound_send.send(Box::new(|se| se.load_default())).unwrap();
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -367,7 +320,10 @@ pub fn main() {
                         let engine = maybe_engine.as_mut().unwrap();
 
                         check_if_project_changed(&notify_recv, engine);
-                        process_audio_messages(&sound_recv, engine);
+                        // Process incoming messages from the main thread
+                        while let Ok(closure) = sound_recv.try_recv() {
+                            closure(engine);
+                        }
 
                         let len = dest.len();
                         let mut di = 0;
@@ -416,8 +372,12 @@ pub fn main() {
         #[cfg(not(target_arch = "wasm32"))]
         let midi = {
             let cloned_sound_send2 = cloned_sound_send.clone();
-            let press = move |key| cloned_sound_send2.send(SoundMsg::PressNote(key)).unwrap();
-            let release = move |key| cloned_sound_send.send(SoundMsg::ReleaseNote(key)).unwrap();
+            let press = move |key| cloned_sound_send2.send(Box::new(move |se| se.press_note(key))).unwrap();
+            let release = move |key| {
+                cloned_sound_send
+                    .send(Box::new(move |se| se.release_note(key)))
+                    .unwrap()
+            };
             Some(Midi::new(press, release))
         };
         #[cfg(target_arch = "wasm32")]
@@ -469,7 +429,9 @@ pub fn main() {
                         // Keys.Backspace
                         '\u{8}' => {
                             Lazy::force(&*cloned_context);
-                            cloned_sound_send.send(SoundMsg::SetErasing(true)).unwrap();
+                            cloned_sound_send
+                                .send(Box::new(|se| se.sequencer.set_erasing(true)))
+                                .unwrap();
                         }
                         _ => (),
                     }
@@ -478,7 +440,9 @@ pub fn main() {
                 match code {
                     // Keys.Backspace
                     '\u{8}' => {
-                        cloned_sound_send.send(SoundMsg::SetErasing(false)).unwrap();
+                        cloned_sound_send
+                            .send(Box::new(|se| se.sequencer.set_erasing(false)))
+                            .unwrap();
                     }
                     _ => (),
                 };
@@ -492,7 +456,7 @@ pub fn main() {
     global_engine.on_select_instrument(move |instrument| {
         Lazy::force(&*cloned_context);
         cloned_sound_send
-            .send(SoundMsg::SelectInstrument(instrument as u8))
+            .send(Box::new(move |se| se.select_instrument(instrument as u8)))
             .unwrap();
     });
 
@@ -501,7 +465,9 @@ pub fn main() {
     global_engine.on_toggle_mute_instrument(move |instrument| {
         Lazy::force(&*cloned_context);
         cloned_sound_send
-            .send(SoundMsg::ToggleMuteInstrument(instrument as u8))
+            .send(Box::new(move |se| {
+                se.sequencer.toggle_mute_instrument(instrument as u8)
+            }))
             .unwrap();
     });
 
@@ -509,19 +475,25 @@ pub fn main() {
     let cloned_sound_send = sound_send.clone();
     global_engine.on_note_pressed(move |note| {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::PressNote(note as u32)).unwrap();
+        cloned_sound_send
+            .send(Box::new(move |se| se.press_note(note as u32)))
+            .unwrap();
     });
 
     let cloned_sound_send = sound_send.clone();
     global_engine.on_note_released(move |note| {
-        cloned_sound_send.send(SoundMsg::ReleaseNote(note as u32)).unwrap();
+        cloned_sound_send
+            .send(Box::new(move |se| se.release_note(note as u32)))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     global_engine.on_note_key_pressed(move |note| {
         let cloned_sound_send2 = cloned_sound_send.clone();
-        cloned_sound_send.send(SoundMsg::PressNote(note as u32)).unwrap();
+        cloned_sound_send
+            .send(Box::new(move |se| se.press_note(note as u32)))
+            .unwrap();
 
         // We have only one timer for direct interactions, and we don't handle
         // keys being held or even multiple keys at time yet, so just visually release all notes.
@@ -529,7 +501,9 @@ pub fn main() {
             TimerMode::SingleShot,
             std::time::Duration::from_millis(15 * 6),
             Box::new(move || {
-                cloned_sound_send2.send(SoundMsg::ReleaseNote(note as u32)).unwrap();
+                cloned_sound_send2
+                    .send(Box::new(move |se| se.release_note(note as u32)))
+                    .unwrap();
             }),
         );
     });
@@ -539,7 +513,7 @@ pub fn main() {
     global_engine.on_pattern_clicked(move |pattern_num| {
         Lazy::force(&*cloned_context);
         cloned_sound_send
-            .send(SoundMsg::SelectPattern(pattern_num as u32))
+            .send(Box::new(move |se| se.sequencer.select_pattern(pattern_num as u32)))
             .unwrap();
     });
 
@@ -547,7 +521,9 @@ pub fn main() {
     let cloned_sound_send = sound_send.clone();
     global_engine.on_toggle_step(move |step_num| {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::ToggleStep(step_num as u32)).unwrap();
+        cloned_sound_send
+            .send(Box::new(move |se| se.sequencer.toggle_step(step_num as u32)))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
@@ -555,7 +531,7 @@ pub fn main() {
     global_engine.on_toggle_step_release(move |step_num| {
         Lazy::force(&*cloned_context);
         cloned_sound_send
-            .send(SoundMsg::ToggleStepRelease(step_num as u32))
+            .send(Box::new(move |se| se.sequencer.toggle_step_release(step_num as u32)))
             .unwrap();
     });
 
@@ -563,7 +539,9 @@ pub fn main() {
     let cloned_sound_send = sound_send.clone();
     global_engine.on_manually_advance_step(move |forwards| {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::ManuallyAdvanceStep(forwards)).unwrap();
+        cloned_sound_send
+            .send(Box::new(move |se| se.sequencer.manually_advance_step(forwards)))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
@@ -572,7 +550,9 @@ pub fn main() {
     global_engine.on_play_clicked(move |toggled| {
         // FIXME: Stop the sound device
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::SetPlaying(toggled)).unwrap();
+        cloned_sound_send
+            .send(Box::new(move |se| se.sequencer.set_playing(toggled)))
+            .unwrap();
         window_weak.unwrap().set_playing(toggled);
     });
 
@@ -580,7 +560,9 @@ pub fn main() {
     let cloned_sound_send = sound_send.clone();
     global_engine.on_record_clicked(move |toggled| {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::SetRecording(toggled)).unwrap();
+        cloned_sound_send
+            .send(Box::new(move |se| se.sequencer.set_recording(toggled)))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
@@ -588,7 +570,7 @@ pub fn main() {
     global_engine.on_append_song_pattern(move |pattern_num| {
         Lazy::force(&*cloned_context);
         cloned_sound_send
-            .send(SoundMsg::AppendSongPattern(pattern_num as u32))
+            .send(Box::new(move |se| se.sequencer.append_song_pattern(pattern_num as u32)))
             .unwrap();
     });
 
@@ -596,28 +578,34 @@ pub fn main() {
     let cloned_sound_send = sound_send.clone();
     global_engine.on_remove_last_song_pattern(move || {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::RemoveLastSongPattern).unwrap();
+        cloned_sound_send
+            .send(Box::new(|se| se.sequencer.remove_last_song_pattern()))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     global_engine.on_clear_song_patterns(move || {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::ClearSongPatterns).unwrap();
+        cloned_sound_send
+            .send(Box::new(|se| se.sequencer.clear_song_patterns()))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     global_engine.on_save_project(move || {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::SaveProject).unwrap();
+        cloned_sound_send.send(Box::new(|se| se.save_project())).unwrap();
     });
 
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     global_engine.on_mute_instruments(move || {
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::MuteInstruments).unwrap();
+        cloned_sound_send
+            .send(Box::new(|se| se.synth.mute_instruments()))
+            .unwrap();
     });
 
     let cloned_context = context.clone();
@@ -625,7 +613,9 @@ pub fn main() {
     window.global::<GlobalSettings>().on_settings_changed(move |settings| {
         println!("SET {:?}", settings);
         Lazy::force(&*cloned_context);
-        cloned_sound_send.send(SoundMsg::ApplySettings(settings)).unwrap();
+        cloned_sound_send
+            .send(Box::new(move |se| se.apply_settings(settings)))
+            .unwrap();
     });
 
     window
