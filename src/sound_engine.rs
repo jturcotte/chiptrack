@@ -263,14 +263,20 @@ impl SoundEngine {
     }
 
     fn save_project_as(&mut self) {
-        || -> Result<(), Box<dyn Error>> {
-            // FIXME: Run on the main thread
+        // On some platforms the native dialog needs to be invoked from the
+        // main thread, but the state needed to decide whether or not we need
+        // to show the dialog is on the sound engine thread.
+        // So
+        // - The UI asks the sound engine thread to save
+        // - The sound engine thread might decide to show the native save dialog from the main thread
+        // - Once done, the main thread re-asks the sound engine thread to save at the selected path.
+        slint::invoke_from_event_loop(move || {
             // FIXME: Ask for confirmation if the file exists
-            if let Some(mut song_path) = FileDialog::new()
+            let maybe_song_path = FileDialog::new()
                 .set_filename("song.ct.md")
                 .show_save_single_file()
-                .expect("Error showing the save dialog.")
-            {
+                .expect("Error showing the save dialog.");
+            if let Some(mut song_path) = maybe_song_path {
                 if song_path
                     .file_name()
                     .map_or(false, |f| f.to_str().map_or(false, |s| !s.ends_with(".ct.md")))
@@ -286,15 +292,21 @@ impl SoundEngine {
                         .expect("Bad path?")
                         .replace(".ct.md", "-instruments.rhai"),
                 ));
-                self.synth.save_as(instruments_path.as_path())?;
-                self.sequencer
-                    .save_as(song_path.as_path(), instruments_path.as_path())
-                    .unwrap_or_else(|e| elog!("Error saving the project: {}", e));
-                self.project_source = ProjectSource::File((song_path, instruments_path));
+                crate::invoke_on_sound_engine(move |engine| {
+                    move || -> Result<(), Box<dyn Error>> {
+                        // Songs shouldn't rely on the default instruments that will vary between versions,
+                        // so save a copy of the instruments and make the saved song point to that file.
+                        engine.synth.save_as(instruments_path.as_path())?;
+                        engine
+                            .sequencer
+                            .save_as(song_path.as_path(), instruments_path.as_path())?;
+                        engine.project_source = ProjectSource::File((song_path, instruments_path));
+                        Ok(())
+                    }()
+                    .unwrap_or_else(|e| elog!("Error saving the project: {}", e))
+                });
             }
-            Ok(())
-        }()
-        .unwrap_or_else(|e| elog!("Error saving the project: {}", e))
+        });
     }
 
     pub fn save_project(&mut self) {

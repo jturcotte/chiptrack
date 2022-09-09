@@ -40,6 +40,21 @@ use std::time::Duration;
 slint::include_modules!();
 
 thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine>> = RefCell::new(None);}
+thread_local! {static SOUND_SENDER: RefCell<Option<std::sync::mpsc::Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>>> = RefCell::new(None);}
+
+pub fn invoke_on_sound_engine<F>(f: F)
+where
+    F: FnOnce(&mut SoundEngine) + Send + 'static,
+{
+    SOUND_SENDER
+        .with(|s| {
+            s.borrow_mut()
+                .as_ref()
+                .expect("Should be initialized")
+                .send(Box::new(f))
+        })
+        .unwrap();
+}
 
 fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicBool>) {
     let was_non_zero = !window.get_waveform_is_zero();
@@ -226,6 +241,9 @@ pub fn main() {
 
     let (sound_send, sound_recv) = mpsc::channel::<Box<dyn FnOnce(&mut SoundEngine) + Send>>();
     let (notify_send, notify_recv) = mpsc::channel();
+
+    let cloned_sound_send = sound_send.clone();
+    SOUND_SENDER.with(|s| *s.borrow_mut() = Some(cloned_sound_send));
 
     let cloned_sound_send = sound_send.clone();
     if let Some(gist_path) = maybe_gist_path {
