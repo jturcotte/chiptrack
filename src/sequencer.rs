@@ -632,7 +632,7 @@ impl Sequencer {
     pub fn remove_last_song_pattern(&mut self) {
         if !self.song.song_patterns.is_empty() {
             self.song.song_patterns.pop();
-            if self.current_song_pattern.unwrap() == self.song.song_patterns.len() {
+            if self.current_song_pattern == Some(self.song.song_patterns.len()) {
                 self.select_song_pattern(if self.song.song_patterns.is_empty() {
                     None
                 } else {
