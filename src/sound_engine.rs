@@ -7,6 +7,7 @@ use crate::synth::Synth;
 use crate::GlobalEngine;
 use crate::MainWindow;
 use crate::Settings;
+use crate::SongSettings;
 
 use native_dialog::FileDialog;
 use slint::Global;
@@ -56,8 +57,12 @@ impl SoundEngine {
         }
     }
 
-    pub fn apply_settings(&mut self, settings: Settings) {
+    pub fn apply_settings(&mut self, settings: &Settings) {
         self.synth.apply_settings(settings);
+    }
+
+    pub fn apply_song_settings(&mut self, settings: &SongSettings) {
+        self.sequencer.apply_song_settings(settings);
     }
 
     fn singularize_note_release(&mut self, source: NoteSource, event: NoteEvent) -> Option<u32> {

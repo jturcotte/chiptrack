@@ -18,7 +18,7 @@ import {
 import { ToolbarButton } from "widgets.slint";
 import { PatternsPanel } from "patterns.slint";
 import { InstrumentsPanel } from "instruments.slint";
-import { OverlayDialog } from "overlay_dialog.slint";
+import { SettingsDialog } from "settings_dialog.slint";
 import { Piano } from "piano.slint";
 import { SongPanel } from "song.slint";
 import { Visualization } from "visualization.slint";
@@ -233,30 +233,9 @@ export MainWindow := Window {
     }
 
     property<bool> show_settings: false;
-    if show_settings: OverlayDialog {
-        accepted => {
-            GlobalSettings.settings.sync_enabled = sync_control.current_value != "Off";
-            GlobalSettings.settings_changed(GlobalSettings.settings);
+    if show_settings: SettingsDialog {
+        closed => {
             show_settings = false;
-        }
-        GridBox {
-            spacing: 24px;
-            Row {
-                Text {
-                    text: "Settings";
-                    font_size: 24px;
-                }
-            }
-            Row {
-                Text {
-                    vertical_alignment: center;
-                    text: "Sync Mode";
-                }
-                sync_control := ComboBox {
-                    model: ["Off", "PO SY1 (master, left channel is 2 PPQN)"];
-                    current_value: GlobalSettings.settings.sync_enabled ? "PO SY1 (master, left channel is 2 PPQN)" : "Off";
-                }
-            }
         }
     }
 }

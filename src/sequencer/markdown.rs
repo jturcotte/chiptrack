@@ -22,6 +22,7 @@ use std::io::Write;
 use std::path::Path;
 
 const INSTRUMENTS_FILE_SETTING: &str = "InstrumentsFile";
+const FRAMES_PER_STEP_SETTING: &str = "FramesPerStep";
 
 #[derive(PartialEq)]
 enum Section {
@@ -176,6 +177,12 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                         let value = caps.get(2).unwrap().as_str();
                         match name {
                             INSTRUMENTS_FILE_SETTING => self.out.instruments_file = value.into(),
+                            FRAMES_PER_STEP_SETTING => {
+                                self.out.frames_per_step = value.parse().or(Err(format!(
+                                    "Setting {} contains an invalid integer ({}).",
+                                    FRAMES_PER_STEP_SETTING, value
+                                )))?
+                            }
                             other => elog!("Unknown song setting [{}], ignoring.", other),
                         }
                     }
@@ -265,6 +272,7 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
 
     write!(f, "## Settings\n\n")?;
     write!(f, "- {}: {}\n", INSTRUMENTS_FILE_SETTING, song.instruments_file)?;
+    write!(f, "- {}: {}\n", FRAMES_PER_STEP_SETTING, song.frames_per_step)?;
     write!(f, "\n")?;
 
     f.flush()?;

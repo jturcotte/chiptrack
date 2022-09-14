@@ -44,6 +44,9 @@ export struct ChannelActiveNote := {
 export struct Settings := {
     sync_enabled: bool,
 }
+export struct SongSettings := {
+    frames_per_step: int,
+}
 
 export global GlobalEngine := {
     property<[SongPatternData]> sequencer_song_patterns: [
@@ -108,8 +111,14 @@ export global GlobalEngine := {
 }
 
 export global GlobalSettings := {
-    property<Settings> settings: { sync_enabled: false, };
+    property<Settings> settings: {
+        sync_enabled: false,
+    };
+    property<SongSettings> song_settings: {
+        frames_per_step: 7,
+    };
     callback settings_changed(Settings);
+    callback song_settings_changed(SongSettings);
 }
 
 export global GlobalUtils := {

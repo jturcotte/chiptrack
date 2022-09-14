@@ -179,7 +179,7 @@ impl Synth {
         self.output_data.clone()
     }
 
-    pub fn apply_settings(&mut self, settings: Settings) {
+    pub fn apply_settings(&mut self, settings: &Settings) {
         let mut output_data = self.output_data.lock().unwrap();
         output_data.gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
         output_data.sync_pulse.enabled = settings.sync_enabled;

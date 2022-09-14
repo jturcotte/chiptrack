@@ -8,8 +8,10 @@ use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
 use crate::utils::MidiNote;
 use crate::GlobalEngine;
+use crate::GlobalSettings;
 use crate::MainWindow;
 use crate::SongPatternData;
+use crate::SongSettings;
 use markdown::parse_markdown_song;
 use markdown::save_markdown_song;
 
@@ -25,9 +27,6 @@ use std::path::Path;
 
 #[cfg(target_arch = "wasm32")]
 use crate::utils;
-
-const FRAMES_PER_STEP: u32 = 6;
-const SNAP_AT_STEP_FRAME: u32 = 4;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NoteEvent {
@@ -154,6 +153,7 @@ pub struct SequencerSong {
     patterns: Vec<Pattern>,
     markdown_header: String,
     instruments_file: String,
+    frames_per_step: u32,
 }
 
 impl Default for InstrumentStep {
@@ -179,6 +179,7 @@ impl Default for SequencerSong {
             ],
             markdown_header: String::new(),
             instruments_file: String::new(),
+            frames_per_step: 7,
         }
     }
 }
@@ -218,6 +219,10 @@ impl Sequencer {
             synth_instrument_ids: vec![String::new(); NUM_INSTRUMENTS],
             main_window: main_window.clone(),
         }
+    }
+
+    pub fn apply_song_settings(&mut self, settings: &SongSettings) {
+        self.song.frames_per_step = settings.frames_per_step as u32;
     }
 
     pub fn select_song_pattern(&mut self, song_pattern: Option<u32>) -> () {
@@ -451,7 +456,7 @@ impl Sequencer {
 
         // FIXME: Reset or remove overflow check
         self.current_frame += 1;
-        if self.current_frame % FRAMES_PER_STEP == 0 {
+        if self.current_frame % self.song.frames_per_step == 0 {
             // Release are at then end of a step, so start by triggering any release of the
             // previous frame.
             for instrument in &self.song.patterns[self.selected_pattern].instruments {
@@ -554,7 +559,7 @@ impl Sequencer {
                     None,
                     // Try to clamp the event to the nearest frame.
                     // Use 4 instead of 3 just to try to compensate for the key press to visual and audible delay.
-                    if self.current_frame % FRAMES_PER_STEP < SNAP_AT_STEP_FRAME {
+                    if self.current_frame % self.song.frames_per_step < self.snap_at_step_frame() {
                         (self.current_step, self.selected_pattern, None)
                     } else {
                         self.just_recorded_over_next_step = true;
@@ -568,14 +573,15 @@ impl Sequencer {
                 // This is to prevent the release to be offset only by one frame but still end up
                 // one step later just because the press would already have been on the step's edge itself.
                 let steps_note_length = ((self.current_frame as f32 - self.last_press_frame.unwrap() as f32)
-                    / FRAMES_PER_STEP as f32)
+                    / self.song.frames_per_step as f32)
                     .round() as u32;
                 // We need to place the release in the previous step (its end), so substract one step.
                 let rounded_end_frame =
-                    self.last_press_frame.unwrap() + (steps_note_length.max(1) - 1) * FRAMES_PER_STEP;
+                    self.last_press_frame.unwrap() + (steps_note_length.max(1) - 1) * self.song.frames_per_step;
 
-                let is_end_in_prev_step = rounded_end_frame / FRAMES_PER_STEP < self.current_frame / FRAMES_PER_STEP;
-                let end_snaps_to_next_step = rounded_end_frame % FRAMES_PER_STEP < SNAP_AT_STEP_FRAME;
+                let is_end_in_prev_step =
+                    rounded_end_frame / self.song.frames_per_step < self.current_frame / self.song.frames_per_step;
+                let end_snaps_to_next_step = rounded_end_frame % self.song.frames_per_step < self.snap_at_step_frame();
                 (
                     None,
                     Some(true),
@@ -664,6 +670,7 @@ impl Sequencer {
 
         let current_song_pattern = self.current_song_pattern;
         let song_patterns = self.song.song_patterns.clone();
+        let frames_per_step = self.song.frames_per_step;
         self.main_window.upgrade_in_event_loop(move |handle| {
             let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
             let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
@@ -676,6 +683,10 @@ impl Sequencer {
                     },
                 });
             }
+
+            let mut settings: SongSettings = Default::default();
+            settings.frames_per_step = frames_per_step as i32;
+            GlobalSettings::get(&handle).set_song_settings(settings);
         });
 
         self.select_pattern(
@@ -737,6 +748,11 @@ impl Sequencer {
         self.update_steps();
 
         self.synth_instrument_ids = instrument_ids.clone();
+    }
+
+    fn snap_at_step_frame(&self) -> u32 {
+        // Use +1 just to try to compensate for the key press to visual and audible delay.
+        self.song.frames_per_step / 2 + 1
     }
 
     fn next_step_and_pattern_and_song_pattern(&self, forwards: bool) -> (usize, usize, Option<usize>) {

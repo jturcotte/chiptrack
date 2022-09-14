@@ -632,9 +632,20 @@ pub fn main() {
         println!("SET {:?}", settings);
         Lazy::force(&*cloned_context);
         cloned_sound_send
-            .send(Box::new(move |se| se.apply_settings(settings)))
+            .send(Box::new(move |se| se.apply_settings(&settings)))
             .unwrap();
     });
+    let cloned_context = context.clone();
+    let cloned_sound_send = sound_send.clone();
+    window
+        .global::<GlobalSettings>()
+        .on_song_settings_changed(move |settings| {
+            println!("SET {:?}", settings);
+            Lazy::force(&*cloned_context);
+            cloned_sound_send
+                .send(Box::new(move |se| se.apply_song_settings(&settings)))
+                .unwrap();
+        });
 
     window
         .global::<GlobalUtils>()
