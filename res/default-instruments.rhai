@@ -26,8 +26,7 @@ fn vibrato_fn(chan) {
     }
 }
 
-set_instrument(1, #{
-    id: "□",
+set_instrument_at_column("□", 0, #{
     press: |note, freq| {
         gb.square1.sweep_time = 0;
         gb.square1.sweep_dir = gb::SWE_INC;
@@ -48,8 +47,7 @@ set_instrument(1, #{
     },
 });
 
-set_instrument(2, #{
-    id: "◰",
+set_instrument_at_column("◰", 0, #{
     press: |note, freq| {
         gb.square1.sweep_time = 0;
         gb.square1.sweep_dir = gb::SWE_INC;
@@ -72,8 +70,7 @@ set_instrument(2, #{
     frames_after_release: 7,
 });
 
-set_instrument(3, #{
-    id: "🞍",
+set_instrument_at_column("🞍", 0, #{
     press: |note, freq| {
         gb.square1.freq = freq;
         // 2:bipp e:a:d:1 f:0:d:2 g
@@ -91,8 +88,7 @@ set_instrument(3, #{
     },
 });
 
-set_instrument(4, #{
-    id: "▦",
+set_instrument_at_column("▦", 0, #{
     press: |note, freq| {
         gb.square1.duty = gb::DUT_1_4;
         gb.square1.env_start = 0xf;
@@ -125,8 +121,7 @@ set_instrument(4, #{
     },
 });
 
-set_instrument(5, #{
-    id: "🟕",
+set_instrument_at_column("🟕", 1, #{
     press: |note, freq| {
         gb.noise.env_start = 0xf;
         gb.noise.env_dir = gb::ENV_DEC;
@@ -141,8 +136,7 @@ set_instrument(5, #{
     },
 });
 
-set_instrument(6, #{
-    id: "🟗",
+set_instrument_at_column("🟗", 1, #{
     press: |note, freq| {
         switch note % 12 {
             0 => {
@@ -234,8 +228,7 @@ set_instrument(6, #{
     },
 });
 
-set_instrument(7, #{
-    id: "◎",
+set_instrument_at_column("◎", 1, #{
     press: |note, freq| {
         // 1:superdrum e:d:d:2 f:2:d:2 g e
         gb.square1.duty = gb::DUT_2_4;
@@ -250,8 +243,7 @@ set_instrument(7, #{
     },
 });
 
-set_instrument(9, #{
-    id: "🛆",
+set_instrument_at_column("🛆", 2, #{
     press: |note, freq| {
         gb.wave.freq = freq;
         gb.wave.playing = false;
@@ -266,8 +258,7 @@ set_instrument(9, #{
     },
 });
 
-set_instrument(10, #{
-    id: "◉",
+set_instrument_at_column("◉", 2, #{
     press: |note, freq| {
         gb.wave.playing = false;
         gb.wave.table = "11235678999876679adffec985421131";
@@ -282,8 +273,7 @@ set_instrument(10, #{
     },
 });
 
-set_instrument(11, #{
-    id: "▻",
+set_instrument_at_column("▻", 2, #{
     press: |note, freq| {
         gb.wave.playing = false;
         gb.wave.table = "dedcba98765432100000000011111111";
@@ -300,8 +290,7 @@ set_instrument(11, #{
     frames_after_release: 2,
 });
 
-set_instrument(12, #{
-    id: "🞠",
+set_instrument_at_column("🞠", 2, #{
     press: |note, freq| {
         gb.wave.playing = false;
         gb.wave.table = "f0f0f0f0f0f0f0f0ff00ff00ff00ff00";
@@ -317,8 +306,7 @@ set_instrument(12, #{
     },
 });
 
-set_instrument(13, #{
-    id: "◺",
+set_instrument_at_column("◺", 3, #{
     press: |note, freq| {
         gb.wave.playing = false;
         gb.wave.table = "0234679acdffffeeeeffffdca9764310";

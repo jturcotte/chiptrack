@@ -20,6 +20,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub const NUM_INSTRUMENTS: usize = 64;
+pub const NUM_INSTRUMENT_COLS: usize = 4;
 pub const NUM_STEPS: usize = 16;
 pub const NUM_PATTERNS: usize = 64;
 

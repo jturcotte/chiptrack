@@ -18,6 +18,7 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use crate::sound_engine::NUM_INSTRUMENTS;
+use crate::sound_engine::NUM_INSTRUMENT_COLS;
 
 // Only works if the function's return type is Result<_, Box<EvalAltResult>>
 macro_rules! runtime_check {
@@ -951,12 +952,36 @@ struct InstrumentState {
     pressed_note: Option<PressedNote>,
 }
 
+impl Default for InstrumentState {
+    fn default() -> Self {
+        InstrumentState {
+            press_function: None,
+            release_function: None,
+            frame_function: None,
+            frames_after_release: 0,
+            pressed_note: None,
+        }
+    }
+}
+
+trait InstrumentColArrayExt {
+    fn get_instrument(&mut self, index: u8) -> Option<&mut InstrumentState>;
+}
+impl InstrumentColArrayExt for [Vec<InstrumentState>; NUM_INSTRUMENT_COLS] {
+    fn get_instrument(&mut self, index: u8) -> Option<&mut InstrumentState> {
+        // Column index is in the two lsb
+        let col = &mut self[(index & 0x3) as usize];
+        // Row index in the remaining bits
+        col.get_mut((index >> 2) as usize)
+    }
+}
+
 pub struct SynthScript {
     script_engine: Engine,
     script_ast: AST,
     script_context: SharedGbBindings,
     instrument_ids: Rc<RefCell<Vec<String>>>,
-    instrument_states: Rc<RefCell<Vec<InstrumentState>>>,
+    instrument_states: Rc<RefCell<[Vec<InstrumentState>; NUM_INSTRUMENT_COLS]>>,
 }
 
 impl SynthScript {
@@ -964,16 +989,7 @@ impl SynthScript {
 
     pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
         let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(vec![Default::default(); NUM_INSTRUMENTS]));
-        let instrument_states = Rc::new(RefCell::new(vec![
-            InstrumentState {
-                press_function: None,
-                release_function: None,
-                frame_function: None,
-                frames_after_release: 0,
-                pressed_note: None
-            };
-            NUM_INSTRUMENTS
-        ]));
+        let instrument_states: Rc<RefCell<[Vec<InstrumentState>; NUM_INSTRUMENT_COLS]>> = Default::default();
         let instrument_ids_clone = instrument_ids.clone();
         let instrument_states_clone = instrument_states.clone();
 
@@ -983,25 +999,35 @@ impl SynthScript {
         engine
             .register_type::<SharedGbBindings>()
             .register_type::<SharedGbSquare>();
-        engine.register_result_fn("set_instrument",
-            move |i: i32, instrument: Dynamic| {
-                runtime_check!(i >= 1 && i <= 64,
-                    "set_instrument: index must be 1 <= i <= 64, got {}",
-                    i);
+        engine.register_result_fn("set_instrument_at_column",
+            move |id: &str, col: i32, instrument: Dynamic| {
+                runtime_check!(!id.is_empty(), "set_instrument_at_column: id must not be empty, got {}", id);
+                runtime_check!(!instrument_ids_clone.borrow().iter().any(|i| i == id), "set_instrument_at_column: id {} must be unique, but was already set", id);
+                runtime_check!(col >= 0 && col <= NUM_INSTRUMENT_COLS as i32,
+                    "set_instrument_at_column: column must be 0 <= col <= {}, got {}",
+                    NUM_INSTRUMENT_COLS, col);
                 runtime_check!(instrument.type_id() == TypeId::of::<Map>(),
-                    "set_instrument: The instrument must be an object map, got {}",
+                    "set_instrument_at_column: The instrument must be an object map, got {}",
                     instrument.type_name());
 
+                let mut state_cols = instrument_states_clone.borrow_mut();
+                let (state, index) = {
+                    let state_col = &mut state_cols[col as usize];
+                    if state_col.len() >= 16 {
+                        return Err(format!("set_instrument_at_column: column {} already contains 16 instruments", col).into());
+                    }
+                    state_col.push(Default::default());
+                    // Column index is in the two lsb
+                    // 0, 1, 2, 3,
+                    // 4, 5, 6, 7,
+                    // ...
+                    let index = ((state_col.len() - 1) << 2) + col as usize;
+                    (&mut state_col.last_mut().unwrap(), index)
+                };
+
+                instrument_ids_clone.borrow_mut()[index] = id.to_owned();
+
                 let mut map = instrument.try_cast::<Map>().unwrap();
-
-                instrument_ids_clone.borrow_mut()[(i - 1) as usize] =
-                    if let Some(id) = map.remove("id").map(|o| o.into_string().unwrap()) {
-                        id
-                    } else {
-                        i.to_string()
-                    };
-
-                let state = &mut instrument_states_clone.borrow_mut()[(i - 1) as usize];
 
                 state.release_function = match map.remove("release") {
                     None =>
@@ -1113,11 +1139,13 @@ impl SynthScript {
     }
 
     fn reset_instruments(&mut self) {
-        for state in &mut *self.instrument_states.borrow_mut() {
-            state.press_function = None;
-            state.release_function = None;
-            state.frame_function = None;
-            state.frames_after_release = 0;
+        for state_col in &mut *self.instrument_states.borrow_mut() {
+            for state in state_col {
+                state.press_function = None;
+                state.release_function = None;
+                state.frame_function = None;
+                state.frames_after_release = 0;
+            }
         }
         for id in &mut *self.instrument_ids.borrow_mut() {
             *id = Default::default();
@@ -1172,20 +1200,22 @@ impl SynthScript {
             gb.end_script_run();
         }
 
-        let state = &mut self.instrument_states.borrow_mut()[instrument as usize];
-        if let Some(f) = &state.press_function {
-            state.pressed_note = Some(PressedNote {
-                note: note,
-                pressed_frame: frame_number,
-                extended_frames: None,
-            });
-            let result: Result<(), _> = f.call(
-                &self.script_engine,
-                &self.script_ast,
-                (note as i32, Self::note_to_freq(note)),
-            );
-            if let Err(e) = result {
-                elog!("{}", e)
+        let mut states = self.instrument_states.borrow_mut();
+        if let Some(state) = states.get_instrument(instrument) {
+            if let Some(f) = &state.press_function {
+                state.pressed_note = Some(PressedNote {
+                    note: note,
+                    pressed_frame: frame_number,
+                    extended_frames: None,
+                });
+                let result: Result<(), _> = f.call(
+                    &self.script_engine,
+                    &self.script_ast,
+                    (note as i32, Self::note_to_freq(note)),
+                );
+                if let Err(e) = result {
+                    elog!("{}", e)
+                }
             }
         }
     }
@@ -1194,70 +1224,74 @@ impl SynthScript {
         // The script themselves are modifying this state, so reset it.
         self.script_context.borrow_mut().set_frame_number(frame_number);
 
-        let state = &mut self.instrument_states.borrow_mut()[instrument as usize];
-        if let (Some(f), Some(PressedNote { note, .. })) = (&state.release_function, &mut state.pressed_note) {
-            let result: Result<(), _> = f.call(
-                &self.script_engine,
-                &self.script_ast,
-                (*note as i32, Self::note_to_freq(*note)),
-            );
-            if let Err(e) = result {
-                elog!("{}", e)
+        let mut states = self.instrument_states.borrow_mut();
+        if let Some(state) = states.get_instrument(instrument) {
+            if let (Some(f), Some(PressedNote { note, .. })) = (&state.release_function, &mut state.pressed_note) {
+                let result: Result<(), _> = f.call(
+                    &self.script_engine,
+                    &self.script_ast,
+                    (*note as i32, Self::note_to_freq(*note)),
+                );
+                if let Err(e) = result {
+                    elog!("{}", e)
+                }
             }
-        }
-        if let Some(PressedNote {
-            note: _,
-            pressed_frame: _,
-            extended_frames,
-        }) = &mut state.pressed_note
-        {
-            // Since the release function might trigger an envelope that lasts a few
-            // frames, the frame function would need to continue running during that time.
-            // The "frames" function will be run as long as pressed_note is some,
-            // so if the instrument has set frames_after_release, transfer that info
-            // into a countdown that the frame function runner will decrease, and then
-            // finally empty `pressed_note`.
-            if state.frames_after_release > 0 {
-                *extended_frames = Some(state.frames_after_release as usize)
-            } else {
-                state.pressed_note = None;
+            if let Some(PressedNote {
+                note: _,
+                pressed_frame: _,
+                extended_frames,
+            }) = &mut state.pressed_note
+            {
+                // Since the release function might trigger an envelope that lasts a few
+                // frames, the frame function would need to continue running during that time.
+                // The "frames" function will be run as long as pressed_note is some,
+                // so if the instrument has set frames_after_release, transfer that info
+                // into a countdown that the frame function runner will decrease, and then
+                // finally empty `pressed_note`.
+                if state.frames_after_release > 0 {
+                    *extended_frames = Some(state.frames_after_release as usize)
+                } else {
+                    state.pressed_note = None;
+                }
             }
         }
     }
 
     pub fn advance_frame(&mut self, frame_number: usize) {
-        for state in &mut *self.instrument_states.borrow_mut() {
-            // Only run the frame function on instruments currently pressed.
-            if let (
-                Some(f),
-                Some(PressedNote {
-                    note,
-                    pressed_frame,
-                    extended_frames,
-                }),
-            ) = (&state.frame_function, &mut state.pressed_note)
-            {
-                // The script themselves are modifying this state, so reset it.
-                self.script_context.borrow_mut().set_frame_number(frame_number);
+        for state_col in &mut *self.instrument_states.borrow_mut() {
+            for state in state_col {
+                // Only run the frame function on instruments currently pressed.
+                if let (
+                    Some(f),
+                    Some(PressedNote {
+                        note,
+                        pressed_frame,
+                        extended_frames,
+                    }),
+                ) = (&state.frame_function, &mut state.pressed_note)
+                {
+                    // The script themselves are modifying this state, so reset it.
+                    self.script_context.borrow_mut().set_frame_number(frame_number);
 
-                let result: Result<(), _> = f.call(
-                    &self.script_engine,
-                    &self.script_ast,
-                    (
-                        *note as i32,
-                        Self::note_to_freq(*note),
-                        (frame_number - *pressed_frame) as i32,
-                    ),
-                );
-                if let Err(e) = result {
-                    elog!("{}", e)
-                }
-                if let Some(remaining) = extended_frames {
-                    *remaining -= 1;
-                    if *remaining == 0 {
-                        // Finally empty `pressed_note` to prevent further
-                        // runs of the frames function.
-                        state.pressed_note = None;
+                    let result: Result<(), _> = f.call(
+                        &self.script_engine,
+                        &self.script_ast,
+                        (
+                            *note as i32,
+                            Self::note_to_freq(*note),
+                            (frame_number - *pressed_frame) as i32,
+                        ),
+                    );
+                    if let Err(e) = result {
+                        elog!("{}", e)
+                    }
+                    if let Some(remaining) = extended_frames {
+                        *remaining -= 1;
+                        if *remaining == 0 {
+                            // Finally empty `pressed_note` to prevent further
+                            // runs of the frames function.
+                            state.pressed_note = None;
+                        }
                     }
                 }
             }
