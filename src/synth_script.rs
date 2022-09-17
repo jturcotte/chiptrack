@@ -1140,12 +1140,7 @@ impl SynthScript {
 
     fn reset_instruments(&mut self) {
         for state_col in &mut *self.instrument_states.borrow_mut() {
-            for state in state_col {
-                state.press_function = None;
-                state.release_function = None;
-                state.frame_function = None;
-                state.frames_after_release = 0;
-            }
+            state_col.clear();
         }
         for id in &mut *self.instrument_ids.borrow_mut() {
             *id = Default::default();
