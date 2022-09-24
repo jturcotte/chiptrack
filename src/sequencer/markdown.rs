@@ -7,7 +7,6 @@ use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
 use crate::utils::MidiNote;
 
-use bit_set::BitSet;
 use pulldown_cmark::Event::*;
 use pulldown_cmark::OffsetIter;
 use pulldown_cmark::Options;
@@ -229,18 +228,28 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
     }
 
     for (pi, p) in song.patterns.iter().enumerate() {
-        let mut non_empty = BitSet::with_capacity(NUM_INSTRUMENTS);
+        let mut non_empty = Vec::with_capacity(NUM_INSTRUMENTS);
         for (ii, i) in p.instruments.iter().enumerate() {
             if i.steps.iter().any(|s| s.press || s.release) {
-                non_empty.insert(ii);
+                non_empty.push(ii);
             }
         }
+        non_empty.sort_by(|a, b| {
+            let mut ai = p.instruments[*a].synth_index.unwrap() as u32;
+            let mut bi = p.instruments[*b].synth_index.unwrap() as u32;
+            // Instrument are indiced by UI pages and have sequenced by row,
+            // but we want to sort by column first, so change the order by moving
+            // the 2 column bits from being least significant to being most significant.
+            ai |= (ai & 0x3) << 8;
+            bi |= (bi & 0x3) << 8;
+            ai.partial_cmp(&bi).unwrap()
+        });
 
         if !non_empty.is_empty() {
             write!(f, "## Pattern {}\n\n", pi + 1)?;
 
             for ii in non_empty.iter() {
-                let id = &p.instruments[ii].id;
+                let id = &p.instruments[*ii].id;
                 write!(f, "|{:^4}", id)?;
             }
             write!(f, "|\n")?;
@@ -251,7 +260,7 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
 
             for si in 0..NUM_STEPS {
                 for ii in non_empty.iter() {
-                    let i = &p.instruments[ii];
+                    let i = &p.instruments[*ii];
                     let s = i.steps[si];
                     if s.press {
                         write!(f, "|{}", MidiNote(s.note as i32).name())?;
