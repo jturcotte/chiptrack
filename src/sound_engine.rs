@@ -228,8 +228,7 @@ impl SoundEngine {
     fn load_file_internal(&mut self, song_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
         log!("Loading the project song from file {:?}", song_path);
         let instruments_file = self.sequencer.load_file(song_path)?;
-        // Assume that it's in the current directory for now.
-        let instruments_path = PathBuf::from(instruments_file);
+        let instruments_path = song_path.with_file_name(instruments_file);
         log!("Loading project instruments from file {:?}", instruments_path);
         self.synth.load_file(instruments_path.as_path())?;
         self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
