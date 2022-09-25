@@ -230,19 +230,21 @@ impl Sequencer {
         self.current_song_pattern = song_pattern.map(|sp| sp as usize);
         let new = self.current_song_pattern;
 
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-            if let Some(current) = old {
-                let mut pattern_row_data = model.row_data(current).unwrap();
-                pattern_row_data.active = false;
-                model.set_row_data(current, pattern_row_data);
-            }
-            if let Some(current) = new {
-                let mut pattern_row_data = model.row_data(current).unwrap();
-                pattern_row_data.active = true;
-                model.set_row_data(current, pattern_row_data);
-            }
-        });
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
+                if let Some(current) = old {
+                    let mut pattern_row_data = model.row_data(current).unwrap();
+                    pattern_row_data.active = false;
+                    model.set_row_data(current, pattern_row_data);
+                }
+                if let Some(current) = new {
+                    let mut pattern_row_data = model.row_data(current).unwrap();
+                    pattern_row_data.active = true;
+                    model.set_row_data(current, pattern_row_data);
+                }
+            })
+            .unwrap();
     }
 
     pub fn select_pattern(&mut self, pattern: u32) -> () {
@@ -253,32 +255,36 @@ impl Sequencer {
 
         self.update_steps();
 
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = GlobalEngine::get(&handle).get_sequencer_patterns();
-            let mut pattern_row_data = model.row_data(old).unwrap();
-            pattern_row_data.active = false;
-            model.set_row_data(old, pattern_row_data);
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_sequencer_patterns();
+                let mut pattern_row_data = model.row_data(old).unwrap();
+                pattern_row_data.active = false;
+                model.set_row_data(old, pattern_row_data);
 
-            let mut pattern_row_data = model.row_data(new).unwrap();
-            pattern_row_data.active = true;
-            model.set_row_data(new, pattern_row_data);
-        });
+                let mut pattern_row_data = model.row_data(new).unwrap();
+                pattern_row_data.active = true;
+                model.set_row_data(new, pattern_row_data);
+            })
+            .unwrap();
     }
 
     pub fn select_step(&mut self, step: u32) -> () {
         let old_step = self.current_step;
         self.current_step = step as usize;
 
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = GlobalEngine::get(&handle).get_sequencer_steps();
-            let mut row_data = model.row_data(old_step).unwrap();
-            row_data.active = false;
-            model.set_row_data(old_step, row_data);
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_sequencer_steps();
+                let mut row_data = model.row_data(old_step).unwrap();
+                row_data.active = false;
+                model.set_row_data(old_step, row_data);
 
-            let mut row_data = model.row_data(step as usize).unwrap();
-            row_data.active = true;
-            model.set_row_data(step as usize, row_data);
-        });
+                let mut row_data = model.row_data(step as usize).unwrap();
+                row_data.active = true;
+                model.set_row_data(step as usize, row_data);
+            })
+            .unwrap();
     }
     pub fn select_instrument(&mut self, instrument: u8) -> () {
         let old_instrument = self.selected_instrument as usize;
@@ -286,16 +292,18 @@ impl Sequencer {
 
         self.update_steps();
 
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = GlobalEngine::get(&handle).get_instruments();
-            let mut row_data = model.row_data(old_instrument).unwrap();
-            row_data.selected = false;
-            model.set_row_data(old_instrument, row_data);
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_instruments();
+                let mut row_data = model.row_data(old_instrument).unwrap();
+                row_data.selected = false;
+                model.set_row_data(old_instrument, row_data);
 
-            let mut row_data = model.row_data(instrument as usize).unwrap();
-            row_data.selected = true;
-            model.set_row_data(instrument as usize, row_data);
-        });
+                let mut row_data = model.row_data(instrument as usize).unwrap();
+                row_data.selected = true;
+                model.set_row_data(instrument as usize, row_data);
+            })
+            .unwrap();
     }
 
     pub fn toggle_mute_instrument(&mut self, instrument: u8) -> () {
@@ -304,12 +312,14 @@ impl Sequencer {
             self.muted_instruments.insert(instrument);
         }
 
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = GlobalEngine::get(&handle).get_instruments();
-            let mut row_data = model.row_data(instrument as usize).unwrap();
-            row_data.muted = !was_muted;
-            model.set_row_data(instrument as usize, row_data);
-        });
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_instruments();
+                let mut row_data = model.row_data(instrument as usize).unwrap();
+                row_data.muted = !was_muted;
+                model.set_row_data(instrument as usize, row_data);
+            })
+            .unwrap();
     }
 
     fn update_patterns(&mut self) -> () {
@@ -317,30 +327,34 @@ impl Sequencer {
             .filter(|&p| !self.song.patterns[p].is_empty())
             .collect();
 
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let patterns = GlobalEngine::get(&handle).get_sequencer_patterns();
-            for p in non_empty_patterns {
-                let mut pattern_row_data = patterns.row_data(p).unwrap();
-                pattern_row_data.empty = false;
-                patterns.set_row_data(p, pattern_row_data);
-            }
-        });
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let patterns = GlobalEngine::get(&handle).get_sequencer_patterns();
+                for p in non_empty_patterns {
+                    let mut pattern_row_data = patterns.row_data(p).unwrap();
+                    pattern_row_data.empty = false;
+                    patterns.set_row_data(p, pattern_row_data);
+                }
+            })
+            .unwrap();
     }
 
     fn update_steps(&mut self) -> () {
         let maybe_steps = self.song.patterns[self.selected_pattern]
             .get_steps(self.selected_instrument)
             .map(|s| s.clone());
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = GlobalEngine::get(&handle).get_sequencer_steps();
-            for (i, step) in maybe_steps.unwrap_or_default().iter().enumerate() {
-                let mut row_data = model.row_data(i).unwrap();
-                row_data.press = step.press;
-                row_data.release = step.release;
-                row_data.note_name = MidiNote(step.note as i32).name().into();
-                model.set_row_data(i, row_data);
-            }
-        });
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_sequencer_steps();
+                for (i, step) in maybe_steps.unwrap_or_default().iter().enumerate() {
+                    let mut row_data = model.row_data(i).unwrap();
+                    row_data.press = step.press;
+                    row_data.release = step.release;
+                    row_data.note_name = MidiNote(step.note as i32).name().into();
+                    model.set_row_data(i, row_data);
+                }
+            })
+            .unwrap();
     }
 
     pub fn toggle_step(&mut self, step_num: u32) -> () {
@@ -412,25 +426,27 @@ impl Sequencer {
         );
 
         let selected_pattern = self.selected_pattern;
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let patterns = GlobalEngine::get(&handle).get_sequencer_patterns();
-            let mut pattern_row_data = patterns.row_data(selected_pattern).unwrap();
-            pattern_row_data.empty = pattern_empty;
-            patterns.set_row_data(selected_pattern, pattern_row_data);
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let patterns = GlobalEngine::get(&handle).get_sequencer_patterns();
+                let mut pattern_row_data = patterns.row_data(selected_pattern).unwrap();
+                pattern_row_data.empty = pattern_empty;
+                patterns.set_row_data(selected_pattern, pattern_row_data);
 
-            let steps = GlobalEngine::get(&handle).get_sequencer_steps();
-            let mut step_row_data = steps.row_data(step_num).unwrap();
-            if let Some(press) = set_press {
-                step_row_data.press = press;
-            }
-            if let Some(release) = set_release {
-                step_row_data.release = release;
-            }
-            if let Some(note) = set_note {
-                step_row_data.note_name = MidiNote(note as i32).name().into();
-            }
-            steps.set_row_data(step_num, step_row_data);
-        });
+                let steps = GlobalEngine::get(&handle).get_sequencer_steps();
+                let mut step_row_data = steps.row_data(step_num).unwrap();
+                if let Some(press) = set_press {
+                    step_row_data.press = press;
+                }
+                if let Some(release) = set_release {
+                    step_row_data.release = release;
+                }
+                if let Some(note) = set_note {
+                    step_row_data.note_name = MidiNote(note as i32).name().into();
+                }
+                steps.set_row_data(step_num, step_row_data);
+            })
+            .unwrap();
     }
     pub fn set_playing(&mut self, val: bool) -> Vec<(u8, NoteEvent, u32)> {
         self.playing = val;
@@ -647,14 +663,16 @@ impl Sequencer {
     pub fn append_song_pattern(&mut self, pattern: u32) {
         self.song.song_patterns.push(pattern as usize);
 
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-            let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-            vec_model.push(SongPatternData {
-                number: pattern as i32,
-                active: false,
-            });
-        });
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
+                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                vec_model.push(SongPatternData {
+                    number: pattern as i32,
+                    active: false,
+                });
+            })
+            .unwrap();
     }
 
     pub fn remove_last_song_pattern(&mut self) {
@@ -668,11 +686,13 @@ impl Sequencer {
                 });
             }
 
-            self.main_window.upgrade_in_event_loop(move |handle| {
-                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-                vec_model.remove(vec_model.row_count() - 1);
-            });
+            self.main_window
+                .upgrade_in_event_loop(move |handle| {
+                    let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
+                    let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                    vec_model.remove(vec_model.row_count() - 1);
+                })
+                .unwrap();
         }
     }
 
@@ -680,11 +700,13 @@ impl Sequencer {
         self.song.song_patterns.clear();
         self.select_song_pattern(None);
 
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-            let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-            vec_model.set_vec(Vec::new());
-        });
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
+                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                vec_model.set_vec(Vec::new());
+            })
+            .unwrap();
     }
 
     fn set_song(&mut self, song: SequencerSong) {
@@ -699,23 +721,25 @@ impl Sequencer {
         let current_song_pattern = self.current_song_pattern;
         let song_patterns = self.song.song_patterns.clone();
         let frames_per_step = self.song.frames_per_step;
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-            let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-            for (i, number) in song_patterns.iter().enumerate() {
-                vec_model.push(SongPatternData {
-                    number: *number as i32,
-                    active: match current_song_pattern {
-                        Some(sp) => i == sp,
-                        None => false,
-                    },
-                });
-            }
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
+                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                for (i, number) in song_patterns.iter().enumerate() {
+                    vec_model.push(SongPatternData {
+                        number: *number as i32,
+                        active: match current_song_pattern {
+                            Some(sp) => i == sp,
+                            None => false,
+                        },
+                    });
+                }
 
-            let mut settings: SongSettings = Default::default();
-            settings.frames_per_step = frames_per_step as i32;
-            GlobalSettings::get(&handle).set_song_settings(settings);
-        });
+                let mut settings: SongSettings = Default::default();
+                settings.frames_per_step = frames_per_step as i32;
+                GlobalSettings::get(&handle).set_song_settings(settings);
+            })
+            .unwrap();
 
         self.select_pattern(
             *self

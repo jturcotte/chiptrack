@@ -248,14 +248,16 @@ impl Synth {
 
     fn update_instrument_ids(&self) {
         let ids = self.script.instrument_ids().clone();
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = GlobalEngine::get(&handle).get_instruments();
-            for (i, id) in ids.iter().enumerate() {
-                let mut row_data = model.row_data(i).unwrap();
-                row_data.id = SharedString::from(id);
-                model.set_row_data(i, row_data);
-            }
-        });
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_instruments();
+                for (i, id) in ids.iter().enumerate() {
+                    let mut row_data = model.row_data(i).unwrap();
+                    row_data.id = SharedString::from(id);
+                    model.set_row_data(i, row_data);
+                }
+            })
+            .unwrap();
     }
 
     pub fn load_default(&mut self) {
@@ -291,122 +293,124 @@ impl Synth {
         // Let square channels be rendered on top of the wave channel.
         states.reverse();
 
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let global = GlobalEngine::get(&handle);
-            let trace_model = global.get_synth_trace_notes();
-            let trace_vec_model = trace_model
-                .as_any()
-                .downcast_ref::<VecModel<ChannelTraceNote>>()
-                .unwrap();
-            let active_model = global.get_synth_active_notes();
-            let active_vec_model = active_model
-                .as_any()
-                .downcast_ref::<VecModel<ChannelActiveNote>>()
-                .unwrap();
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let global = GlobalEngine::get(&handle);
+                let trace_model = global.get_synth_trace_notes();
+                let trace_vec_model = trace_model
+                    .as_any()
+                    .downcast_ref::<VecModel<ChannelTraceNote>>()
+                    .unwrap();
+                let active_model = global.get_synth_active_notes();
+                let active_vec_model = active_model
+                    .as_any()
+                    .downcast_ref::<VecModel<ChannelActiveNote>>()
+                    .unwrap();
 
-            // FIXME: Provide the oldest tick number to the UI or get it from it
-            let visible_ticks = 6 * 16 * 2;
+                // FIXME: Provide the oldest tick number to the UI or get it from it
+                let visible_ticks = 6 * 16 * 2;
 
-            // First remove traces that would disappear after being shrunk as this affects indices.
-            while trace_vec_model.row_count() > 0 {
-                let trace = trace_vec_model.row_data(0).unwrap();
-                if frame_number - (trace.start_tick + trace.num_ticks) >= visible_ticks {
-                    trace_vec_model.remove(0);
-                } else {
-                    break;
-                }
-            }
-
-            let mut last_chan_trace_index: [Option<usize>; 4] = [None; 4];
-            for i in 0..trace_vec_model.row_count() {
-                let mut trace = trace_vec_model.row_data(i).unwrap();
-
-                // Remember whether this trace is a candidate to be merged with current channel traces.
-                if trace.start_tick + trace.num_ticks == frame_number {
-                    last_chan_trace_index[trace.channel as usize] = Some(i);
-                }
-
-                // Shrink old traces that span past the trace history range.
-                if frame_number - trace.start_tick >= visible_ticks {
-                    let diff = frame_number - trace.start_tick - visible_ticks;
-                    trace.start_tick += diff;
-                    trace.num_ticks -= diff;
-                    trace_vec_model.set_row_data(i, trace);
-                }
-            }
-
-            // FIXME: Keep notes that are still active instead of re-adding?
-            active_vec_model.set_vec(Vec::new());
-
-            for (channel, &(freq, vol)) in states.iter().enumerate() {
-                if vol > 0 {
-                    let (trace, active) = if let Some((note, cent_adj)) = freq.map(MidiNote::from_freq) {
-                        let semitone = note.semitone();
-                        // Stretch the between-notes range for white notes not followed by a black note.
-                        let cent_factor = if (semitone == 4 || semitone == 11) && cent_adj > 0.0
-                            || (semitone == 5 || semitone == 0) && cent_adj < 0.0
-                        {
-                            1.0
-                        } else {
-                            0.5
-                        };
-
-                        let trace = ChannelTraceNote {
-                            channel: channel as i32,
-                            start_tick: frame_number,
-                            num_ticks: 1,
-                            octave: note.octave(),
-                            key_pos: note.key_pos(),
-                            cent_adj: cent_adj * cent_factor,
-                            is_black: note.is_black(),
-                            volume: vol as f32 / 15.0,
-                        };
-                        let active = ChannelActiveNote {
-                            trace: trace.clone(),
-                            note_name: note.name().into(),
-                        };
-                        (trace, active)
+                // First remove traces that would disappear after being shrunk as this affects indices.
+                while trace_vec_model.row_count() > 0 {
+                    let trace = trace_vec_model.row_data(0).unwrap();
+                    if frame_number - (trace.start_tick + trace.num_ticks) >= visible_ticks {
+                        trace_vec_model.remove(0);
                     } else {
-                        let trace = ChannelTraceNote {
-                            channel: channel as i32,
-                            start_tick: frame_number,
-                            num_ticks: 1,
-                            octave: 0,
-                            key_pos: 0,
-                            cent_adj: 0.0,
-                            is_black: false,
-                            volume: vol as f32 / 15.0,
-                        };
-                        let active = ChannelActiveNote {
-                            trace: trace.clone(),
-                            note_name: "*".into(),
-                        };
-                        (trace, active)
-                    };
-
-                    let maybe_last_index = last_chan_trace_index[trace.channel as usize];
-                    maybe_last_index
-                        .and_then(|last_index| {
-                            let mut last = trace_vec_model.row_data(last_index).unwrap();
-                            if last.channel == trace.channel
-                                && last.octave == trace.octave
-                                && last.key_pos == trace.key_pos
-                                && last.cent_adj == trace.cent_adj
-                                && last.is_black == trace.is_black
-                                && last.volume == trace.volume
-                            {
-                                last.num_ticks += trace.num_ticks;
-                                Some(trace_vec_model.set_row_data(last_index, last))
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or_else(|| trace_vec_model.push(trace));
-
-                    active_vec_model.push(active);
+                        break;
+                    }
                 }
-            }
-            global.set_current_tick_number(frame_number);
-        });
+
+                let mut last_chan_trace_index: [Option<usize>; 4] = [None; 4];
+                for i in 0..trace_vec_model.row_count() {
+                    let mut trace = trace_vec_model.row_data(i).unwrap();
+
+                    // Remember whether this trace is a candidate to be merged with current channel traces.
+                    if trace.start_tick + trace.num_ticks == frame_number {
+                        last_chan_trace_index[trace.channel as usize] = Some(i);
+                    }
+
+                    // Shrink old traces that span past the trace history range.
+                    if frame_number - trace.start_tick >= visible_ticks {
+                        let diff = frame_number - trace.start_tick - visible_ticks;
+                        trace.start_tick += diff;
+                        trace.num_ticks -= diff;
+                        trace_vec_model.set_row_data(i, trace);
+                    }
+                }
+
+                // FIXME: Keep notes that are still active instead of re-adding?
+                active_vec_model.set_vec(Vec::new());
+
+                for (channel, &(freq, vol)) in states.iter().enumerate() {
+                    if vol > 0 {
+                        let (trace, active) = if let Some((note, cent_adj)) = freq.map(MidiNote::from_freq) {
+                            let semitone = note.semitone();
+                            // Stretch the between-notes range for white notes not followed by a black note.
+                            let cent_factor = if (semitone == 4 || semitone == 11) && cent_adj > 0.0
+                                || (semitone == 5 || semitone == 0) && cent_adj < 0.0
+                            {
+                                1.0
+                            } else {
+                                0.5
+                            };
+
+                            let trace = ChannelTraceNote {
+                                channel: channel as i32,
+                                start_tick: frame_number,
+                                num_ticks: 1,
+                                octave: note.octave(),
+                                key_pos: note.key_pos(),
+                                cent_adj: cent_adj * cent_factor,
+                                is_black: note.is_black(),
+                                volume: vol as f32 / 15.0,
+                            };
+                            let active = ChannelActiveNote {
+                                trace: trace.clone(),
+                                note_name: note.name().into(),
+                            };
+                            (trace, active)
+                        } else {
+                            let trace = ChannelTraceNote {
+                                channel: channel as i32,
+                                start_tick: frame_number,
+                                num_ticks: 1,
+                                octave: 0,
+                                key_pos: 0,
+                                cent_adj: 0.0,
+                                is_black: false,
+                                volume: vol as f32 / 15.0,
+                            };
+                            let active = ChannelActiveNote {
+                                trace: trace.clone(),
+                                note_name: "*".into(),
+                            };
+                            (trace, active)
+                        };
+
+                        let maybe_last_index = last_chan_trace_index[trace.channel as usize];
+                        maybe_last_index
+                            .and_then(|last_index| {
+                                let mut last = trace_vec_model.row_data(last_index).unwrap();
+                                if last.channel == trace.channel
+                                    && last.octave == trace.octave
+                                    && last.key_pos == trace.key_pos
+                                    && last.cent_adj == trace.cent_adj
+                                    && last.is_black == trace.is_black
+                                    && last.volume == trace.volume
+                                {
+                                    last.num_ticks += trace.num_ticks;
+                                    Some(trace_vec_model.set_row_data(last_index, last))
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or_else(|| trace_vec_model.push(trace));
+
+                        active_vec_model.push(active);
+                    }
+                }
+                global.set_current_tick_number(frame_number);
+            })
+            .unwrap();
     }
 }

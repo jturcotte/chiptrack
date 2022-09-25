@@ -1014,8 +1014,8 @@ impl SynthScript {
         engine
             .register_type::<SharedGbBindings>()
             .register_type::<SharedGbSquare>();
-        engine.register_result_fn("set_instrument_at_column",
-            move |id: &str, col: i32, instrument: Dynamic| {
+        engine.register_fn("set_instrument_at_column",
+            move |id: &str, col: i32, instrument: Dynamic| -> Result<(), Box<EvalAltResult>> {
                 runtime_check!(!id.is_empty(), "set_instrument_at_column: id must not be empty, got {}", id);
                 runtime_check!(!instrument_ids_clone.borrow().iter().any(|i| i == id), "set_instrument_at_column: id {} must be unique, but was already set", id);
                 runtime_check!(col >= 0 && col <= NUM_INSTRUMENT_COLS as i32,

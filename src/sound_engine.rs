@@ -114,29 +114,31 @@ impl SoundEngine {
                 self.synth.release_instrument(instrument);
             };
 
-            self.main_window.upgrade_in_event_loop(move |handle| {
-                let pressed = typ == NoteEvent::Press;
-                if is_selected_instrument {
-                    let notes_model = handle.get_notes();
-                    for row in 0..notes_model.row_count() {
-                        let mut row_data = notes_model.row_data(row).unwrap();
-                        // A note release might not happen if a press happened in-between.
-                        if note_to_release.map_or(false, |n| n == row_data.note_number as u32) {
-                            row_data.active = false;
-                            notes_model.set_row_data(row, row_data.clone());
-                        }
+            self.main_window
+                .upgrade_in_event_loop(move |handle| {
+                    let pressed = typ == NoteEvent::Press;
+                    if is_selected_instrument {
+                        let notes_model = handle.get_notes();
+                        for row in 0..notes_model.row_count() {
+                            let mut row_data = notes_model.row_data(row).unwrap();
+                            // A note release might not happen if a press happened in-between.
+                            if note_to_release.map_or(false, |n| n == row_data.note_number as u32) {
+                                row_data.active = false;
+                                notes_model.set_row_data(row, row_data.clone());
+                            }
 
-                        if row_data.note_number as u32 == note {
-                            row_data.active = pressed;
-                            notes_model.set_row_data(row, row_data);
+                            if row_data.note_number as u32 == note {
+                                row_data.active = pressed;
+                                notes_model.set_row_data(row, row_data);
+                            }
                         }
                     }
-                }
-                let instruments_model = GlobalEngine::get(&handle).get_instruments();
-                let mut row_data = instruments_model.row_data(instrument as usize).unwrap();
-                row_data.active = pressed;
-                instruments_model.set_row_data(instrument as usize, row_data);
-            });
+                    let instruments_model = GlobalEngine::get(&handle).get_instruments();
+                    let mut row_data = instruments_model.row_data(instrument as usize).unwrap();
+                    row_data.active = pressed;
+                    instruments_model.set_row_data(instrument as usize, row_data);
+                })
+                .unwrap();
         }
     }
 
@@ -157,27 +159,31 @@ impl SoundEngine {
         self.pressed_note = None;
 
         // Release all notes visually that might have been pressed for the previous instrument.
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = handle.get_notes();
-            for row in 0..model.row_count() {
-                let mut row_data = model.row_data(row).unwrap();
-                row_data.active = false;
-                model.set_row_data(row, row_data);
-            }
-        });
-    }
-
-    fn release_note_visually(&mut self, note: u32) -> () {
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = handle.get_notes();
-            for row in 0..model.row_count() {
-                let mut row_data = model.row_data(row).unwrap();
-                if note == row_data.note_number as u32 {
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = handle.get_notes();
+                for row in 0..model.row_count() {
+                    let mut row_data = model.row_data(row).unwrap();
                     row_data.active = false;
                     model.set_row_data(row, row_data);
                 }
-            }
-        });
+            })
+            .unwrap();
+    }
+
+    fn release_note_visually(&mut self, note: u32) -> () {
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = handle.get_notes();
+                for row in 0..model.row_count() {
+                    let mut row_data = model.row_data(row).unwrap();
+                    if note == row_data.note_number as u32 {
+                        row_data.active = false;
+                        model.set_row_data(row, row_data);
+                    }
+                }
+            })
+            .unwrap();
     }
 
     pub fn press_note(&mut self, note: u32) -> () {
@@ -190,16 +196,18 @@ impl SoundEngine {
             self.release_note_visually(note_to_release)
         }
 
-        self.main_window.upgrade_in_event_loop(move |handle| {
-            let model = handle.get_notes();
-            for row in 0..model.row_count() {
-                let mut row_data = model.row_data(row).unwrap();
-                if row_data.note_number == note as i32 {
-                    row_data.active = true;
-                    model.set_row_data(row, row_data);
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = handle.get_notes();
+                for row in 0..model.row_count() {
+                    let mut row_data = model.row_data(row).unwrap();
+                    if row_data.note_number == note as i32 {
+                        row_data.active = true;
+                        model.set_row_data(row, row_data);
+                    }
                 }
-            }
-        });
+            })
+            .unwrap();
     }
 
     pub fn release_note(&mut self, note: u32) -> () {
@@ -320,7 +328,8 @@ impl SoundEngine {
                     .unwrap_or_else(|e| elog!("Error saving the project: {}", e))
                 });
             }
-        });
+        })
+        .unwrap();
     }
 
     pub fn save_project(&mut self) {
