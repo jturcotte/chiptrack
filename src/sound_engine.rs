@@ -95,8 +95,7 @@ impl SoundEngine {
         })
     }
 
-    pub fn advance_frame(&mut self) -> () {
-        let (step_change, note_events) = self.sequencer.advance_frame();
+    fn send_note_events_to_synth(&mut self, note_events: Vec<(u8, NoteEvent, u32)>) {
         for (instrument, typ, note) in note_events {
             let is_selected_instrument = instrument == self.sequencer.selected_instrument;
 
@@ -139,6 +138,16 @@ impl SoundEngine {
                 instruments_model.set_row_data(instrument as usize, row_data);
             });
         }
+    }
+
+    pub fn set_playing(&mut self, val: bool) -> () {
+        let note_events = self.sequencer.set_playing(val);
+        self.send_note_events_to_synth(note_events);
+    }
+
+    pub fn advance_frame(&mut self) -> () {
+        let (step_change, note_events) = self.sequencer.advance_frame();
+        self.send_note_events_to_synth(note_events);
         self.synth.advance_frame(step_change);
     }
 

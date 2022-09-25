@@ -569,7 +569,7 @@ pub fn main() {
         // FIXME: Stop the sound device
         Lazy::force(&*cloned_context);
         cloned_sound_send
-            .send(Box::new(move |se| se.sequencer.set_playing(toggled)))
+            .send(Box::new(move |se| se.set_playing(toggled)))
             .unwrap();
         window_weak.unwrap().set_playing(toggled);
     });

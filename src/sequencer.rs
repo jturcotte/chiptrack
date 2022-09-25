@@ -432,12 +432,23 @@ impl Sequencer {
             steps.set_row_data(step_num, step_row_data);
         });
     }
-    pub fn set_playing(&mut self, val: bool) -> () {
+    pub fn set_playing(&mut self, val: bool) -> Vec<(u8, NoteEvent, u32)> {
         self.playing = val;
         // Reset the current_frame so that it's aligned with full
         // steps and that record_press would record any key while
         // stopped to the current frame and not the next.
         self.current_frame = 0;
+
+        if self.playing {
+            // The first advance_frame after playing will move from frame 0 to frame 1 and skip presses
+            // of frame 0. Since we don't care about releases of the non-existant previous frame, do the
+            // presses now, right after starting the playback.
+            let mut note_events: Vec<(u8, NoteEvent, u32)> = Vec::new();
+            self.handle_current_step_presses(&mut note_events);
+            note_events
+        } else {
+            Vec::new()
+        }
     }
     pub fn set_recording(&mut self, val: bool) -> () {
         self.recording = val;
@@ -447,6 +458,79 @@ impl Sequencer {
         // Already remove the current step.
         self.set_step_events(self.current_step, self.selected_pattern, Some(false), Some(false), None);
     }
+
+    fn handle_current_step_presses(&mut self, note_events: &mut Vec<(u8, NoteEvent, u32)>) {
+        for instrument in &self.song.patterns[self.selected_pattern].instruments {
+            let i = match instrument.synth_index {
+                Some(i) => i,
+                None => {
+                    elog!("The song is attempting to press instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
+                    continue;
+                }
+            };
+            if self.muted_instruments.contains(&i) {
+                continue;
+            }
+            if self.just_recorded_over_next_step && i == self.selected_instrument {
+                self.just_recorded_over_next_step = false;
+                continue;
+            }
+            if let Some(InstrumentStep {
+                note,
+                press,
+                release: _,
+            }) = self.song.patterns[self.selected_pattern]
+                .get_steps(i)
+                .map(|ss| ss[self.current_step])
+            {
+                if press {
+                    println!(
+                        "➕ REL {} note {}",
+                        self.synth_instrument_ids[i as usize],
+                        MidiNote(note as i32).name()
+                    );
+                    note_events.push((i, NoteEvent::Press, note));
+                }
+            }
+        }
+    }
+
+    fn handle_current_step_releases(&mut self, note_events: &mut Vec<(u8, NoteEvent, u32)>) {
+        for instrument in &self.song.patterns[self.selected_pattern].instruments {
+            let i = match instrument.synth_index {
+                Some(i) => i,
+                None => {
+                    elog!("The song is attempting to release instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
+                    continue;
+                }
+            };
+            if self.muted_instruments.contains(&i) {
+                continue;
+            }
+            if self.just_recorded_over_next_step && i == self.selected_instrument {
+                // Let the press loop further down reset the flag.
+                continue;
+            }
+            if let Some(InstrumentStep {
+                note,
+                press: _,
+                release,
+            }) = self.song.patterns[self.selected_pattern]
+                .get_steps(i)
+                .map(|ss| ss[self.current_step])
+            {
+                if release {
+                    println!(
+                        "➖ PRS {} note {}",
+                        self.synth_instrument_ids[i as usize],
+                        MidiNote(note as i32).name()
+                    );
+                    note_events.push((i, NoteEvent::Release, note));
+                }
+            }
+        }
+    }
+
     pub fn advance_frame(&mut self) -> (Option<u32>, Vec<(u8, NoteEvent, u32)>) {
         let mut note_events: Vec<(u8, NoteEvent, u32)> = Vec::new();
 
@@ -459,78 +543,14 @@ impl Sequencer {
         if self.current_frame % self.song.frames_per_step == 0 {
             // Release are at then end of a step, so start by triggering any release of the
             // previous frame.
-            for instrument in &self.song.patterns[self.selected_pattern].instruments {
-                let i = match instrument.synth_index {
-                    Some(i) => i,
-                    None => {
-                        elog!("The song is attempting to release instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
-                        continue;
-                    }
-                };
-                if self.muted_instruments.contains(&i) {
-                    continue;
-                }
-                if self.just_recorded_over_next_step && i == self.selected_instrument {
-                    // Let the press loop further down reset the flag.
-                    continue;
-                }
-                if let Some(InstrumentStep {
-                    note,
-                    press: _,
-                    release,
-                }) = self.song.patterns[self.selected_pattern]
-                    .get_steps(i)
-                    .map(|ss| ss[self.current_step])
-                {
-                    if release {
-                        println!(
-                            "➖ PRS {} note {}",
-                            self.synth_instrument_ids[i as usize],
-                            MidiNote(note as i32).name()
-                        );
-                        note_events.push((i, NoteEvent::Release, note));
-                    }
-                }
-            }
+            self.handle_current_step_releases(&mut note_events);
 
             self.advance_step(true);
             if self.erasing {
                 self.set_step_events(self.current_step, self.selected_pattern, Some(false), Some(false), None);
             }
 
-            for instrument in &self.song.patterns[self.selected_pattern].instruments {
-                let i = match instrument.synth_index {
-                    Some(i) => i,
-                    None => {
-                        elog!("The song is attempting to press instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
-                        continue;
-                    }
-                };
-                if self.muted_instruments.contains(&i) {
-                    continue;
-                }
-                if self.just_recorded_over_next_step && i == self.selected_instrument {
-                    self.just_recorded_over_next_step = false;
-                    continue;
-                }
-                if let Some(InstrumentStep {
-                    note,
-                    press,
-                    release: _,
-                }) = self.song.patterns[self.selected_pattern]
-                    .get_steps(i)
-                    .map(|ss| ss[self.current_step])
-                {
-                    if press {
-                        println!(
-                            "➕ REL {} note {}",
-                            self.synth_instrument_ids[i as usize],
-                            MidiNote(note as i32).name()
-                        );
-                        note_events.push((i, NoteEvent::Press, note));
-                    }
-                }
-            }
+            self.handle_current_step_presses(&mut note_events);
             (Some(self.current_step as u32), note_events)
         } else {
             (None, note_events)
