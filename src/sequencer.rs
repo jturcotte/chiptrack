@@ -483,7 +483,11 @@ impl Sequencer {
                     .map(|ss| ss[self.current_step])
                 {
                     if release {
-                        println!("➖ Instrument release {:?} note {:?}", i, note);
+                        println!(
+                            "➖ PRS {} note {}",
+                            self.synth_instrument_ids[i as usize],
+                            MidiNote(note as i32).name()
+                        );
                         note_events.push((i, NoteEvent::Release, note));
                     }
                 }
@@ -518,7 +522,11 @@ impl Sequencer {
                     .map(|ss| ss[self.current_step])
                 {
                     if press {
-                        println!("➕ Instrument press {:?} note {:?}", i, note);
+                        println!(
+                            "➕ REL {} note {}",
+                            self.synth_instrument_ids[i as usize],
+                            MidiNote(note as i32).name()
+                        );
                         note_events.push((i, NoteEvent::Press, note));
                     }
                 }

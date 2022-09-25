@@ -96,20 +96,29 @@ trait ScriptChannel {
     fn base(&self) -> u16;
     fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>>;
     fn frame_number(&mut self) -> Ref<'_, usize>;
-    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>>;
-    fn active_settings_range(&mut self) -> &mut Option<Range<usize>>;
+    fn resettable_settings_range(&mut self) -> &mut Option<Range<usize>>;
+    fn pending_settings_range(&mut self) -> &mut Option<Range<usize>>;
 
     fn register_addresses(&self) -> std::iter::Chain<Range<u16>, Range<u16>> {
         let base = self.base();
         (base..base + 5).into_iter().chain((0..0).into_iter())
     }
 
-    fn end_script_run(&mut self) {
-        *self.previous_settings_range() = self.active_settings_range().take()
+    fn mark_pending_settings_as_resettable(&mut self) {
+        *self.resettable_settings_range() = self.pending_settings_range().take()
     }
 
-    fn reset_previous_settings_range(&mut self) {
-        if let Some(mut frame_range) = self.previous_settings_range().take() {
+    fn unmark_pending_settings_as_resettable(&mut self) {
+        if let Some(range) = self.resettable_settings_range().take() {
+            // Any setting marked as active should have reset the pending channel settings first.
+            assert!(self.pending_settings_range().is_none());
+            *self.pending_settings_range() = Some(range);
+            // *self.resettable_settings_range() = self.pending_settings_range().take()
+        }
+    }
+
+    fn reset_resettable_settings_range(&mut self) {
+        if let Some(mut frame_range) = self.resettable_settings_range().take() {
             let reg_addrs = self.register_addresses();
             // Only clear reg settings in the present or future.
             frame_range.start = frame_range.start.max(*self.frame_number());
@@ -124,9 +133,9 @@ trait ScriptChannel {
         }
     }
 
-    fn extend_active_settings_range(&mut self, index: usize) {
+    fn extend_pending_settings_range(&mut self, index: usize) {
         let to_frame = *self.frame_number() + index;
-        let maybe_range = self.active_settings_range();
+        let maybe_range = self.pending_settings_range();
         match maybe_range.as_mut() {
             Some(range) => range.end = range.end.max(to_frame + 1),
             None => *maybe_range = Some(to_frame..to_frame + 1),
@@ -142,13 +151,13 @@ trait ScriptChannel {
     }
 
     fn orit(&mut self, addr: u16, with: RegSetter) {
-        self.reset_previous_settings_range();
-        self.extend_active_settings_range(0);
+        self.reset_resettable_settings_range();
+        self.extend_pending_settings_range(0);
         self.get_reg_settings(0).orit(addr, with)
     }
     fn orit_at_index(&mut self, index: usize, addr: u16, with: RegSetter) {
-        self.reset_previous_settings_range();
-        self.extend_active_settings_range(index);
+        self.reset_resettable_settings_range();
+        self.extend_pending_settings_range(index);
         self.get_reg_settings(index).orit(addr, with)
     }
 
@@ -164,8 +173,8 @@ pub struct GbSquare {
     channel: Channel,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     frame_number: Rc<RefCell<usize>>,
-    previous_settings_range: Option<Range<usize>>,
-    active_settings_range: Option<Range<usize>>,
+    resettable_settings_range: Option<Range<usize>>,
+    pending_settings_range: Option<Range<usize>>,
 }
 
 impl GbSquare {
@@ -281,11 +290,11 @@ impl ScriptChannel for GbSquare {
     fn frame_number(&mut self) -> Ref<'_, usize> {
         self.frame_number.borrow()
     }
-    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.previous_settings_range
+    fn resettable_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.resettable_settings_range
     }
-    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.active_settings_range
+    fn pending_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.pending_settings_range
     }
 }
 pub type SharedGbSquare = Rc<RefCell<GbSquare>>;
@@ -295,8 +304,8 @@ pub struct GbWave {
     channel: Channel,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     frame_number: Rc<RefCell<usize>>,
-    previous_settings_range: Option<Range<usize>>,
-    active_settings_range: Option<Range<usize>>,
+    resettable_settings_range: Option<Range<usize>>,
+    pending_settings_range: Option<Range<usize>>,
 }
 impl GbWave {
     pub fn set_playing(&mut self, index: usize, v: bool) -> Result<(), Box<EvalAltResult>> {
@@ -405,11 +414,11 @@ impl ScriptChannel for GbWave {
     fn frame_number(&mut self) -> Ref<'_, usize> {
         self.frame_number.borrow()
     }
-    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.previous_settings_range
+    fn resettable_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.resettable_settings_range
     }
-    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.active_settings_range
+    fn pending_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.pending_settings_range
     }
 }
 pub type SharedGbWave = Rc<RefCell<GbWave>>;
@@ -419,8 +428,8 @@ pub struct GbNoise {
     channel: Channel,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     frame_number: Rc<RefCell<usize>>,
-    previous_settings_range: Option<Range<usize>>,
-    active_settings_range: Option<Range<usize>>,
+    resettable_settings_range: Option<Range<usize>>,
+    pending_settings_range: Option<Range<usize>>,
 }
 impl GbNoise {
     pub fn set_env_start(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
@@ -500,11 +509,11 @@ impl ScriptChannel for GbNoise {
     fn frame_number(&mut self) -> Ref<'_, usize> {
         self.frame_number.borrow()
     }
-    fn previous_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.previous_settings_range
+    fn resettable_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.resettable_settings_range
     }
-    fn active_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.active_settings_range
+    fn pending_settings_range(&mut self) -> &mut Option<Range<usize>> {
+        &mut self.pending_settings_range
     }
 }
 pub type SharedGbNoise = Rc<RefCell<GbNoise>>;
@@ -524,11 +533,17 @@ impl GbBindings {
     fn set_frame_number(&mut self, v: usize) {
         *self.frame_number.borrow_mut() = v;
     }
-    fn end_script_run(&mut self) {
-        self.square1.borrow_mut().end_script_run();
-        self.square2.borrow_mut().end_script_run();
-        self.wave.borrow_mut().end_script_run();
-        self.noise.borrow_mut().end_script_run();
+    fn mark_pending_settings_as_resettable(&mut self) {
+        self.square1.borrow_mut().mark_pending_settings_as_resettable();
+        self.square2.borrow_mut().mark_pending_settings_as_resettable();
+        self.wave.borrow_mut().mark_pending_settings_as_resettable();
+        self.noise.borrow_mut().mark_pending_settings_as_resettable();
+    }
+    fn unmark_pending_settings_as_resettable(&mut self) {
+        self.square1.borrow_mut().unmark_pending_settings_as_resettable();
+        self.square2.borrow_mut().unmark_pending_settings_as_resettable();
+        self.wave.borrow_mut().unmark_pending_settings_as_resettable();
+        self.noise.borrow_mut().unmark_pending_settings_as_resettable();
     }
 }
 
@@ -1092,29 +1107,29 @@ impl SynthScript {
             channel: Square1,
             settings_ring: settings_ring.clone(),
             frame_number: frame_number.clone(),
-            previous_settings_range: None,
-            active_settings_range: None,
+            resettable_settings_range: None,
+            pending_settings_range: None,
         }));
         let square2 = Rc::new(RefCell::new(GbSquare {
             channel: Square2,
             settings_ring: settings_ring.clone(),
             frame_number: frame_number.clone(),
-            previous_settings_range: None,
-            active_settings_range: None,
+            resettable_settings_range: None,
+            pending_settings_range: None,
         }));
         let wave = Rc::new(RefCell::new(GbWave {
             channel: Wave,
             settings_ring: settings_ring.clone(),
             frame_number: frame_number.clone(),
-            previous_settings_range: None,
-            active_settings_range: None,
+            resettable_settings_range: None,
+            pending_settings_range: None,
         }));
         let noise = Rc::new(RefCell::new(GbNoise {
             channel: Noise,
             settings_ring: settings_ring.clone(),
             frame_number: frame_number.clone(),
-            previous_settings_range: None,
-            active_settings_range: None,
+            resettable_settings_range: None,
+            pending_settings_range: None,
         }));
         let gb = Rc::new(RefCell::new(GbBindings {
             settings_ring: settings_ring.clone(),
@@ -1192,7 +1207,7 @@ impl SynthScript {
             let mut gb = self.script_context.borrow_mut();
             // The script themselves are modifying this state, so reset it.
             gb.set_frame_number(frame_number);
-            gb.end_script_run();
+            gb.mark_pending_settings_as_resettable();
         }
 
         let mut states = self.instrument_states.borrow_mut();
@@ -1213,6 +1228,11 @@ impl SynthScript {
                 }
             }
         }
+
+        // Only a press should be able to steal a channel, so unmark the channel settings
+        // of non-reset channels after the press so that any frame or release function
+        // running on top of those pending settings won't be resetting them first.
+        self.script_context.borrow_mut().unmark_pending_settings_as_resettable();
     }
 
     pub fn release_instrument(&mut self, frame_number: usize, instrument: u8) -> () {
@@ -1304,7 +1324,7 @@ impl SynthScript {
         {
             let mut gb = self.script_context.borrow_mut();
             gb.set_frame_number(frame_number);
-            gb.end_script_run();
+            gb.mark_pending_settings_as_resettable();
             // FIXME: Also reset the gb states somewhere like gbsplay does
         }
 
