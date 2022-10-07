@@ -619,6 +619,22 @@ pub fn main() {
         cloned_sound_send.send(Box::new(|se| se.save_project())).unwrap();
     });
 
+    let window_weak = window.as_weak();
+    let mut previous_phasing = None;
+    global_engine.on_phase_visualization_tick(move |animation_tick| {
+        let phasing = match previous_phasing {
+            None => {
+                let window = window_weak.clone().upgrade().unwrap();
+                let synth_tick = GlobalEngine::get(&window).get_synth_tick();
+                let phasing = synth_tick as f32 - animation_tick;
+                previous_phasing = Some(phasing);
+                phasing
+            }
+            Some(phasing) => phasing,
+        };
+        animation_tick + phasing
+    });
+
     let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
     global_engine.on_mute_instruments(move || {

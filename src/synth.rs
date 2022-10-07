@@ -409,7 +409,7 @@ impl Synth {
                         active_vec_model.push(active);
                     }
                 }
-                global.set_current_tick_number(frame_number);
+                global.set_synth_tick(frame_number);
             })
             .unwrap();
     }

@@ -80,7 +80,10 @@ export global GlobalEngine := {
         {active: false}, {active: false}, {active: false}, {active: false},
         {active: false}, {active: false}, {active: false}, {active: false},
         ];
-    property<int> current_tick_number: 123;
+
+    property<int> synth_tick: 0;
+    callback phase_visualization_tick(float) -> float;
+
     property<[ChannelTraceNote]> synth_trace_notes: [
         { channel: 0, start_tick: 123, num_ticks: 1, octave: 3, key_pos: 0, is_black: false, volume: 1.0, },
         { channel: 0, start_tick: 123, num_ticks: 1, octave: 3, key_pos: 3, is_black: true, volume: 1.0, },

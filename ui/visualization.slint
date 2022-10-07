@@ -151,7 +151,14 @@ Visualization := Rectangle {
             // thread. So clip the container.
             clip: true;
             Rectangle {
-                x: GlobalEngine.current_tick_number * trace_container.tick_width;
+                // We animate x using Slint's current animation tick, but the traces are positioned based
+                // on synth ticks. Both of them are set to pass through ~59.7 ticks per second, but they don't
+                // necessarily start from 0 at the same time.
+                // To keep the animation smooth, the phasing will be constant once determined at the beginning.
+                x: GlobalEngine.phase_visualization_tick(
+                    // 4194304 Hz / 70224 Hz per frame = ~59.7 frames per second
+                    animation_tick() * (4194304/70224) / 1000ms
+                    ) * trace_container.tick_width;
 
                 for note[idx] in GlobalEngine.synth_trace_notes:
                 Rectangle {
