@@ -103,13 +103,13 @@ export MainWindow := Window {
                 else if (event.text == "8") { GlobalEngine.select_instrument(7); }
                 else if (event.text == "9") { GlobalEngine.select_instrument(8); }
                 else if (event.text == "0") { GlobalEngine.select_instrument(9); }
-                else if (event.text == Keys.LeftArrow) { GlobalEngine.manually_advance_step(false); }
-                else if (event.text == Keys.RightArrow) { GlobalEngine.manually_advance_step(true); }
-                else if (event.text == Keys.PageDown) { root.octave_increased(-1); }
-                else if (event.text == Keys.PageUp) { root.octave_increased(1); }
-                else if (event.text == Keys.Tab) { song_mode_button.toggled = !song_mode_button.toggled; }
-                else if (event.text == Keys.Return) { GlobalEngine.play_clicked(!root.playing); }
-                else if (event.text == Keys.Escape) { GlobalEngine.mute_instruments(); }
+                else if (event.text == Key.LeftArrow) { GlobalEngine.manually_advance_step(false); }
+                else if (event.text == Key.RightArrow) { GlobalEngine.manually_advance_step(true); }
+                else if (event.text == Key.PageDown) { root.octave_increased(-1); }
+                else if (event.text == Key.PageUp) { root.octave_increased(1); }
+                else if (event.text == Key.Tab) { song_mode_button.toggled = !song_mode_button.toggled; }
+                else if (event.text == Key.Return) { GlobalEngine.play_clicked(!root.playing); }
+                else if (event.text == Key.Escape) { GlobalEngine.mute_instruments(); }
             }
             global_key_event(event.text, true);
             accept

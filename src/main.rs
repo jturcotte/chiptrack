@@ -446,7 +446,7 @@ pub fn main() {
                 if !already_pressed.borrow().contains(&code) {
                     already_pressed.borrow_mut().insert(code.to_owned());
                     match code {
-                        // Keys.Backspace
+                        // Key.Backspace
                         '\u{8}' => {
                             Lazy::force(&*cloned_context);
                             cloned_sound_send
@@ -458,7 +458,7 @@ pub fn main() {
                 }
             } else {
                 match code {
-                    // Keys.Backspace
+                    // Key.Backspace
                     '\u{8}' => {
                         cloned_sound_send
                             .send(Box::new(|se| se.sequencer.set_erasing(false)))
