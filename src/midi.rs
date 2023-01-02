@@ -39,16 +39,17 @@ impl Midi {
 
         // Just connect to all available input MIDI devices for now.
         let port_count = MidiInput::new("").unwrap().port_count();
-        log!("Found {} midi ports", port_count);
+        log!("Found {} MIDI ports", port_count);
         let connections: Vec<_> = (0..port_count)
-            .map(|i| {
+            .filter_map(|i| {
                 let mut midi_in = MidiInput::new("Chiptrack").unwrap();
                 midi_in.ignore(midir::Ignore::All);
                 let port = &midi_in.ports()[i];
                 log!("Connecting to port {}", midi_in.port_name(&port).unwrap());
                 midi_in
                     .connect(&port, &format!("Chiptrack Input Port {}", i), callback2.clone(), ())
-                    .unwrap()
+                    .map_err(|e| elog!("Couldn't connect to MIDI input: {}", e))
+                    .ok()
             })
             .collect();
 
