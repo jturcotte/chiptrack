@@ -4,6 +4,8 @@
 use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
 use crate::synth::Synth;
+use crate::synth_script::RegSettings;
+use crate::synth_script::SynthScript;
 use crate::GlobalEngine;
 use crate::MainWindow;
 use crate::Settings;
@@ -12,12 +14,15 @@ use crate::SongSettings;
 use native_dialog::FileDialog;
 use slint::Global;
 use slint::Model;
+use slint::SharedString;
 use slint::Weak;
 
+use std::cell::RefCell;
 use std::error::Error;
 use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 pub const NUM_INSTRUMENTS: usize = 64;
 pub const NUM_INSTRUMENT_COLS: usize = 4;
@@ -39,6 +44,9 @@ enum ProjectSource {
 pub struct SoundEngine {
     pub sequencer: Sequencer,
     pub synth: Synth,
+    script: SynthScript,
+    settings_ring: Rc<RefCell<Vec<RegSettings>>>,
+    frame_number: usize,
     main_window: Weak<MainWindow>,
     pressed_note: Option<NoteSource>,
     project_source: ProjectSource,
@@ -48,10 +56,15 @@ impl SoundEngine {
     pub fn new(sample_rate: u32, main_window: Weak<MainWindow>, settings: Settings) -> SoundEngine {
         let sequencer = Sequencer::new(main_window.clone());
         let synth = Synth::new(main_window.clone(), sample_rate, settings);
+        let settings_ring = Rc::new(RefCell::new(vec![RegSettings::new(); 512]));
+        let script = SynthScript::new(settings_ring.clone());
 
         SoundEngine {
             sequencer: sequencer,
             synth: synth,
+            script: script,
+            settings_ring: settings_ring,
+            frame_number: 0,
             main_window: main_window,
             pressed_note: None,
             project_source: ProjectSource::New,
@@ -106,12 +119,12 @@ impl SoundEngine {
             };
 
             if typ == NoteEvent::Press {
-                self.synth.press_instrument_note(instrument, note);
+                self.script.press_instrument_note(self.frame_number, instrument, note);
             } else if !is_selected_instrument || note_to_release.is_some() {
                 // Only send the sequenced release to the synth if the last of the pressed notes is
                 // being released, or if this isn't the selected instruments (in which case only one
                 // note will be pressed at a time).
-                self.synth.release_instrument(instrument);
+                self.script.release_instrument(self.frame_number, instrument);
             };
 
             self.main_window
@@ -149,8 +162,15 @@ impl SoundEngine {
 
     pub fn advance_frame(&mut self) -> () {
         let (step_change, note_events) = self.sequencer.advance_frame();
+
         self.send_note_events_to_synth(note_events);
-        self.synth.advance_frame(step_change);
+        self.script.advance_frame(self.frame_number);
+
+        let i = self.settings_ring_index();
+        let reg_settings = &mut self.settings_ring.borrow_mut()[i];
+        self.synth.advance_frame(self.frame_number, reg_settings, step_change);
+
+        self.frame_number += 1;
     }
 
     pub fn select_instrument(&mut self, instrument: u8) -> () {
@@ -187,8 +207,8 @@ impl SoundEngine {
     }
 
     pub fn press_note(&mut self, note: u8) -> () {
-        self.synth
-            .press_instrument_note(self.sequencer.selected_instrument, note);
+        self.script
+            .press_instrument_note(self.frame_number, self.sequencer.selected_instrument, note);
         self.sequencer.record_press(note);
 
         // Check which not
@@ -214,16 +234,37 @@ impl SoundEngine {
         // Instruments are monophonic, ignore any note release, either sequenced or live,
         // for the current instrument if it wasn't the last pressed one.
         if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), NoteEvent::Release) {
-            self.synth.release_instrument(self.sequencer.selected_instrument);
+            self.script.release_instrument(self.frame_number, self.sequencer.selected_instrument);
             self.sequencer.record_release(note);
             self.release_note_visually(note_to_release);
         }
     }
 
+    fn update_script_instrument_in_ui(&self) {
+        let ids = self.script.instrument_ids().clone();
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_instruments();
+                for (i, id) in ids.iter().enumerate() {
+                    let mut row_data = model.row_data(i).unwrap();
+                    row_data.id = SharedString::from(id);
+                    model.set_row_data(i, row_data);
+                }
+            })
+            .unwrap();
+    }
+
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+        self.script.save_as(instruments_path)
+    }
+
     pub fn load_default(&mut self) {
         self.sequencer.load_default();
-        self.synth.load_default();
-        self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
+        self.script.load_default(self.frame_number);
+        self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
+        self.update_script_instrument_in_ui();
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -241,14 +282,19 @@ impl SoundEngine {
         }
     }
 
+    fn settings_ring_index(&self) -> usize {
+        self.frame_number % self.settings_ring.borrow().len()
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn load_file_internal(&mut self, song_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
         log!("Loading the project song from file {:?}", song_path);
         let instruments_file = self.sequencer.load_file(song_path)?;
         let instruments_path = song_path.with_file_name(instruments_file);
         log!("Loading project instruments from file {:?}", instruments_path);
-        self.synth.load_file(instruments_path.as_path())?;
-        self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
+        self.script.load_file(instruments_path.as_path(), self.frame_number)?;
+        self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
+        self.update_script_instrument_in_ui();
         Ok(instruments_path)
     }
 
@@ -278,8 +324,9 @@ impl SoundEngine {
             .as_str()
             .ok_or("content should be a string")?;
 
-        self.synth.load_str(instruments)?;
-        self.sequencer.set_synth_instrument_ids(&self.synth.instrument_ids());
+        self.script.load_str(instruments, self.frame_number)?;
+        self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
+        self.update_script_instrument_in_ui();
 
         Ok(())
     }
@@ -318,7 +365,7 @@ impl SoundEngine {
                     move || -> Result<(), Box<dyn Error>> {
                         // Songs shouldn't rely on the default instruments that will vary between versions,
                         // so save a copy of the instruments and make the saved song point to that file.
-                        engine.synth.save_as(instruments_path.as_path())?;
+                        engine.script.save_as(instruments_path.as_path())?;
                         engine
                             .sequencer
                             .save_as(song_path.as_path(), instruments_path.as_path())?;
@@ -352,9 +399,10 @@ impl SoundEngine {
 
     pub fn reload_instruments_from_file(&mut self) {
         if let ProjectSource::File((_, path)) = &self.project_source {
-            self.synth
-                .load_file(&path.as_path())
+            self.script
+                .load_file(&path.as_path(), self.frame_number)
                 .unwrap_or_else(|e| elog!("Couldn't reload instruments from file {:?}.\n\tError: {:?}", path, e));
+            self.update_script_instrument_in_ui();
         }
     }
 }

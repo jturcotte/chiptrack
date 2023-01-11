@@ -3,7 +3,7 @@
 
 use crate::synth_script::Channel;
 use crate::synth_script::RegSettings;
-use crate::synth_script::SynthScript;
+
 use crate::utils::MidiNote;
 use crate::ChannelActiveNote;
 use crate::ChannelTraceNote;
@@ -13,14 +13,9 @@ use crate::Settings;
 
 use slint::Global;
 use slint::Model;
-use slint::SharedString;
 use slint::VecModel;
 use slint::Weak;
 
-use std::cell::Ref;
-use std::cell::RefCell;
-use std::error::Error;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 // The pass-through channel is otherwise too loud compared to mixed content.
@@ -54,9 +49,6 @@ struct FakePlayer {
 
 pub struct Synth {
     dmg: rboy::Sound,
-    script: SynthScript,
-    settings_ring: Rc<RefCell<Vec<RegSettings>>>,
-    frame_number: usize,
     output_data: Arc<Mutex<OutputData>>,
     main_window: Weak<MainWindow>,
 }
@@ -145,9 +137,6 @@ impl rboy::AudioPlayer for FakePlayer {
 
 impl Synth {
     pub fn new(main_window: Weak<MainWindow>, sample_rate: u32, settings: Settings) -> Synth {
-        let settings_ring = Rc::new(RefCell::new(vec![RegSettings::new(); 512]));
-        let script = SynthScript::new(settings_ring.clone());
-
         let gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
 
         let output_data = Arc::new(Mutex::new(OutputData {
@@ -167,9 +156,6 @@ impl Synth {
 
         Synth {
             dmg: dmg,
-            script: script,
-            settings_ring: settings_ring,
-            frame_number: 0,
             output_data: output_data,
             main_window: main_window,
         }
@@ -185,23 +171,21 @@ impl Synth {
         output_data.sync_pulse.enabled = settings.sync_enabled;
     }
 
+    // FIXME: It's not really advancing here, more like applying
     // GameBoy games seem to use the main loop clocked to the screen's refresh rate
     // to also drive the sound chip. To keep the song timing, also use the same 59.73hz
     // frame refresh rate.
-    pub fn advance_frame(&mut self, step_change: Option<u32>) {
-        self.script.advance_frame(self.frame_number);
+    pub fn advance_frame(&mut self, frame_number: usize, settings: &mut RegSettings, step_change: Option<u32>) {
 
         {
-            let i = self.settings_ring_index();
-            let mut settings_ring = self.settings_ring.borrow_mut();
             let dmg = &mut self.dmg;
-            settings_ring[i].for_each_setting(|addr, set| {
+            settings.for_each_setting(|addr, set| {
                 // Trying to read the memory wouldn't give us the value we wrote last,
                 // so overwrite any state previously set in bits outside of RegSetter.mask
                 // with zeros.
                 dmg.wb(addr, set.value);
             });
-            settings_ring[i].clear_all();
+            settings.clear_all();
         }
 
         // Just enable all channels for now
@@ -221,16 +205,7 @@ impl Synth {
         // For 44100hz audio, this will put 44100/59.73 audio samples in self.buffer.
         self.dmg.do_cycle(VBLANK_CYCLES);
 
-        self.update_ui_channel_states();
-        self.frame_number += 1;
-    }
-
-    pub fn press_instrument_note(&mut self, instrument: u8, note: u8) -> () {
-        self.script.press_instrument_note(self.frame_number, instrument, note);
-    }
-
-    pub fn release_instrument(&mut self, instrument: u8) -> () {
-        self.script.release_instrument(self.frame_number, instrument);
+        self.update_ui_channel_states(frame_number as i32);
     }
 
     /// Can be used to manually mute when instruments have an infinite length and envelope.
@@ -242,53 +217,7 @@ impl Synth {
         self.dmg.wb(Channel::Noise as u16 + 2, 0);
     }
 
-    pub fn instrument_ids<'a>(&'a self) -> Ref<'a, Vec<String>> {
-        self.script.instrument_ids()
-    }
-
-    fn update_instrument_ids(&self) {
-        let ids = self.script.instrument_ids().clone();
-        self.main_window
-            .upgrade_in_event_loop(move |handle| {
-                let model = GlobalEngine::get(&handle).get_instruments();
-                for (i, id) in ids.iter().enumerate() {
-                    let mut row_data = model.row_data(i).unwrap();
-                    row_data.id = SharedString::from(id);
-                    model.set_row_data(i, row_data);
-                }
-            })
-            .unwrap();
-    }
-
-    pub fn load_default(&mut self) {
-        self.script.load_default(self.frame_number);
-        self.update_instrument_ids();
-    }
-
-    pub fn load_str(&mut self, encoded: &str) -> Result<(), Box<dyn Error>> {
-        self.script.load_str(encoded, self.frame_number)?;
-        self.update_instrument_ids();
-        Ok(())
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_file(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
-        self.script.load_file(instruments_path, self.frame_number)?;
-        self.update_instrument_ids();
-        Ok(())
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
-        self.script.save_as(instruments_path)
-    }
-
-    fn settings_ring_index(&self) -> usize {
-        self.frame_number % self.settings_ring.borrow().len()
-    }
-
-    fn update_ui_channel_states(&self) {
-        let frame_number = self.frame_number as i32;
+    fn update_ui_channel_states(&self, frame_number: i32) {
         let mut states = self.dmg.chan_states();
         // Let square channels be rendered on top of the wave channel.
         states.reverse();
