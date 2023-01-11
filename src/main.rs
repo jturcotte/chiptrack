@@ -215,9 +215,7 @@ pub fn main() {
     }
 
     struct Context {
-        key_release_timer: Timer,
         _stream: cpal::Stream,
-        _midi: Option<Midi>,
     }
 
     let window = MainWindow::new();
@@ -389,32 +387,28 @@ pub fn main() {
 
         stream.play().unwrap();
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let midi = {
-            let cloned_sound_send2 = cloned_sound_send.clone();
-            let press = move |key| cloned_sound_send2.send(Box::new(move |se| se.press_note(key))).unwrap();
-            let release = move |key| {
-                cloned_sound_send
-                    .send(Box::new(move |se| se.release_note(key)))
-                    .unwrap()
-            };
-            Some(Midi::new(press, release))
-        };
-        #[cfg(target_arch = "wasm32")]
-        // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
-        // us when that initialization is done and that we can start querying the list of midi
-        // devices. It's also annoying for users that don't care about MIDI to get a permission
-        // request, so I'll need this to be enabled explicitly for the Web version.
-        // The aldio latency is still so bad with the web version though,
-        // so I'm not sure if that's really worth it.
-        let midi = None;
-
         Context {
-            key_release_timer: Default::default(),
             _stream: stream,
-            _midi: midi,
         }
     }));
+
+    // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
+    // us when that initialization is done and that we can start querying the list of midi
+    // devices. It's also annoying for users that don't care about MIDI to get a permission
+    // request, so I'll need this to be enabled explicitly for the Web version.
+    // The aldio latency is still so bad with the web version though,
+    // so I'm not sure if that's really worth it.
+    #[cfg(not(target_arch = "wasm32"))]
+    let _midi = {
+        let cloned_sound_send2 = cloned_sound_send.clone();
+        let press = move |key| cloned_sound_send2.send(Box::new(move |se| se.press_note(key))).unwrap();
+        let release = move |key| {
+            cloned_sound_send
+                .send(Box::new(move |se| se.release_note(key)))
+                .unwrap()
+        };
+        Some(Midi::new(press, release))
+    };
 
     let window_weak = window.as_weak();
     window.on_octave_increased(move |octave_delta| {
@@ -507,8 +501,8 @@ pub fn main() {
             .unwrap();
     });
 
-    let cloned_context = context.clone();
     let cloned_sound_send = sound_send.clone();
+    let key_release_timer: Timer = Default::default();
     global_engine.on_note_key_pressed(move |note| {
         let cloned_sound_send2 = cloned_sound_send.clone();
         cloned_sound_send
@@ -517,7 +511,7 @@ pub fn main() {
 
         // We have only one timer for direct interactions, and we don't handle
         // keys being held or even multiple keys at time yet, so just visually release all notes.
-        cloned_context.key_release_timer.start(
+        key_release_timer.start(
             TimerMode::SingleShot,
             std::time::Duration::from_millis(15 * 6),
             Box::new(move || {
