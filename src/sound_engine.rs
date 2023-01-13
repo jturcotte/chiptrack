@@ -3,6 +3,7 @@
 
 use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
+use crate::sound_renderer::invoke_on_sound_engine;
 use crate::synth::Synth;
 use crate::synth_script::RegSettings;
 use crate::synth_script::SynthScript;
@@ -255,11 +256,6 @@ impl SoundEngine {
     }
 
 
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
-        self.script.save_as(instruments_path)
-    }
-
     pub fn load_default(&mut self) {
         self.sequencer.load_default();
         self.script.load_default(self.frame_number);
@@ -361,7 +357,7 @@ impl SoundEngine {
                         .expect("Bad path?")
                         .replace(".ct.md", "-instruments.rhai"),
                 ));
-                crate::invoke_on_sound_engine(move |engine| {
+                invoke_on_sound_engine(move |engine| {
                     move || -> Result<(), Box<dyn Error>> {
                         // Songs shouldn't rely on the default instruments that will vary between versions,
                         // so save a copy of the instruments and make the saved song point to that file.
