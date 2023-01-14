@@ -3,8 +3,8 @@
 
 use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
-use crate::sound_renderer::invoke_on_sound_engine;
-use crate::synth::Synth;
+use crate::sound_renderer::Synth;
+use crate::sound_renderer::emulated::invoke_on_sound_engine;
 use crate::synth_script::RegSettings;
 use crate::synth_script::SynthScript;
 use crate::GlobalEngine;
