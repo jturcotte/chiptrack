@@ -1,6 +1,9 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+use alloc::format;
+use alloc::string::String;
+
 pub static NOTE_FREQUENCIES: [u32; 128] = [
 8376,
 8868,

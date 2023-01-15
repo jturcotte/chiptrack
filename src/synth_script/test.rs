@@ -20,15 +20,18 @@ use wamr_sys::wasm_runtime_load;
 use wamr_sys::wasm_runtime_lookup_function;
 use wamr_sys::wasm_runtime_register_natives;
 
+use alloc::boxed::Box;
+use alloc::ffi::CString;
+use alloc::format;
+use alloc::rc::Rc;
+use alloc::string::String;
+use alloc::string::ToString;
 use alloc::vec::Vec;
 use alloc::vec;
-
 use core::mem;
 use core::ptr;
-use std::ffi::c_void;
-use std::ffi::CStr;
-use std::ffi::CString;
-use std::rc::Rc;
+use core::ffi::c_void;
+use core::ffi::CStr;
 
 
 
@@ -149,7 +152,7 @@ impl<F> HostFunctionIA<F>
 const IA_SIG: &str = "(i*~)\0";
 unsafe extern "C" fn trampoline_ia_<F: FnMut(i32, &[i32])>(exec_env: wasm_exec_env_t, v1: i32, v2: *const i32, v2l: i32) {
     let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
-    f(v1, std::slice::from_raw_parts(v2, v2l as usize))
+    f(v1, core::slice::from_raw_parts(v2, v2l as usize))
 }
 impl<F: FnMut(i32, &[i32])> HostFunction for HostFunctionIA<F>
 {
@@ -180,7 +183,7 @@ impl<F> HostFunctionIAA<F>
 const IAA_SIG: &str = "(i*~*~)\0";
 unsafe extern "C" fn trampoline_iaa_<F: FnMut(i32, &[i32], &[i32])>(exec_env: wasm_exec_env_t, v1: i32, v2: *const i32, v2l: i32, v3: *const i32, v3l: i32) {
     let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
-    f(v1, std::slice::from_raw_parts(v2, v2l as usize), std::slice::from_raw_parts(v3, v3l as usize))
+    f(v1, core::slice::from_raw_parts(v2, v2l as usize), core::slice::from_raw_parts(v3, v3l as usize))
 }
 impl<F: FnMut(i32, &[i32], &[i32])> HostFunction for HostFunctionIAA<F>
 {

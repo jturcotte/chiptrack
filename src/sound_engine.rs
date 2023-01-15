@@ -4,6 +4,7 @@
 use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
 use crate::sound_renderer::Synth;
+#[cfg(feature = "std")]
 use crate::sound_renderer::emulated::invoke_on_sound_engine;
 use crate::synth_script::RegSettings;
 use crate::synth_script::SynthScript;
@@ -12,18 +13,23 @@ use crate::MainWindow;
 use crate::Settings;
 use crate::SongSettings;
 
+#[cfg(feature = "std")]
 use native_dialog::FileDialog;
 use slint::Global;
 use slint::Model;
 use slint::SharedString;
 use slint::Weak;
 
-use std::cell::RefCell;
+use alloc::rc::Rc;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::cell::RefCell;
+#[cfg(feature = "std")]
 use std::error::Error;
+#[cfg(feature = "std")]
 use std::ffi::OsString;
-use std::path::Path;
-use std::path::PathBuf;
-use std::rc::Rc;
+#[cfg(feature = "std")]
+use std::path::{Path, PathBuf};
 
 pub const NUM_INSTRUMENTS: usize = 64;
 pub const NUM_INSTRUMENT_COLS: usize = 4;
@@ -38,7 +44,9 @@ enum NoteSource {
 
 enum ProjectSource {
     New,
+    #[cfg(feature = "std")]
     File((PathBuf, PathBuf)),
+    #[cfg(feature = "std")]
     Gist,
 }
 
@@ -262,7 +270,7 @@ impl<SynthType: Synth> SoundEngine<SynthType> {
         self.update_script_instrument_in_ui();
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
     pub fn load_file(&mut self, song_path: &Path) {
         match self.load_file_internal(song_path) {
             Ok(instruments_path) => self.project_source = ProjectSource::File((song_path.to_owned(), instruments_path)),
@@ -270,6 +278,7 @@ impl<SynthType: Synth> SoundEngine<SynthType> {
         }
     }
 
+    #[cfg(feature = "std")]
     pub fn load_gist(&mut self, json: serde_json::Value) {
         match self.load_gist_internal(json) {
             Ok(_) => self.project_source = ProjectSource::Gist,
@@ -281,7 +290,7 @@ impl<SynthType: Synth> SoundEngine<SynthType> {
         self.frame_number % self.settings_ring.borrow().len()
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
     fn load_file_internal(&mut self, song_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
         log!("Loading the project song from file {:?}", song_path);
         let instruments_file = self.sequencer.load_file(song_path)?;
@@ -293,6 +302,7 @@ impl<SynthType: Synth> SoundEngine<SynthType> {
         Ok(instruments_path)
     }
 
+    #[cfg(feature = "std")]
     fn load_gist_internal(&mut self, json: serde_json::Value) -> Result<(), Box<dyn Error>> {
         let files = json
             .get("files")
@@ -326,6 +336,7 @@ impl<SynthType: Synth> SoundEngine<SynthType> {
         Ok(())
     }
 
+    #[cfg(feature = "std")]
     fn save_project_as(&mut self) {
         // On some platforms the native dialog needs to be invoked from the
         // main thread, but the state needed to decide whether or not we need
@@ -373,18 +384,24 @@ impl<SynthType: Synth> SoundEngine<SynthType> {
         })
         .unwrap();
     }
+    #[cfg(not(feature = "std"))]
+    fn save_project_as(&mut self) {
+    }
 
     pub fn save_project(&mut self) {
         match &self.project_source {
             ProjectSource::New => self.save_project_as(),
+            #[cfg(feature = "std")]
             ProjectSource::File((song_path, _)) => self
                 .sequencer
                 .save(song_path.as_path())
                 .unwrap_or_else(|e| elog!("Error saving the project: {}", e)),
+            #[cfg(feature = "std")]
             ProjectSource::Gist => elog!("Can't save a project loaded from a gist URL."),
         }
     }
 
+    #[cfg(feature = "std")]
     pub fn instruments_path(&self) -> Option<&Path> {
         match &self.project_source {
             ProjectSource::File((_, instruments_path)) => Some(instruments_path.as_path()),
@@ -392,6 +409,7 @@ impl<SynthType: Synth> SoundEngine<SynthType> {
         }
     }
 
+    #[cfg(feature = "std")]
     pub fn reload_instruments_from_file(&mut self) {
         if let ProjectSource::File((_, path)) = &self.project_source {
             self.script

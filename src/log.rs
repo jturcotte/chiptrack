@@ -18,15 +18,28 @@ macro_rules! elog {
         web_sys::console::error_1(&format!( $( $t )* ).into())
     }
 }
-#[cfg(not(target_arch = "wasm32"))]
+
+#[cfg(all(feature = "std", not(target_arch = "wasm32")))]
 macro_rules! log {
     ( $( $t:tt )* ) => {
         println!( $( $t )* )
     }
 }
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "std", not(target_arch = "wasm32")))]
 macro_rules! elog {
     ( $( $t:tt )* ) => {
         eprintln!( $( $t )* )
+    }
+}
+
+#[cfg(not(feature = "std"))]
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+    }
+}
+#[cfg(not(feature = "std"))]
+macro_rules! elog {
+    ( $( $t:tt )* ) => {
+        ()
     }
 }

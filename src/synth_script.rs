@@ -8,16 +8,23 @@ use crate::synth_script::test::WasmExecEnv;
 use crate::synth_script::test::WasmRuntime;
 use crate::utils::NOTE_FREQUENCIES;
 
-use std::cell::Ref;
-use std::cell::RefCell;
-use std::cell::RefMut;
-use std::ffi::CStr;
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
+use alloc::vec;
+use alloc::vec::Vec;
+use alloc::rc::Rc;
+use alloc::string::String;
+use core::cell::Ref;
+use core::cell::RefCell;
+use core::cell::RefMut;
+use core::ffi::CStr;
+#[cfg(feature = "std")]
 use std::fs::File;
+#[cfg(feature = "std")]
 use std::io::Write;
-use std::ops::BitOr;
-use std::ops::BitOrAssign;
-use std::ops::Range;
-use std::rc::Rc;
+use core::ops::BitOr;
+use core::ops::BitOrAssign;
+use core::ops::Range;
 
 pub mod test;
 
@@ -109,7 +116,7 @@ trait ScriptChannel {
     fn pending_settings_range(&self) -> RefMut<'_, Option<Range<usize>>>;
     fn trigger(&self) -> Result<(), String>;
 
-    fn register_addresses(&self) -> std::iter::Chain<Range<u16>, Range<u16>> {
+    fn register_addresses(&self) -> core::iter::Chain<Range<u16>, Range<u16>> {
         let base = self.base();
         (base..base + 5).into_iter().chain((0..0).into_iter())
     }
@@ -443,8 +450,8 @@ impl ScriptChannel for GbSquare {
     }
 
 }
-impl std::fmt::Debug for GbSquare {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for GbSquare {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "GbSquare")
     }
 }
@@ -456,8 +463,8 @@ pub struct GbBindings {
     frame_number: Rc<RefCell<usize>>,
     channels: [GbSquare; 4],
 }
-impl std::fmt::Debug for GbBindings {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for GbBindings {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "GbBindings")
     }
 }
@@ -491,7 +498,7 @@ impl GbBindings {
 }
 
 fn instrument_print(v: i32) {
-  println!("Instruments: {:?}", v);
+  log!("Instruments: {:?}", v);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -767,6 +774,7 @@ impl SynthScript {
         //     .expect("Error loading default instruments.");
     }
 
+    #[cfg(feature = "std")]
     pub fn load_str(&mut self, _encoded: &str, _frame_number: usize) -> Result<(), Box<dyn std::error::Error>> {
         self.reset_instruments();
 
@@ -776,7 +784,7 @@ impl SynthScript {
         Ok(())
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
     pub fn load_file(&mut self, instruments_path: &std::path::Path, _frame_number: usize) -> Result<(), Box<dyn std::error::Error>> {
         self.reset_instruments();
 
@@ -795,7 +803,7 @@ impl SynthScript {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
     pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
         let mut f = File::create(instruments_path)?;
         f.write_all(SynthScript::DEFAULT_INSTRUMENTS)?;

@@ -1,7 +1,11 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+#![cfg_attr(not(feature = "std"), no_std)]
+extern crate alloc;
+
 mod log;
+#[cfg(feature = "std")]
 mod midi;
 mod sequencer;
 mod sound_engine;
@@ -12,10 +16,12 @@ mod utils;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+#[cfg(feature = "std")]
 use crate::sound_renderer::emulated::new_emulated_sound_renderer;
 use crate::sound_renderer::PrintRegistersSoundRenderer;
 use crate::sound_renderer::SoundRenderer;
 use crate::sound_renderer::Synth;
+#[cfg(feature = "std")]
 use crate::midi::Midi;
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_PATTERNS;
@@ -23,13 +29,20 @@ use crate::sound_engine::NUM_STEPS;
 use crate::utils::MidiNote;
 
 use slint::{Model, Timer, TimerMode};
+#[cfg(feature = "std")]
 use url::Url;
 
-use std::cell::RefCell;
-use std::collections::HashSet;
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::cell::RefCell;
+#[cfg(feature = "std")]
 use std::env;
+#[cfg(feature = "std")]
 use std::path::PathBuf;
-use std::rc::Rc;
+use core::time::Duration;
 
 
 
@@ -42,7 +55,7 @@ pub fn main() {
     #[cfg(all(debug_assertions, target_arch = "wasm32"))]
     console_error_panic_hook::set_once();
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
     let (maybe_file_path, maybe_gist_path) = match env::args().nth(1).map(|u| Url::parse(&u)) {
         None => (None, None),
         Some(Ok(url)) => {
@@ -133,6 +146,7 @@ pub fn main() {
     let sound_renderer = Rc::new(RefCell::new(new_emulated_sound_renderer(&window)));
     // let sound_renderer = Rc::new(RefCell::new(PrintRegistersSoundRenderer::new(&window)));
 
+    #[cfg(feature = "std")]
     if let Some(gist_path) = maybe_gist_path {
         let api_url = "https://api.github.com/gists/".to_owned() + gist_path.splitn(2, '/').last().unwrap();
         log!("Loading the project from gist API URL {}", api_url.to_string());
@@ -168,6 +182,8 @@ pub fn main() {
     } else {
         sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.load_default());
     }
+    #[cfg(not(feature = "std"))]
+    sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.load_default());
 
     // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
     // us when that initialization is done and that we can start querying the list of midi
@@ -175,7 +191,7 @@ pub fn main() {
     // request, so I'll need this to be enabled explicitly for the Web version.
     // The aldio latency is still so bad with the web version though,
     // so I'm not sure if that's really worth it.
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
     let _midi = {
         let cloned_sound_renderer = sound_renderer.borrow().sender();
         let cloned_sound_renderer2 = sound_renderer.borrow().sender();
@@ -209,13 +225,13 @@ pub fn main() {
 
     // KeyEvent doesn't expose yet whether a press event is due to auto-repeat.
     // Do the deduplication natively until such an API exists.
-    let already_pressed = Rc::new(RefCell::new(HashSet::new()));
+    let mut already_pressed = Vec::new();
     let cloned_sound_renderer = sound_renderer.clone();
     window.on_global_key_event(move |text, pressed| {
         if let Some(code) = text.as_str().chars().next() {
             if pressed {
-                if !already_pressed.borrow().contains(&code) {
-                    already_pressed.borrow_mut().insert(code.to_owned());
+                if !already_pressed.contains(&code) {
+                    already_pressed.push(code.to_owned());
                     match code {
                         // Key.Backspace
                         '\u{8}' => {
@@ -234,7 +250,9 @@ pub fn main() {
                     }
                     _ => (),
                 };
-                already_pressed.borrow_mut().remove(&code);
+                if let Some(index) = already_pressed.iter().position(|x| *x == code) {
+                    already_pressed.swap_remove(index);
+                }
             }
         }
     });
@@ -276,7 +294,7 @@ pub fn main() {
         // keys being held or even multiple keys at time yet, so just visually release all notes.
         key_release_timer.start(
             TimerMode::SingleShot,
-            std::time::Duration::from_millis(15 * 6),
+            Duration::from_millis(15 * 6),
             Box::new(move || {
                 cloned_sound_renderer2
                     .borrow_mut().invoke_on_sound_engine(move |se| se.release_note(note as u8));
@@ -370,7 +388,7 @@ pub fn main() {
 
     let cloned_sound_renderer = sound_renderer.clone();
     window.global::<GlobalSettings>().on_settings_changed(move |settings| {
-        println!("SET {:?}", settings);
+        log!("SET {:?}", settings);
         cloned_sound_renderer
             .borrow_mut().invoke_on_sound_engine(move |se| se.apply_settings(&settings));
     });
@@ -378,7 +396,7 @@ pub fn main() {
     window
         .global::<GlobalSettings>()
         .on_song_settings_changed(move |settings| {
-            println!("SET {:?}", settings);
+            log!("SET {:?}", settings);
             cloned_sound_renderer
                 .borrow_mut().invoke_on_sound_engine(move |se| se.apply_song_settings(&settings));
         });

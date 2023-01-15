@@ -1,6 +1,7 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+#[cfg(feature = "std")]
 mod markdown;
 
 use crate::sound_engine::NUM_INSTRUMENTS;
@@ -12,17 +13,23 @@ use crate::GlobalSettings;
 use crate::MainWindow;
 use crate::SongPatternData;
 use crate::SongSettings;
-use markdown::parse_markdown_song;
-use markdown::save_markdown_song;
+#[cfg(feature = "std")]
+use markdown::{parse_markdown_song, save_markdown_song};
 
 use slint::Global;
 use slint::Model;
 use slint::VecModel;
 use slint::Weak;
 
-use std::collections::HashMap;
-use std::collections::HashSet;
+use alloc::borrow::ToOwned;
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
 use std::error::Error;
+#[cfg(feature = "std")]
 use std::path::Path;
 
 #[cfg(target_arch = "wasm32")]
@@ -123,7 +130,7 @@ impl Pattern {
     }
 
     fn update_synth_index(&mut self, new_instrument_ids: &Vec<String>) {
-        let mut instrument_by_id: HashMap<String, Instrument> =
+        let mut instrument_by_id: BTreeMap<String, Instrument> =
             self.instruments.drain(..).map(|i| (i.id.clone(), i)).collect();
         self.instruments = new_instrument_ids
             .iter()
@@ -151,7 +158,9 @@ impl Pattern {
 pub struct SequencerSong {
     song_patterns: Vec<usize>,
     patterns: Vec<Pattern>,
+    #[cfg(feature = "std")]
     markdown_header: String,
+    #[cfg(feature = "std")]
     instruments_file: String,
     frames_per_step: u32,
 }
@@ -177,7 +186,9 @@ impl Default for SequencerSong {
                 };
                 NUM_PATTERNS
             ],
+            #[cfg(feature = "std")]
             markdown_header: String::new(),
+            #[cfg(feature = "std")]
             instruments_file: String::new(),
             frames_per_step: 7,
         }
@@ -196,7 +207,8 @@ pub struct Sequencer {
     erasing: bool,
     last_press_frame: Option<u32>,
     just_recorded_over_next_step: bool,
-    muted_instruments: HashSet<u8>,
+    // FIXME: Use a bitset
+    muted_instruments: BTreeSet<u8>,
     synth_instrument_ids: Vec<String>,
     main_window: Weak<MainWindow>,
 }
@@ -215,7 +227,7 @@ impl Sequencer {
             erasing: false,
             last_press_frame: None,
             just_recorded_over_next_step: false,
-            muted_instruments: HashSet::new(),
+            muted_instruments: BTreeSet::new(),
             synth_instrument_ids: vec![String::new(); NUM_INSTRUMENTS],
             main_window: main_window.clone(),
         }
@@ -500,7 +512,7 @@ impl Sequencer {
                 .map(|ss| ss[self.current_step])
             {
                 if press {
-                    println!(
+                    log!(
                         "➕ PRS {} note {}",
                         self.synth_instrument_ids[i as usize],
                         MidiNote(note as i32).name()
@@ -536,7 +548,7 @@ impl Sequencer {
                 .map(|ss| ss[self.current_step])
             {
                 if release {
-                    println!(
+                    log!(
                         "➖ REL {} note {}",
                         self.synth_instrument_ids[i as usize],
                         MidiNote(note as i32).name()
@@ -755,6 +767,7 @@ impl Sequencer {
         self.set_song(Default::default());
     }
 
+#[cfg(feature = "std")]
     pub fn load_str(&mut self, markdown: &str) -> Result<String, Box<dyn Error>> {
         let song = parse_markdown_song(markdown)?;
 
@@ -763,7 +776,7 @@ impl Sequencer {
         Ok(instruments_file)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
     pub fn load_file(&mut self, song_path: &Path) -> Result<String, Box<dyn Error>> {
         if song_path.exists() {
             let md = std::fs::read_to_string(song_path)?;
@@ -777,12 +790,12 @@ impl Sequencer {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
     pub fn save(&self, song_path: &Path) -> Result<(), Box<dyn Error>> {
         save_markdown_song(&self.song, song_path)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
     pub fn save_as(&mut self, song_path: &Path, instruments_path: &Path) -> Result<(), Box<dyn Error>> {
         self.song.instruments_file = instruments_path
             .file_name()

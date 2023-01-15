@@ -1,45 +1,37 @@
 // Copyright © 2023 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-use crate::sound_renderer::Synth;
-use crate::SoundRenderer;
+use crate::ChannelActiveNote;
+use crate::ChannelTraceNote;
+use crate::GlobalEngine;
 use crate::GlobalSettings;
 use crate::MainWindow;
+use crate::Settings;
 use crate::sound_engine::SoundEngine;
+use crate::sound_renderer::Synth;
+use crate::SoundRenderer;
+use crate::synth_script::Channel;
+use crate::synth_script::RegSettings;
+use crate::utils::MidiNote;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
-use slint::{ComponentHandle, Rgba8Pixel, SharedPixelBuffer};
+use slint::{ComponentHandle, Global, Model, Rgba8Pixel, SharedPixelBuffer, VecModel, Weak};
 use tiny_skia::*;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
+use std::sync::mpsc;
+use std::sync::Mutex;
 use std::time::Duration;
 
 thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine<RboySynth>>> = RefCell::new(None);}
 thread_local! {static SOUND_SENDER: RefCell<Option<std::sync::mpsc::Sender<Box<dyn FnOnce(&mut SoundEngine<RboySynth>) + Send>>>> = RefCell::new(None);}
-
-use crate::synth_script::Channel;
-use crate::synth_script::RegSettings;
-
-use crate::utils::MidiNote;
-use crate::ChannelActiveNote;
-use crate::ChannelTraceNote;
-use crate::GlobalEngine;
-use crate::Settings;
-
-use slint::Global;
-use slint::Model;
-use slint::VecModel;
-use slint::Weak;
-
-use std::sync::Mutex;
 
 // The pass-through channel is otherwise too loud compared to mixed content.
 const SYNC_GAIN: f32 = 1.0 / 3.0;

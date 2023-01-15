@@ -1,6 +1,7 @@
 // Copyright © 2023 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+#[cfg(feature = "std")]
 pub mod emulated;
 
 use crate::synth_script::RegSettings;
@@ -10,11 +11,14 @@ use crate::sound_engine::SoundEngine;
 
 use slint::{ComponentHandle};
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use core::cell::RefCell;
+use alloc::rc::Rc;
 
+#[cfg(feature = "std")]
 use std::sync::mpsc;
+#[cfg(feature = "std")]
 use std::sync::mpsc::Sender;
+use core::time::Duration;
 
 pub trait Synth {
     // FIXME: It's not really advancing here, more like applying
@@ -52,8 +56,10 @@ pub trait SoundRenderer<SynthType: Synth> {
     where
         F: FnOnce(&mut SoundEngine<SynthType>) + Send + 'static;
 
-    fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine<SynthType>) + Send>>;
     fn force(&mut self);
+
+    #[cfg(feature = "std")]
+    fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine<SynthType>) + Send>>;
 }
 
 pub struct PrintRegistersSoundRenderer {
@@ -68,7 +74,7 @@ impl PrintRegistersSoundRenderer {
 
         let timer = slint::Timer::default();
         let cloned_sound_engine = sound_engine.clone();
-        timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(16), move || {
+        timer.start(slint::TimerMode::Repeated, Duration::from_millis(16), move || {
            cloned_sound_engine.borrow_mut().advance_frame();
         });
 
@@ -84,6 +90,7 @@ impl SoundRenderer<PrintRegistersSynth> for PrintRegistersSoundRenderer {
         f(&mut self.sound_engine.borrow_mut())
     }
 
+    #[cfg(feature = "std")]
     fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine<PrintRegistersSynth>) + Send>> {
         // FIXME
         let (sender, _receiver) = mpsc::channel();
