@@ -6,7 +6,6 @@ use crate::sequencer::Sequencer;
 use crate::sound_renderer::Synth;
 #[cfg(feature = "std")]
 use crate::sound_renderer::emulated::invoke_on_sound_engine;
-use crate::synth_script::RegSettings;
 use crate::synth_script::SynthScript;
 use crate::GlobalEngine;
 use crate::MainWindow;
@@ -20,10 +19,7 @@ use slint::Model;
 use slint::SharedString;
 use slint::Weak;
 
-use alloc::rc::Rc;
-use alloc::vec;
 use alloc::vec::Vec;
-use core::cell::RefCell;
 #[cfg(feature = "std")]
 use std::error::Error;
 #[cfg(feature = "std")]
@@ -54,7 +50,6 @@ pub struct SoundEngine {
     pub sequencer: Sequencer,
     pub synth: Synth,
     script: SynthScript,
-    settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     frame_number: usize,
     main_window: Weak<MainWindow>,
     pressed_note: Option<NoteSource>,
@@ -64,9 +59,7 @@ pub struct SoundEngine {
 impl SoundEngine {
     pub fn new(synth: Synth, main_window: Weak<MainWindow>) -> SoundEngine {
         let sequencer = Sequencer::new(main_window.clone());
-        let settings_ring = Rc::new(RefCell::new(vec![RegSettings::new(); 512]));
         let script = SynthScript::new(
-            settings_ring.clone(),
             synth.set_sound_reg_callback(),
             synth.set_wave_table_callback());
 
@@ -74,7 +67,6 @@ impl SoundEngine {
             sequencer: sequencer,
             synth: synth,
             script: script,
-            settings_ring: settings_ring,
             frame_number: 0,
             main_window: main_window,
             pressed_note: None,
@@ -177,9 +169,7 @@ impl SoundEngine {
         self.send_note_events_to_synth(note_events);
         self.script.advance_frame(self.frame_number);
 
-        let i = self.settings_ring_index();
-        let reg_settings = &mut self.settings_ring.borrow_mut()[i];
-        self.synth.advance_frame(self.frame_number, reg_settings, step_change);
+        self.synth.advance_frame(self.frame_number, step_change);
 
         self.frame_number += 1;
     }
@@ -287,10 +277,6 @@ impl SoundEngine {
             Ok(_) => self.project_source = ProjectSource::Gist,
             Err(err) => elog!("Error extracting project from gist: {}", err),
         }
-    }
-
-    fn settings_ring_index(&self) -> usize {
-        self.frame_number % self.settings_ring.borrow().len()
     }
 
     #[cfg(all(feature = "std", not(target_arch = "wasm32")))]

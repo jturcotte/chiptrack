@@ -9,8 +9,6 @@ use crate::MainWindow;
 use crate::Settings;
 use crate::sound_engine::SoundEngine;
 
-use crate::synth_script::Channel;
-use crate::synth_script::RegSettings;
 use crate::utils::MidiNote;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -149,6 +147,13 @@ impl rboy::AudioPlayer for FakePlayer {
     }
 }
 
+pub enum Channel {
+    Square1 = 0xff10,
+    Square2 = 0xff15,
+    Wave = 0xff1a,
+    Noise = 0xff1f,
+}
+
 impl Synth {
     pub fn new(main_window: Weak<MainWindow>, sample_rate: u32, settings: Settings) -> Synth {
         let gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
@@ -178,17 +183,9 @@ impl Synth {
     // GameBoy games seem to use the main loop clocked to the screen's refresh rate
     // to also drive the sound chip. To keep the song timing, also use the same 59.73hz
     // frame refresh rate.
-    pub fn advance_frame(&mut self, frame_number: usize, settings: &mut RegSettings, step_change: Option<u32>) {
+    pub fn advance_frame(&mut self, frame_number: usize, step_change: Option<u32>) {
         {
             let dmg = &mut self.dmg.borrow_mut();
-            settings.for_each_setting(|addr, set| {
-                // Trying to read the memory wouldn't give us the value we wrote last,
-                // so overwrite any state previously set in bits outside of RegSetter.mask
-                // with zeros.
-                dmg.wb(addr, set.value);
-            });
-            settings.clear_all();
-
             // Just enable all channels for now
             dmg.wb(0xff24, 0xff);
             dmg.wb(0xff25, 0xff);

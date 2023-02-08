@@ -104,37 +104,6 @@ impl<F: FnMut(&WasmModuleInst, &CStr, i32, &CStr, &CStr, &CStr)> HostFunction fo
     }
 }
 
-pub struct HostFunctionI<F> 
-{
-    closure: F,
-    name: CString,
-}
-impl<F> HostFunctionI<F> 
-{
-    pub fn new(name: &str, closure: F) -> HostFunctionI<F> {
-        HostFunctionI{
-            closure: closure,
-            name: CString::new(name).unwrap(),
-        }
-    }
-}
-const I_SIG: &str = "(i)\0";
-unsafe extern "C" fn trampoline_i_<F: FnMut(i32)>(exec_env: wasm_exec_env_t, v: i32) {
-    let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
-    f(v)
-}
-impl<F: FnMut(i32)> HostFunction for HostFunctionI<F>
-{
-    fn to_native_symbol(&mut self) -> NativeSymbol {
-        NativeSymbol { 
-        symbol: self.name.as_ptr(),
-        func_ptr: trampoline_i_::<F> as *mut c_void,
-        signature: I_SIG.as_ptr() as *const i8,
-        attachment: &mut self.closure as *mut _ as *mut c_void
-        }
-    }
-}
-
 pub struct HostFunctionII<F> 
 {
     closure: F,
@@ -166,37 +135,6 @@ impl<F: FnMut(i32, i32)> HostFunction for HostFunctionII<F>
     }
 }
 
-pub struct HostFunctionIA<F> 
-{
-    closure: F,
-    name: CString,
-}
-impl<F> HostFunctionIA<F> 
-{
-    pub fn new(name: &str, closure: F) -> HostFunctionIA<F> {
-        HostFunctionIA{
-            closure: closure,
-            name: CString::new(name).unwrap(),
-        }
-    }
-}
-const IA_SIG: &str = "(i*~)\0";
-unsafe extern "C" fn trampoline_ia_<F: FnMut(i32, &[i32])>(exec_env: wasm_exec_env_t, v1: i32, v2: *const i32, v2l: i32) {
-    let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
-    f(v1, core::slice::from_raw_parts(v2, v2l as usize))
-}
-impl<F: FnMut(i32, &[i32])> HostFunction for HostFunctionIA<F>
-{
-    fn to_native_symbol(&mut self) -> NativeSymbol {
-        NativeSymbol { 
-        symbol: self.name.as_ptr(),
-        func_ptr: trampoline_ia_::<F> as *mut c_void,
-        signature: IA_SIG.as_ptr() as *const i8,
-        attachment: &mut self.closure as *mut _ as *mut c_void
-        }
-    }
-}
-
 pub struct HostFunctionA<F> 
 {
     closure: F,
@@ -223,68 +161,6 @@ impl<F: FnMut(&[u8])> HostFunction for HostFunctionA<F>
         symbol: self.name.as_ptr(),
         func_ptr: trampoline_a_::<F> as *mut c_void,
         signature: A_SIG.as_ptr() as *const i8,
-        attachment: &mut self.closure as *mut _ as *mut c_void
-        }
-    }
-}
-
-pub struct HostFunctionIAA<F> 
-{
-    closure: F,
-    name: CString,
-}
-impl<F> HostFunctionIAA<F> 
-{
-    pub fn new(name: &str, closure: F) -> HostFunctionIAA<F> {
-        HostFunctionIAA{
-            closure: closure,
-            name: CString::new(name).unwrap(),
-        }
-    }
-}
-const IAA_SIG: &str = "(i*~*~)\0";
-unsafe extern "C" fn trampoline_iaa_<F: FnMut(i32, &[i32], &[i32])>(exec_env: wasm_exec_env_t, v1: i32, v2: *const i32, v2l: i32, v3: *const i32, v3l: i32) {
-    let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
-    f(v1, core::slice::from_raw_parts(v2, v2l as usize), core::slice::from_raw_parts(v3, v3l as usize))
-}
-impl<F: FnMut(i32, &[i32], &[i32])> HostFunction for HostFunctionIAA<F>
-{
-    fn to_native_symbol(&mut self) -> NativeSymbol {
-        NativeSymbol { 
-        symbol: self.name.as_ptr(),
-        func_ptr: trampoline_iaa_::<F> as *mut c_void,
-        signature: IAA_SIG.as_ptr() as *const i8,
-        attachment: &mut self.closure as *mut _ as *mut c_void
-        }
-    }
-}
-
-pub struct HostFunctionIi<F> 
-{
-    closure: F,
-    name: CString,
-}
-impl<F> HostFunctionIi<F> 
-{
-    pub fn new(name: &str, closure: F) -> HostFunctionIi<F> {
-        HostFunctionIi{
-            closure: closure,
-            name: CString::new(name).unwrap(),
-        }
-    }
-}
-const I_I_SIG: &str = "(i)i\0";
-unsafe extern "C" fn trampoline_i_i<F: FnMut(i32) -> i32>(exec_env: wasm_exec_env_t, v: i32) -> i32 {
-    let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
-    f(v)
-}
-impl<F: FnMut(i32) -> i32> HostFunction for HostFunctionIi<F>
-{
-    fn to_native_symbol(&mut self) -> NativeSymbol {
-        NativeSymbol { 
-        symbol: self.name.as_ptr(),
-        func_ptr: trampoline_i_i::<F> as *mut c_void,
-        signature: I_I_SIG.as_ptr() as *const i8,
         attachment: &mut self.closure as *mut _ as *mut c_void
         }
     }
