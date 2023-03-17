@@ -328,9 +328,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitfrob"
-version = "0.2.3"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb18fff2e974c4b95a45f47398bb6ed5b040ccdaac9d41ed045d33dbe960f75f"
+checksum = "306618c132f918e25afda40db1ac19020961a5cd4ac123063a7de459aca8ef10"
 
 [[package]]
 name = "blip_buf"
@@ -366,6 +366,12 @@ checksum = "69cce20737498f97b993470a6e536b8523f0af7892a4f928cceb1ac5e52ebe7e"
 dependencies = [
  "generic-array",
 ]
+
+[[package]]
+name = "bracer"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6559b8c3065745016f5cc2d1095273fe8a175e953c976426947ad828d6ba6fda"
 
 [[package]]
 name = "bumpalo"
@@ -1433,9 +1439,12 @@ dependencies = [
 
 [[package]]
 name = "gba"
-version = "0.10.0"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d12a39cf9319566f4b87879854843c2884adc8882b6524ab22d83c0430e3b09b"
 dependencies = [
  "bitfrob",
+ "bracer",
  "voladdress",
 ]
 
@@ -4036,9 +4045,9 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "voladdress"
-version = "1.2.2"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "576fbc7b03f545c62d59d1c27e64d924f1c6e533960fe4f2d6dc653aa1867784"
+checksum = "7fbf3fef7bc995d3f8350936bdd07966c7a1f96183d52e3f28c29d099d0b5ecc"
 
 [[package]]
 name = "vtable"
@@ -4082,7 +4091,8 @@ dependencies = [
 
 [[package]]
 name = "wamr-sys"
-version = "1.1.1"
+version = "1.2.0"
+source = "git+https://github.com/jturcotte/wamr-sys.git?rev=93546401ecdfb7beb6856d42b6cb7bca3941fa33#93546401ecdfb7beb6856d42b6cb7bca3941fa33"
 dependencies = [
  "bindgen 0.56.0",
  "cc",

@@ -154,18 +154,20 @@ impl MinimalGbaWindow {
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
         let global_engine = GlobalEngine::get(&handle);
         let current_instrument = global_engine.get_current_instrument() as usize;
-        let tsb = TextScreenblockAddress::new(31);
+        let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
 
         if self.sequencer_steps_tracker.take_dirtiness() {
+            let vid_row = tsb.get_row(0).unwrap();
             let current_instrument_id = global_engine.get_instruments().row_data(current_instrument).unwrap().id;
-            tsb.row_col(0, 6 + 1).write(TextEntry::new());
-            tsb.row_col(0, 6 + 2).write(TextEntry::new());
+            vid_row.index(6 + 1).write(TextEntry::new());
+            vid_row.index(6 + 2).write(TextEntry::new());
             for (j, c) in current_instrument_id.chars().enumerate() {
-                tsb.row_col(0, 6 + j).write(TextEntry::new().with_tile(c as u16));
+                vid_row.index(6 + j).write(TextEntry::new().with_tile(c as u16));
             }
 
             let sequencer_steps = global_engine.get_sequencer_steps();
             for i in 0 .. sequencer_steps.row_count() {
+                let vid_row = tsb.get_row(i + 1).unwrap();
                 let row_data = sequencer_steps.row_data(i).unwrap();
                 for (j, c) in row_data.note_name.chars().enumerate() {
                     let tile_index = if row_data.press {
@@ -173,36 +175,37 @@ impl MinimalGbaWindow {
                     } else {
                         0
                     };
-                    tsb.row_col(i + 1, j + 6).write(TextEntry::new().with_tile(tile_index));
+                    vid_row.index(j + 6).write(TextEntry::new().with_tile(tile_index));
                 }
-                tsb.row_col(i + 1, 4).write(TextEntry::new().with_tile(row_data.active as u16 * 7));
-                tsb.row_col(i + 1, 5).write(TextEntry::new().with_tile(row_data.press as u16 * '[' as u16));
-                tsb.row_col(i + 1, 9).write(TextEntry::new().with_tile(row_data.release as u16 * ']' as u16));
+                vid_row.index(4).write(TextEntry::new().with_tile(row_data.active as u16 * 7));
+                vid_row.index(5).write(TextEntry::new().with_tile(row_data.press as u16 * '[' as u16));
+                vid_row.index(9).write(TextEntry::new().with_tile(row_data.release as u16 * ']' as u16));
             }
         }
         if self.sequencer_pattern_instruments_tracker.take_dirtiness() {
+            let top_vid_row = tsb.get_row(0).unwrap();
             let sequencer_pattern_instruments = global_engine.get_sequencer_pattern_instruments();
             for i in 0 .. 6 {
                 if i < sequencer_pattern_instruments.row_count() {
                     let row_data = sequencer_pattern_instruments.row_data(i).unwrap();
 
-                    tsb.row_col(0, i * 3 + 11 + 1).write(TextEntry::new());
-                    tsb.row_col(0, i * 3 + 11 + 2).write(TextEntry::new());
+                    top_vid_row.index(i * 3 + 11 + 1).write(TextEntry::new());
+                    top_vid_row.index(i * 3 + 11 + 2).write(TextEntry::new());
                     for (j, c) in row_data.id.chars().enumerate() {
-                        tsb.row_col(0, i * 3 + 11 + j).write(TextEntry::new().with_tile(c as u16));
+                        top_vid_row.index(i * 3 + 11 + j).write(TextEntry::new().with_tile(c as u16));
                     }
 
                     let steps_empty = row_data.steps_empty;
                     for j in 0 .. steps_empty.row_count() {
                         let empty = steps_empty.row_data(j).unwrap();
-                        tsb.row_col(j + 1, i * 3 + 11).write(TextEntry::new().with_tile(!empty as u16 * 7));
+                        tsb.get_row(j + 1).unwrap().index(i * 3 + 11).write(TextEntry::new().with_tile(!empty as u16 * 7));
                     }                    
                 } else {
-                    tsb.row_col(0, i * 3 + 11).write(TextEntry::new());
-                    tsb.row_col(0, i * 3 + 11 + 1).write(TextEntry::new());
-                    tsb.row_col(0, i * 3 + 11 + 2).write(TextEntry::new());
+                    top_vid_row.index(i * 3 + 11).write(TextEntry::new());
+                    top_vid_row.index(i * 3 + 11 + 1).write(TextEntry::new());
+                    top_vid_row.index(i * 3 + 11 + 2).write(TextEntry::new());
                     for j in 1 .. 17 {
-                        tsb.row_col(j, i * 3 + 11).write(TextEntry::new());
+                        tsb.get_row(j).unwrap().index(i * 3 + 11).write(TextEntry::new());
                     }                    
                 }
             }
