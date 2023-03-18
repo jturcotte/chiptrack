@@ -13,11 +13,14 @@ mod utils;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
+use crate::sound_renderer::PrintRegistersSoundRenderer;
+use crate::sound_renderer::SoundRenderer;
 use crate::sound_renderer::new_cpal_sound_renderer;
 use crate::midi::Midi;
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
+use crate::synth::Synth;
 use crate::utils::MidiNote;
 
 use slint::{Model, Timer, TimerMode};
@@ -128,7 +131,8 @@ pub fn main() {
     global_engine.set_synth_trace_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
     global_engine.set_synth_active_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
 
-    let sound_renderer = Rc::new(RefCell::new(new_cpal_sound_renderer(&window)));
+    // let sound_renderer = Rc::new(RefCell::new(new_cpal_sound_renderer(&window)));
+    let sound_renderer = Rc::new(RefCell::new(PrintRegistersSoundRenderer::new(&window)));
 
     if let Some(gist_path) = maybe_gist_path {
         let api_url = "https://api.github.com/gists/".to_owned() + gist_path.splitn(2, '/').last().unwrap();

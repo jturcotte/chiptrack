@@ -4,6 +4,9 @@
 use crate::GlobalSettings;
 use crate::MainWindow;
 use crate::sound_engine::SoundEngine;
+use crate::synth::PrintRegistersSynth;
+use crate::synth::RboySynth;
+use crate::synth::Synth;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat};
@@ -20,12 +23,12 @@ use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::time::Duration;
 
-thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine>> = RefCell::new(None);}
-thread_local! {static SOUND_SENDER: RefCell<Option<std::sync::mpsc::Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>>> = RefCell::new(None);}
+thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine<RboySynth>>> = RefCell::new(None);}
+thread_local! {static SOUND_SENDER: RefCell<Option<std::sync::mpsc::Sender<Box<dyn FnOnce(&mut SoundEngine<RboySynth>) + Send>>>> = RefCell::new(None);}
 
 pub fn invoke_on_sound_engine<F>(f: F)
 where
-    F: FnOnce(&mut SoundEngine) + Send + 'static,
+    F: FnOnce(&mut SoundEngine<RboySynth>) + Send + 'static,
 {
     SOUND_SENDER
         .with(|s| {
@@ -42,30 +45,77 @@ pub struct Context {
 
 }
 
+pub trait SoundRenderer<SynthType: Synth> {
+    fn invoke_on_sound_engine<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut SoundEngine<SynthType>) + Send + 'static;
+
+    fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine<SynthType>) + Send>>;
+    fn force(&mut self);
+}
+
+pub struct PrintRegistersSoundRenderer {
+    sound_engine: Rc<RefCell<SoundEngine<PrintRegistersSynth>>>,
+    _timer: slint::Timer,
+}
+
+impl PrintRegistersSoundRenderer {
+    pub fn new(window: &MainWindow) -> PrintRegistersSoundRenderer {
+        let synth = PrintRegistersSynth{};
+        let sound_engine = Rc::new(RefCell::new(SoundEngine::new(synth, window.as_weak())));
+
+        let timer = slint::Timer::default();
+        let cloned_sound_engine = sound_engine.clone();
+        timer.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(16), move || {
+           cloned_sound_engine.borrow_mut().advance_frame();
+        });
+
+        PrintRegistersSoundRenderer{sound_engine, _timer: timer}
+    }
+}
+
+impl SoundRenderer<PrintRegistersSynth> for PrintRegistersSoundRenderer {
+    fn invoke_on_sound_engine<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut SoundEngine<PrintRegistersSynth>) + Send + 'static,
+    {
+        f(&mut self.sound_engine.borrow_mut())
+    }
+
+    fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine<PrintRegistersSynth>) + Send>> {
+        // FIXME
+        let (sender, _receiver) = mpsc::channel();
+        sender
+    }
+
+    fn force(&mut self) {
+    }
+}
+
 pub struct CpalSoundRenderer<LazyF: FnOnce() -> Context> {
-    sound_send: Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>,
+    sound_send: Sender<Box<dyn FnOnce(&mut SoundEngine<RboySynth>) + Send>>,
     context: Rc<Lazy<Context, LazyF>>,
 }
 
-impl<LazyF: FnOnce() -> Context> CpalSoundRenderer<LazyF> {
-    pub fn invoke_on_sound_engine<F>(&mut self, f: F)
+impl<LazyF: FnOnce() -> Context> SoundRenderer<RboySynth> for CpalSoundRenderer<LazyF> {
+    fn invoke_on_sound_engine<F>(&mut self, f: F)
     where
-        F: FnOnce(&mut SoundEngine) + Send + 'static,
+        F: FnOnce(&mut SoundEngine<RboySynth>) + Send + 'static,
     {
         Lazy::force(&*self.context);
         self.sound_send.send(Box::new(f)).unwrap();
     }
 
-    pub fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>> {
+    fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine<RboySynth>) + Send>> {
         self.sound_send.clone()
     }
 
-    pub fn force(&mut self) {
+    fn force(&mut self) {
         Lazy::force(&*self.context);
     }
 }
 
-fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) -> () {
+fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine<RboySynth>) -> () {
     while let Ok(msg) = notify_recv.try_recv() {
         let reload = if let Some(instruments_path) = engine.instruments_path() {
             let instruments = instruments_path.file_name();
@@ -147,7 +197,7 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
     }
 }
 pub fn new_cpal_sound_renderer(window: &MainWindow) -> CpalSoundRenderer<impl FnOnce() -> Context> {
-    let (sound_send, sound_recv) = mpsc::channel::<Box<dyn FnOnce(&mut SoundEngine) + Send>>();
+    let (sound_send, sound_recv) = mpsc::channel::<Box<dyn FnOnce(&mut SoundEngine<RboySynth>) + Send>>();
     let (notify_send, notify_recv) = mpsc::channel();
 
     let cloned_sound_send = sound_send.clone();
@@ -198,10 +248,10 @@ pub fn new_cpal_sound_renderer(window: &MainWindow) -> CpalSoundRenderer<impl Fn
                     SOUND_ENGINE.with(|maybe_engine_cell| {
                         let mut maybe_engine = maybe_engine_cell.borrow_mut();
                         if let None = *maybe_engine {
+                            let synth = RboySynth::new(window_weak.clone(), sample_rate, initial_settings.clone());
                             *maybe_engine = Some(SoundEngine::new(
-                                sample_rate,
+                                synth,
                                 window_weak.clone(),
-                                initial_settings.clone(),
                             ));
                         }
                         let engine = maybe_engine.as_mut().unwrap();

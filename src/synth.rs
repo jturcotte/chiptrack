@@ -18,6 +18,37 @@ use slint::Weak;
 
 use std::sync::{Arc, Mutex};
 
+pub trait Synth {
+    // FIXME: It's not really advancing here, more like applying
+    // GameBoy games seem to use the main loop clocked to the screen's refresh rate
+    // to also drive the sound chip. To keep the song timing, also use the same 59.73hz
+    // frame refresh rate.
+    fn advance_frame(&mut self, frame_number: usize, settings: &mut RegSettings, step_change: Option<u32>);
+
+    fn apply_settings(&mut self, settings: &Settings);
+
+    /// Can be used to manually mute when instruments have an infinite length and envelope.
+    fn mute_instruments(&mut self);
+}
+
+pub struct PrintRegistersSynth {
+}
+
+impl Synth for PrintRegistersSynth {
+    fn advance_frame(&mut self, frame_number: usize, settings: &mut RegSettings, _step_change: Option<u32>) {
+        settings.for_each_setting(|addr, set| {
+            log!("{} - {:#x}: {:#04x} ({:#010b})", frame_number, addr, set.value, set.value);
+        });
+        settings.clear_all();
+    }
+
+    fn apply_settings(&mut self, _settings: &Settings) {
+    }
+
+    fn mute_instruments(&mut self) {
+    }
+}
+
 // The pass-through channel is otherwise too loud compared to mixed content.
 const SYNC_GAIN: f32 = 1.0 / 3.0;
 const VBLANK_CYCLES: u32 = 70224;
@@ -47,7 +78,7 @@ struct FakePlayer {
     state: Arc<Mutex<OutputData>>,
 }
 
-pub struct Synth {
+pub struct RboySynth {
     dmg: rboy::Sound,
     output_data: Arc<Mutex<OutputData>>,
     main_window: Weak<MainWindow>,
@@ -135,47 +166,8 @@ impl rboy::AudioPlayer for FakePlayer {
     }
 }
 
-impl Synth {
-    pub fn new(main_window: Weak<MainWindow>, sample_rate: u32, settings: Settings) -> Synth {
-        let gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
-
-        let output_data = Arc::new(Mutex::new(OutputData {
-            buffer: Vec::new(),
-            buffer_viz: Vec::new(),
-            gain: gain,
-            sync_pulse: SyncPulse::new(settings.sync_enabled, sample_rate, 300, 2),
-        }));
-
-        let player = Box::new(FakePlayer {
-            sample_rate: sample_rate,
-            state: output_data.clone(),
-        });
-        let mut dmg = rboy::Sound::new(player);
-        // Already power it on.
-        dmg.wb(0xff26, 0x80);
-
-        Synth {
-            dmg: dmg,
-            output_data: output_data,
-            main_window: main_window,
-        }
-    }
-
-    pub fn output_data(&self) -> Arc<Mutex<OutputData>> {
-        self.output_data.clone()
-    }
-
-    pub fn apply_settings(&mut self, settings: &Settings) {
-        let mut output_data = self.output_data.lock().unwrap();
-        output_data.gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
-        output_data.sync_pulse.enabled = settings.sync_enabled;
-    }
-
-    // FIXME: It's not really advancing here, more like applying
-    // GameBoy games seem to use the main loop clocked to the screen's refresh rate
-    // to also drive the sound chip. To keep the song timing, also use the same 59.73hz
-    // frame refresh rate.
-    pub fn advance_frame(&mut self, frame_number: usize, settings: &mut RegSettings, step_change: Option<u32>) {
+impl Synth for RboySynth {
+    fn advance_frame(&mut self, frame_number: usize, settings: &mut RegSettings, step_change: Option<u32>) {
 
         {
             let dmg = &mut self.dmg;
@@ -208,13 +200,49 @@ impl Synth {
         self.update_ui_channel_states(frame_number as i32);
     }
 
-    /// Can be used to manually mute when instruments have an infinite length and envelope.
-    pub fn mute_instruments(&mut self) {
+    fn apply_settings(&mut self, settings: &Settings) {
+        let mut output_data = self.output_data.lock().unwrap();
+        output_data.gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
+        output_data.sync_pulse.enabled = settings.sync_enabled;
+    }
+
+    fn mute_instruments(&mut self) {
         // Set the envelopes to 0.
         self.dmg.wb(Channel::Square1 as u16 + 2, 0);
         self.dmg.wb(Channel::Square2 as u16 + 2, 0);
         self.dmg.wb(Channel::Wave as u16 + 2, 0);
         self.dmg.wb(Channel::Noise as u16 + 2, 0);
+    }
+}
+
+impl RboySynth {
+    pub fn new(main_window: Weak<MainWindow>, sample_rate: u32, settings: Settings) -> RboySynth {
+        let gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
+
+        let output_data = Arc::new(Mutex::new(OutputData {
+            buffer: Vec::new(),
+            buffer_viz: Vec::new(),
+            gain: gain,
+            sync_pulse: SyncPulse::new(settings.sync_enabled, sample_rate, 300, 2),
+        }));
+
+        let player = Box::new(FakePlayer {
+            sample_rate: sample_rate,
+            state: output_data.clone(),
+        });
+        let mut dmg = rboy::Sound::new(player);
+        // Already power it on.
+        dmg.wb(0xff26, 0x80);
+
+        RboySynth {
+            dmg: dmg,
+            output_data: output_data,
+            main_window: main_window,
+        }
+    }
+
+    pub fn output_data(&self) -> Arc<Mutex<OutputData>> {
+        self.output_data.clone()
     }
 
     fn update_ui_channel_states(&self, frame_number: i32) {

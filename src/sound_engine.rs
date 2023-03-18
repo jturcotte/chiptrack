@@ -42,9 +42,9 @@ enum ProjectSource {
     Gist,
 }
 
-pub struct SoundEngine {
+pub struct SoundEngine<SynthType: Synth> {
     pub sequencer: Sequencer,
-    pub synth: Synth,
+    pub synth: SynthType,
     script: SynthScript,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     frame_number: usize,
@@ -53,10 +53,9 @@ pub struct SoundEngine {
     project_source: ProjectSource,
 }
 
-impl SoundEngine {
-    pub fn new(sample_rate: u32, main_window: Weak<MainWindow>, settings: Settings) -> SoundEngine {
+impl<SynthType: Synth> SoundEngine<SynthType> {
+    pub fn new(synth: SynthType, main_window: Weak<MainWindow>) -> SoundEngine<SynthType> {
         let sequencer = Sequencer::new(main_window.clone());
-        let synth = Synth::new(main_window.clone(), sample_rate, settings);
         let settings_ring = Rc::new(RefCell::new(vec![RegSettings::new(); 512]));
         let script = SynthScript::new(settings_ring.clone());
 
