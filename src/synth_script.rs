@@ -3,8 +3,11 @@
 
 use crate::sound_engine::NUM_INSTRUMENT_COLS;
 use crate::sound_engine::NUM_INSTRUMENTS;
-use crate::synth_script::test::WasmExecEnv;
-use crate::synth_script::test::WasmRuntime;
+use crate::synth_script::wasm::WasmExecEnv;
+use crate::synth_script::wasm::WasmFunction;
+use crate::synth_script::wasm::WasmModule;
+use crate::synth_script::wasm::WasmModuleInst;
+use crate::synth_script::wasm::WasmRuntime;
 use crate::utils::NOTE_FREQUENCIES;
 
 use alloc::borrow::ToOwned;
@@ -21,7 +24,7 @@ use std::fs::File;
 #[cfg(feature = "std")]
 use std::io::Write;
 
-pub mod test;
+pub mod wasm;
 
 fn instrument_print(s: &CStr) {
   log!("print: {}", s.to_str().expect("Invalid UTF-8"));
@@ -36,9 +39,9 @@ struct PressedNote {
 
 #[derive(Clone)]
 struct InstrumentState {
-    press_function: Option<test::WasmFunction>,
-    release_function: Option<test::WasmFunction>,
-    frame_function: Option<test::WasmFunction>,
+    press_function: Option<WasmFunction>,
+    release_function: Option<WasmFunction>,
+    frame_function: Option<WasmFunction>,
     frames_after_release: i32,
     pressed_note: Option<PressedNote>,
 }
@@ -87,7 +90,7 @@ impl SynthScript {
         let instrument_ids_clone = instrument_ids.clone();
         let instrument_states_clone = instrument_states.clone();
 
-        let set_instrument_at_column = move |module: &test::WasmModuleInst, cid: &CStr, col: i32, press: &CStr, release: &CStr, frame: &CStr| -> () {
+        let set_instrument_at_column = move |module: &WasmModuleInst, cid: &CStr, col: i32, press: &CStr, release: &CStr, frame: &CStr| -> () {
             let id = cid.to_str().unwrap();
             assert!(!id.is_empty(), "set_instrument_at_column: id must not be empty, got {:?}", id);
             assert!(!instrument_ids_clone.borrow().iter().any(|i| i == id), "set_instrument_at_column: id {} must be unique, but was already set", id);
@@ -116,14 +119,14 @@ impl SynthScript {
             state.frame_function = module.lookup_function(frame);
         };
 
-        let functions: Vec<Box<dyn test::HostFunction>> = vec![
-            Box::new(test::HostFunctionS::new("print", instrument_print)),
-            Box::new(test::HostFunctionSISSS::new("set_instrument_at_column", set_instrument_at_column)),
-            Box::new(test::HostFunctionII::new("gba_set_sound_reg", synth_set_sound_reg)),
-            Box::new(test::HostFunctionA::new("gba_set_wave_table", synth_set_wave_table)),
+        let functions: Vec<Box<dyn wasm::HostFunction>> = vec![
+            Box::new(wasm::HostFunctionS::new("print", instrument_print)),
+            Box::new(wasm::HostFunctionSISSS::new("set_instrument_at_column", set_instrument_at_column)),
+            Box::new(wasm::HostFunctionII::new("gba_set_sound_reg", synth_set_sound_reg)),
+            Box::new(wasm::HostFunctionA::new("gba_set_wave_table", synth_set_wave_table)),
         ];
       
-        let runtime = Rc::new(test::WasmRuntime::new(functions).unwrap());
+        let runtime = Rc::new(WasmRuntime::new(functions).unwrap());
 
         SynthScript {
             wasm_runtime: runtime,
@@ -173,9 +176,9 @@ impl SynthScript {
 
         if instruments_path.exists() {
             let buffer = std::fs::read(instruments_path)?;
-            let module = Rc::new(test::WasmModule::new(buffer, self.wasm_runtime.clone()).unwrap());
-            let module_inst = Rc::new(test::WasmModuleInst::new(module).unwrap());
-            self.wasm_exec_env = Some(test::WasmExecEnv::new(module_inst).unwrap());
+            let module = Rc::new(WasmModule::new(buffer, self.wasm_runtime.clone()).unwrap());
+            let module_inst = Rc::new(WasmModuleInst::new(module).unwrap());
+            self.wasm_exec_env = Some(WasmExecEnv::new(module_inst).unwrap());
 
             // let ast = self.script_engine.compile_file(instruments_path.to_path_buf())?;
             // self.interpreter.run_file(instruments_path).unwrap();
