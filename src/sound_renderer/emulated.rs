@@ -412,6 +412,7 @@ pub struct Context {
 pub struct SoundRenderer<LazyF: FnOnce() -> Context> {
     sound_send: Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>,
     context: Rc<Lazy<Context, LazyF>>,
+    _watcher: notify::RecommendedWatcher,
 }
 
 impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
@@ -630,7 +631,7 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
         }
     }));
 
-    SoundRenderer{sound_send, context}
+    SoundRenderer{sound_send, context, _watcher: watcher}
 
 }
 
