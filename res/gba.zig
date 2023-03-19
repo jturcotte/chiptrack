@@ -4,12 +4,28 @@ const fmt = std.fmt;
 extern fn print([*:0]const u8) void;
 pub extern fn gba_set_sound_reg(addr: u32, value: u32) void;
 pub extern fn gba_set_wave_table(table: [*]const u8, table_len: u32) void;
-pub extern fn set_instrument_at_column(id: [*:0]const u8, col: i32, press_symbol: [*:0]const u8, release_symbol: [*:0]const u8, frame_symbol: [*:0]const u8) void;
+extern fn set_instrument_at_column(id: [*:0]const u8, col: i32, frames_after_release: i32, press_symbol: [*:0]const u8, release_symbol: [*:0]const u8, frame_symbol: [*:0]const u8) void;
 
 pub fn debug(comptime f: []const u8, args: anytype) void {
-    var b: [128]u8 = undefined;
-    _ = fmt.bufPrint(&b, f, args) catch unreachable;
+    var b: [256]u8 = undefined;
+    const r = fmt.bufPrint(&b, f, args) catch unreachable;
+    b[r.len] = 0;
     print(@ptrCast([*:0]u8, &b));
+}
+
+const Instrument = struct {
+    press: [*:0]const u8 = "",
+    release: [*:0]const u8 = "",
+    frame: [*:0]const u8 = "",
+    frames_after_release: i32 = 0,
+};
+pub fn setInstrument(id: [*:0]const u8, col: i32, instrument: Instrument) void {
+    return set_instrument_at_column(
+        id, col,
+        instrument.frames_after_release,
+        instrument.press,
+        instrument.release,
+        instrument.frame);
 }
 
 pub const nr10 = 0x4000060;
@@ -34,29 +50,68 @@ pub const square2 = Channel.square2;
 pub const wave = Channel.wave;
 pub const noise = Channel.noise;
 
-pub const swe_inc = 0;
-pub const swe_dec = 1;
-pub const env_dec = 0;
-pub const env_inc = 1;
-pub const dut_1_8 = 0;
-pub const dut_1_4 = 1;
-pub const dut_2_4 = 2;
-pub const dut_3_4 = 3;
-pub const vol_0 = 0;
-pub const vol_100 = 1;
-pub const vol_50 = 2;
-pub const vol_25 = 3;
-pub const vol_75 = 4;
-pub const wid_15 = 0;
-pub const wid_7 = 1;
-pub const div_8 = 0;
-pub const div_16 = 1;
-pub const div_32 = 2;
-pub const div_48 = 3;
-pub const div_64 = 4;
-pub const div_80 = 5;
-pub const div_96 = 6;
-pub const div_112 = 7;
+pub const swe_inc: u1 = 0;
+pub const swe_dec: u1 = 1;
+pub const env_dec: u1 = 0;
+pub const env_inc: u1 = 1;
+pub const dut_1_8: u2 = 0;
+pub const dut_1_4: u2 = 1;
+pub const dut_2_4: u2 = 2;
+pub const dut_3_4: u2 = 3;
+pub const vol_0: u3 = 0;
+pub const vol_100: u3 = 1;
+pub const vol_50: u3 = 2;
+pub const vol_25: u3 = 3;
+pub const vol_75: u3 = 5;
+pub const wid_15: u1 = 0;
+pub const wid_7: u1 = 1;
+pub const div_8: u3 = 0;
+pub const div_16: u3 = 1;
+pub const div_32: u3 = 2;
+pub const div_48: u3 = 3;
+pub const div_64: u3 = 4;
+pub const div_80: u3 = 5;
+pub const div_96: u3 = 6;
+pub const div_112: u3 = 7;
+
+/// (NR10) - Channel 1 Sweep register (R/W)
+pub const Sweep = packed struct {
+    // Bit        Expl.
+    // 0-2   R/W  Number of sweep shift      (n=0-7)
+    shift: u3 = 0,
+    // 3     R/W  Sweep Frequency Direction  (0=Increase, 1=Decrease)
+    dir: u1 = 0,
+    // 4-6   R/W  Sweep Time; units of 7.8ms (0-7, min=7.8ms, max=54.7ms)
+    time: u3 = 0,
+    // 7-15  -    Not used
+    _: u9 = 0,
+
+    pub fn init() Sweep {
+        return Sweep{};
+    }
+    pub fn withShift(self: Sweep, v: u3) Sweep {
+        var copy = self;
+        copy.shift = v;
+        return copy;
+    }
+    pub fn withDir(self: Sweep, v: u1) Sweep {
+        var copy = self;
+        copy.dir = v;
+        return copy;
+    }
+    pub fn withTime(self: Sweep, v: u3) Sweep {
+        var copy = self;
+        copy.time = v;
+        return copy;
+    }
+    pub fn write(self: Sweep, channel: Channel) void {
+        const address: u32 = switch (channel) {
+            Channel.square1 => nr10,
+            else => unreachable,
+        };
+        gbaSetSoundReg(address, @bitCast(u16, self));
+    }
+};
 
 /// (NRx1, NRx2) - Duty/Len/Envelope (R/W)
 pub const EnvDutyLen = packed struct {

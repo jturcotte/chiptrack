@@ -374,7 +374,7 @@ impl Synth {
 
     fn gba_to_gb_addr(gba_addr: i32) -> (Option<u16>, Option<u16>) {
         match gba_addr {
-            0x4000060 => (None, Some(0xFF10)),         // NR10
+            0x4000060 => (Some(0xFF10), None),         // NR10
             0x4000062 => (Some(0xFF11), Some(0xFF12)), // NR11, NR12
             0x4000064 => (Some(0xFF13), Some(0xFF14)), // NR13, NR14
             0x4000068 => (Some(0xFF16), Some(0xFF17)), // NR21, NR22

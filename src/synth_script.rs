@@ -78,7 +78,7 @@ pub struct SynthScript {
 }
 
 impl SynthScript {
-    const DEFAULT_INSTRUMENTS: &'static [u8; 16733] = include_bytes!("../res/default-instruments.wasm");
+    const DEFAULT_INSTRUMENTS: &'static [u8] = include_bytes!("../res/default-instruments.rhai");
 
     pub fn new<F, G>(synth_set_sound_reg: F, synth_set_wave_table: G) -> SynthScript
         where
@@ -90,7 +90,7 @@ impl SynthScript {
         let instrument_ids_clone = instrument_ids.clone();
         let instrument_states_clone = instrument_states.clone();
 
-        let set_instrument_at_column = move |module: &WasmModuleInst, cid: &CStr, col: i32, press: &CStr, release: &CStr, frame: &CStr| -> () {
+        let set_instrument_at_column = move |module: &WasmModuleInst, cid: &CStr, col: i32, frames_after_release: i32, press: &CStr, release: &CStr, frame: &CStr| -> () {
             let id = cid.to_str().unwrap();
             assert!(!id.is_empty(), "set_instrument_at_column: id must not be empty, got {:?}", id);
             assert!(!instrument_ids_clone.borrow().iter().any(|i| i == id), "set_instrument_at_column: id {} must be unique, but was already set", id);
@@ -114,6 +114,7 @@ impl SynthScript {
 
             instrument_ids_clone.borrow_mut()[index] = id.to_owned();
 
+            state.frames_after_release = frames_after_release;
             state.press_function = module.lookup_function(press);
             state.release_function = module.lookup_function(release);
             state.frame_function = module.lookup_function(frame);
@@ -121,7 +122,7 @@ impl SynthScript {
 
         let functions: Vec<Box<dyn wasm::HostFunction>> = vec![
             Box::new(wasm::HostFunctionS::new("print", instrument_print)),
-            Box::new(wasm::HostFunctionSISSS::new("set_instrument_at_column", set_instrument_at_column)),
+            Box::new(wasm::HostFunctionSIISSS::new("set_instrument_at_column", set_instrument_at_column)),
             Box::new(wasm::HostFunctionII::new("gba_set_sound_reg", synth_set_sound_reg)),
             Box::new(wasm::HostFunctionA::new("gba_set_wave_table", synth_set_wave_table)),
         ];
@@ -147,6 +148,7 @@ impl SynthScript {
         for id in &mut *self.instrument_ids.borrow_mut() {
             *id = Default::default();
         }
+        self.wasm_exec_env = None;
     }
 
     pub fn load_default(&mut self, _frame_number: usize) {
@@ -206,23 +208,27 @@ impl SynthScript {
                     pressed_frame: frame_number,
                     extended_frames: None,
                 });
-                self.wasm_exec_env.as_ref().unwrap().call_ii(*f, note as i32, Self::note_to_freq(note)).unwrap();
+                self.wasm_exec_env.as_ref().unwrap().call_ii(*f, Self::note_to_freq(note), note as i32).unwrap();
             }
         }
     }
 
-    pub fn release_instrument(&mut self, _frame_number: usize, instrument: u8) -> () {
+    pub fn release_instrument(&mut self, frame_number: usize, instrument: u8) -> () {
         let mut states = self.instrument_states.borrow_mut();
         if let Some(state) = states.get_instrument(instrument) {
-            if let (Some(f), Some(PressedNote { note, .. })) = (&state.release_function, &mut state.pressed_note) {
-                self.wasm_exec_env.as_ref().unwrap().call_ii(*f, *note as i32, Self::note_to_freq(*note)).unwrap();
-            }
             if let Some(PressedNote {
-                note: _,
-                pressed_frame: _,
+                note,
+                pressed_frame,
                 extended_frames,
             }) = &mut state.pressed_note
             {
+                if let Some(f) = &state.release_function {
+                    self.wasm_exec_env.as_ref().unwrap().call_iii(
+                        *f,
+                        Self::note_to_freq(*note),
+                        *note as i32,
+                        (frame_number - *pressed_frame) as i32).unwrap();
+                }
                 // Since the release function might trigger an envelope that lasts a few
                 // frames, the frame function would need to continue running during that time.
                 // The "frames" function will be run as long as pressed_note is some,
@@ -253,8 +259,8 @@ impl SynthScript {
                 {
                     self.wasm_exec_env.as_ref().unwrap().call_iii(
                         *f,
-                        *note as i32,
                         Self::note_to_freq(*note),
+                        *note as i32,
                         (frame_number - *pressed_frame) as i32).unwrap();
                     if let Some(remaining) = extended_frames {
                         *remaining -= 1;

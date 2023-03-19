@@ -2,24 +2,6 @@
 
 extern crate alloc;
 
-use wamr_sys::mem_alloc_type_t_Alloc_With_Pool;
-use wamr_sys::NativeSymbol;
-use wamr_sys::RuntimeInitArgs;
-use wamr_sys::wasm_exec_env_t;
-use wamr_sys::wasm_function_inst_t;
-use wamr_sys::wasm_module_inst_t;
-use wamr_sys::wasm_module_t;
-use wamr_sys::wasm_runtime_call_wasm;
-use wamr_sys::wasm_runtime_create_exec_env;
-use wamr_sys::wasm_runtime_full_init;
-use wamr_sys::wasm_runtime_get_exception;
-use wamr_sys::wasm_runtime_get_function_attachment;
-use wamr_sys::wasm_runtime_get_module_inst;
-use wamr_sys::wasm_runtime_instantiate;
-use wamr_sys::wasm_runtime_load;
-use wamr_sys::wasm_runtime_lookup_function;
-use wamr_sys::wasm_runtime_register_natives;
-
 use alloc::boxed::Box;
 use alloc::ffi::CString;
 use alloc::format;
@@ -32,8 +14,7 @@ use core::mem;
 use core::ptr;
 use core::ffi::c_void;
 use core::ffi::CStr;
-
-
+use wamr_sys::*;
 
 pub trait HostFunction {
     fn to_native_symbol(&mut self) -> NativeSymbol;
@@ -70,35 +51,38 @@ impl<F: FnMut(&CStr)> HostFunction for HostFunctionS<F>
     }
 }
 
-pub struct HostFunctionSISSS<F> 
+pub struct HostFunctionSIISSS<F> 
 {
     closure: F,
     name: CString,
 }
-impl<F> HostFunctionSISSS<F> 
+impl<F> HostFunctionSIISSS<F> 
 {
-    pub fn new(name: &str, closure: F) -> HostFunctionSISSS<F> {
-        HostFunctionSISSS{
+    pub fn new(name: &str, closure: F) -> HostFunctionSIISSS<F> {
+        HostFunctionSIISSS{
             closure: closure,
             name: CString::new(name).unwrap(),
         }
     }
 }
-const SISSS_SIG: &str = "($i$$$)\0";
-unsafe extern "C" fn trampoline_siss_<F: FnMut(&WasmModuleInst, &CStr, i32, &CStr, &CStr, &CStr)>(exec_env: wasm_exec_env_t, v1: *const i8, v2: i32, v3: *const i8, v4: *const i8, v5: *const i8) {
+const SIISSS_SIG: &str = "($ii$$$)\0";
+unsafe extern "C" fn trampoline_siss_<F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr)>(exec_env: wasm_exec_env_t, v1: *const i8, v2: i32, v3: i32, v4: *const i8, v5: *const i8, v6: *const i8) {
     let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
-    let m = WasmModuleInst{
-        module_inst: wasm_runtime_get_module_inst(exec_env),
+    // Create a temporary instance wrapping the handle
+    let mut m = WasmModuleInst{
+        module_inst: Some(wasm_runtime_get_module_inst(exec_env)),
         _module: None};
-    f(&m, CStr::from_ptr(v1), v2, CStr::from_ptr(v3), CStr::from_ptr(v4), CStr::from_ptr(v5));
+    f(&m, CStr::from_ptr(v1), v2, v3, CStr::from_ptr(v4), CStr::from_ptr(v5), CStr::from_ptr(v6));
+    // Prevent the module_inst from being deinstantiated during m's drop
+    m.module_inst = None;
 }
-impl<F: FnMut(&WasmModuleInst, &CStr, i32, &CStr, &CStr, &CStr)> HostFunction for HostFunctionSISSS<F>
+impl<F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr)> HostFunction for HostFunctionSIISSS<F>
 {
     fn to_native_symbol(&mut self) -> NativeSymbol {
         NativeSymbol { 
         symbol: self.name.as_ptr(),
         func_ptr: trampoline_siss_::<F> as *mut c_void,
-        signature: SISSS_SIG.as_ptr() as *const i8,
+        signature: SIISSS_SIG.as_ptr() as *const i8,
         attachment: &mut self.closure as *mut _ as *mut c_void
         }
     }
@@ -171,7 +155,6 @@ pub struct WasmFunction {
     f: wasm_function_inst_t,
 }
 
-// FIXME: Drop
 pub struct WasmRuntime {
     _module_name: CString,
     _functions: Vec<Box<dyn HostFunction>>,
@@ -187,7 +170,7 @@ pub struct WasmModule {
 }
 
 pub struct WasmModuleInst {
-    module_inst: wasm_module_inst_t,
+    module_inst: Option<wasm_module_inst_t>,
     // Only for ownership
     _module: Option<Rc<WasmModule>>,
 }
@@ -237,6 +220,12 @@ impl WasmRuntime {
     } }
 }
 
+impl Drop for WasmRuntime {
+    fn drop(&mut self) { unsafe {
+        wasm_runtime_destroy()
+    } }
+}
+
 impl WasmModule {
 
     pub fn new(mut wasm_buffer: Vec<u8>, runtime: Rc<WasmRuntime>) -> Result<WasmModule, String> { unsafe {
@@ -247,6 +236,12 @@ impl WasmModule {
             return Err(format!("wasm_runtime_load failed: {:?}", CStr::from_ptr(error_buf.as_ptr())));
         }
         Ok(WasmModule{module, _wasm_buffer: wasm_buffer, _runtime: Some(runtime)})
+    } }
+}
+
+impl Drop for WasmModule {
+    fn drop(&mut self) { unsafe {
+        wasm_runtime_unload(self.module)
     } }
 }
 
@@ -261,11 +256,11 @@ impl WasmModuleInst {
         if module_inst == ptr::null_mut() {
             return Err(format!("wasm_runtime_instantiate failed: {:?}", CStr::from_ptr(error_buf.as_ptr())));
         }
-        Ok(WasmModuleInst{module_inst, _module: Some(module)})
+        Ok(WasmModuleInst{module_inst: Some(module_inst), _module: Some(module)})
     } }
 
     pub fn lookup_function(&self, name: &CStr) -> Option<WasmFunction> { unsafe {
-        let f = wasm_runtime_lookup_function(self.module_inst, name.as_ptr(), ptr::null());
+        let f = wasm_runtime_lookup_function(self.module_inst.unwrap(), name.as_ptr(), ptr::null());
         if f != ptr::null_mut() {
             Some(WasmFunction{f})
         } else {
@@ -275,13 +270,19 @@ impl WasmModuleInst {
 
 }
 
+impl Drop for WasmModuleInst {
+    fn drop(&mut self) { unsafe {
+        if let Some(module_inst) = self.module_inst {
+            wasm_runtime_deinstantiate(module_inst)
+        }
+    } }
+}
 
 impl WasmExecEnv {
 
     pub fn new(module_inst: Rc<WasmModuleInst>) -> Result<WasmExecEnv, String> { unsafe {
-        
         // creat an execution environment to execute the WASM functions 
-        let exec_env = wasm_runtime_create_exec_env(module_inst.module_inst, INSTANCE_STACK_SIZE);
+        let exec_env = wasm_runtime_create_exec_env(module_inst.module_inst.unwrap(), INSTANCE_STACK_SIZE);
         if exec_env == ptr::null_mut() {
             return Err("wasm_runtime_create_exec_env failed.".to_string());
         }
@@ -292,7 +293,7 @@ impl WasmExecEnv {
             let argv: [u32; 1] = [0];
             env.call_argv(start, argv)?;
         }
-        
+
         Ok(env)
     } }
 
@@ -317,5 +318,11 @@ impl WasmExecEnv {
             let cstr = CStr::from_ptr(wasm_runtime_get_exception(wasm_runtime_get_module_inst(self.exec_env)));
             return Err(format!("wasm_runtime_call_wasm failed: {:?}", cstr));
         }
+    } }
+}
+
+impl Drop for WasmExecEnv {
+    fn drop(&mut self) { unsafe {
+        wasm_runtime_destroy_exec_env(self.exec_env)
     } }
 }
