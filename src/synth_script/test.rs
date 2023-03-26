@@ -39,6 +39,37 @@ pub trait HostFunction {
     fn to_native_symbol(&mut self) -> NativeSymbol;
 }
 
+pub struct HostFunctionS<F> 
+{
+    closure: F,
+    name: CString,
+}
+impl<F> HostFunctionS<F> 
+{
+    pub fn new(name: &str, closure: F) -> HostFunctionS<F> {
+        HostFunctionS{
+            closure: closure,
+            name: CString::new(name).unwrap(),
+        }
+    }
+}
+const S_SIG: &str = "($)\0";
+unsafe extern "C" fn trampoline_s_<F: FnMut(&CStr)>(exec_env: wasm_exec_env_t, v1: *const i8) {
+    let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
+    f(CStr::from_ptr(v1));
+}
+impl<F: FnMut(&CStr)> HostFunction for HostFunctionS<F>
+{
+    fn to_native_symbol(&mut self) -> NativeSymbol {
+        NativeSymbol { 
+        symbol: self.name.as_ptr(),
+        func_ptr: trampoline_s_::<F> as *mut c_void,
+        signature: S_SIG.as_ptr() as *const i8,
+        attachment: &mut self.closure as *mut _ as *mut c_void
+        }
+    }
+}
+
 pub struct HostFunctionSISSS<F> 
 {
     closure: F,
@@ -166,6 +197,37 @@ impl<F: FnMut(i32, &[i32])> HostFunction for HostFunctionIA<F>
     }
 }
 
+pub struct HostFunctionA<F> 
+{
+    closure: F,
+    name: CString,
+}
+impl<F> HostFunctionA<F> 
+{
+    pub fn new(name: &str, closure: F) -> HostFunctionA<F> {
+        HostFunctionA{
+            closure: closure,
+            name: CString::new(name).unwrap(),
+        }
+    }
+}
+const A_SIG: &str = "(*~)\0";
+unsafe extern "C" fn trampoline_a_<F: FnMut(&[u8])>(exec_env: wasm_exec_env_t, v1: *const u8, v1l: i32) {
+    let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
+    f(core::slice::from_raw_parts(v1, v1l as usize))
+}
+impl<F: FnMut(&[u8])> HostFunction for HostFunctionA<F>
+{
+    fn to_native_symbol(&mut self) -> NativeSymbol {
+        NativeSymbol { 
+        symbol: self.name.as_ptr(),
+        func_ptr: trampoline_a_::<F> as *mut c_void,
+        signature: A_SIG.as_ptr() as *const i8,
+        attachment: &mut self.closure as *mut _ as *mut c_void
+        }
+    }
+}
+
 pub struct HostFunctionIAA<F> 
 {
     closure: F,
@@ -284,7 +346,7 @@ impl WasmRuntime {
         let mut native_symbols: Vec<NativeSymbol> = 
             functions.iter_mut().map(|f| f.to_native_symbol()).collect();
 
-        let module_name = CString::new("gb").unwrap();
+        let module_name = CString::new("env").unwrap();
         if !wasm_runtime_register_natives(module_name.as_ptr(),
                                          native_symbols.as_mut_ptr(), 
                                          native_symbols.len() as u32) {
@@ -347,8 +409,15 @@ impl WasmExecEnv {
         if exec_env == ptr::null_mut() {
             return Err("wasm_runtime_create_exec_env failed.".to_string());
         }
+
+        let maybe_start = module_inst.lookup_function(CStr::from_ptr("_start\0".as_ptr() as *const i8));
+        let env = WasmExecEnv{exec_env, _module_inst: Some(module_inst)};
+        if let Some(start) = maybe_start {
+            let argv: [u32; 1] = [0];
+            env.call_argv(start, argv)?;
+        }
         
-        Ok(WasmExecEnv{exec_env, _module_inst: Some(module_inst)})
+        Ok(env)
     } }
 
     pub fn call_ii(&self, function: WasmFunction, a1: i32, a2: i32) -> Result<(), String> {

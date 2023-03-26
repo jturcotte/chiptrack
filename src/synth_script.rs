@@ -497,8 +497,8 @@ impl GbBindings {
     }
 }
 
-fn instrument_print(v: i32) {
-  log!("Instruments: {:?}", v);
+fn instrument_print(s: &CStr) {
+  log!("print: {}", s.to_str().expect("Invalid UTF-8"));
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -631,7 +631,11 @@ pub struct SynthScript {
 impl SynthScript {
     const DEFAULT_INSTRUMENTS: &'static [u8; 16733] = include_bytes!("../res/default-instruments.wasm");
 
-    pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
+    pub fn new<F, G>(settings_ring: Rc<RefCell<Vec<RegSettings>>>, synth_set_sound_reg: F, synth_set_wave_table: G) -> SynthScript
+        where
+            F: Fn(i32, i32) + 'static,
+            G: Fn(&[u8]) + 'static,
+    {
         let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(vec![Default::default(); NUM_INSTRUMENTS]));
         let instrument_states: Rc<RefCell<[Vec<InstrumentState>; NUM_INSTRUMENT_COLS]>> = Default::default();
         let instrument_ids_clone = instrument_ids.clone();
@@ -644,7 +648,7 @@ impl SynthScript {
             assert!(col >= 0 && col <= NUM_INSTRUMENT_COLS as i32,
                 "set_instrument_at_column: column must be 0 <= col <= {}, got {}",
                 NUM_INSTRUMENT_COLS, col);
-
+log!("YIESSSS {:?}", cid.to_str());
             let mut state_cols = instrument_states_clone.borrow_mut();
             let (state, index) = {
                 let state_col = &mut state_cols[col as usize];
@@ -704,8 +708,10 @@ impl SynthScript {
         });
 
         let functions: Vec<Box<dyn test::HostFunction>> = vec![
+            Box::new(test::HostFunctionS::new("print", instrument_print)),
             Box::new(test::HostFunctionSISSS::new("set_instrument_at_column", set_instrument_at_column)),
-            Box::new(test::HostFunctionI::new("print", instrument_print)),
+            Box::new(test::HostFunctionII::new("gba_set_sound_reg", synth_set_sound_reg)),
+            Box::new(test::HostFunctionA::new("gba_set_wave_table", synth_set_wave_table)),
             Box::new(test::HostFunctionIi::new("to_square_gb_freq", GbSquare::to_square_gb_freq)),
             Box::new(test::HostFunctionIi::new("to_wave_gb_freq", GbSquare::to_wave_gb_freq)),
             Box::new(test::HostFunctionI::new("wait_frames", setter_gb_wrapper!(gb, wait_frames(v)))),

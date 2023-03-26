@@ -16,11 +16,7 @@ mod utils;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-#[cfg(feature = "std")]
-use crate::sound_renderer::emulated::new_emulated_sound_renderer;
-use crate::sound_renderer::PrintRegistersSoundRenderer;
-use crate::sound_renderer::SoundRenderer;
-use crate::sound_renderer::Synth;
+use crate::sound_renderer::new_sound_renderer;
 #[cfg(feature = "std")]
 use crate::midi::Midi;
 use crate::sound_engine::NUM_INSTRUMENTS;
@@ -143,8 +139,7 @@ pub fn main() {
     global_engine.set_synth_trace_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
     global_engine.set_synth_active_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
 
-    let sound_renderer = Rc::new(RefCell::new(new_emulated_sound_renderer(&window)));
-    // let sound_renderer = Rc::new(RefCell::new(PrintRegistersSoundRenderer::new(&window)));
+    let sound_renderer = Rc::new(RefCell::new(new_sound_renderer(&window)));
 
     #[cfg(feature = "std")]
     if let Some(gist_path) = maybe_gist_path {

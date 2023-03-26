@@ -8,8 +8,7 @@ use crate::GlobalSettings;
 use crate::MainWindow;
 use crate::Settings;
 use crate::sound_engine::SoundEngine;
-use crate::sound_renderer::Synth;
-use crate::SoundRenderer;
+
 use crate::synth_script::Channel;
 use crate::synth_script::RegSettings;
 use crate::utils::MidiNote;
@@ -30,8 +29,8 @@ use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine<RboySynth>>> = RefCell::new(None);}
-thread_local! {static SOUND_SENDER: RefCell<Option<std::sync::mpsc::Sender<Box<dyn FnOnce(&mut SoundEngine<RboySynth>) + Send>>>> = RefCell::new(None);}
+thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine>> = RefCell::new(None);}
+thread_local! {static SOUND_SENDER: RefCell<Option<std::sync::mpsc::Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>>> = RefCell::new(None);}
 
 // The pass-through channel is otherwise too loud compared to mixed content.
 const SYNC_GAIN: f32 = 1.0 / 3.0;
@@ -62,8 +61,8 @@ struct FakePlayer {
     state: Arc<Mutex<OutputData>>,
 }
 
-pub struct RboySynth {
-    dmg: rboy::Sound,
+pub struct Synth {
+    dmg: Rc<RefCell<rboy::Sound>>,
     output_data: Arc<Mutex<OutputData>>,
     main_window: Weak<MainWindow>,
 }
@@ -150,57 +149,8 @@ impl rboy::AudioPlayer for FakePlayer {
     }
 }
 
-impl Synth for RboySynth {
-    fn advance_frame(&mut self, frame_number: usize, settings: &mut RegSettings, step_change: Option<u32>) {
-
-        {
-            let dmg = &mut self.dmg;
-            settings.for_each_setting(|addr, set| {
-                // Trying to read the memory wouldn't give us the value we wrote last,
-                // so overwrite any state previously set in bits outside of RegSetter.mask
-                // with zeros.
-                dmg.wb(addr, set.value);
-            });
-            settings.clear_all();
-        }
-
-        // Just enable all channels for now
-        self.dmg.wb(0xff24, 0xff);
-        self.dmg.wb(0xff25, 0xff);
-
-        // The sequencer step changed, check if we need to send a pulse to sync downstream devices.
-        if let Some(next_step) = step_change {
-            // Pocket Operator and Volca devices use 2 ppqm.
-            let ppqm = 2;
-            if next_step % ppqm == 0 {
-                self.output_data.lock().unwrap().sync_pulse.pulse();
-            }
-        }
-
-        // Generate one frame of mixed output.
-        // For 44100hz audio, this will put 44100/59.73 audio samples in self.buffer.
-        self.dmg.do_cycle(VBLANK_CYCLES);
-
-        self.update_ui_channel_states(frame_number as i32);
-    }
-
-    fn apply_settings(&mut self, settings: &Settings) {
-        let mut output_data = self.output_data.lock().unwrap();
-        output_data.gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
-        output_data.sync_pulse.enabled = settings.sync_enabled;
-    }
-
-    fn mute_instruments(&mut self) {
-        // Set the envelopes to 0.
-        self.dmg.wb(Channel::Square1 as u16 + 2, 0);
-        self.dmg.wb(Channel::Square2 as u16 + 2, 0);
-        self.dmg.wb(Channel::Wave as u16 + 2, 0);
-        self.dmg.wb(Channel::Noise as u16 + 2, 0);
-    }
-}
-
-impl RboySynth {
-    pub fn new(main_window: Weak<MainWindow>, sample_rate: u32, settings: Settings) -> RboySynth {
+impl Synth {
+    pub fn new(main_window: Weak<MainWindow>, sample_rate: u32, settings: Settings) -> Synth {
         let gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
 
         let output_data = Arc::new(Mutex::new(OutputData {
@@ -218,11 +168,81 @@ impl RboySynth {
         // Already power it on.
         dmg.wb(0xff26, 0x80);
 
-        RboySynth {
-            dmg: dmg,
+        Synth {
+            dmg: Rc::new(RefCell::new(dmg)),
             output_data: output_data,
             main_window: main_window,
         }
+    }
+
+    // GameBoy games seem to use the main loop clocked to the screen's refresh rate
+    // to also drive the sound chip. To keep the song timing, also use the same 59.73hz
+    // frame refresh rate.
+    pub fn advance_frame(&mut self, frame_number: usize, settings: &mut RegSettings, step_change: Option<u32>) {
+        {
+            let dmg = &mut self.dmg.borrow_mut();
+            settings.for_each_setting(|addr, set| {
+                // Trying to read the memory wouldn't give us the value we wrote last,
+                // so overwrite any state previously set in bits outside of RegSetter.mask
+                // with zeros.
+                dmg.wb(addr, set.value);
+            });
+            settings.clear_all();
+
+            // Just enable all channels for now
+            dmg.wb(0xff24, 0xff);
+            dmg.wb(0xff25, 0xff);
+
+            // The sequencer step changed, check if we need to send a pulse to sync downstream devices.
+            if let Some(next_step) = step_change {
+                // Pocket Operator and Volca devices use 2 ppqm.
+                let ppqm = 2;
+                if next_step % ppqm == 0 {
+                    self.output_data.lock().unwrap().sync_pulse.pulse();
+                }
+            }
+
+            // Generate one frame of mixed output.
+            // For 44100hz audio, this will put 44100/59.73 audio samples in self.buffer.
+            dmg.do_cycle(VBLANK_CYCLES);
+        }
+
+        self.update_ui_channel_states(frame_number as i32);
+    }
+
+    pub fn set_sound_reg_callback(&self) -> impl Fn(i32, i32) {
+        let dmg_cell = self.dmg.clone();
+        move |addr: i32, value: i32| {
+            let (maybe_lsb, maybe_msb) = Synth::gba_to_gb_addr(addr);
+            let mut dmg = dmg_cell.borrow_mut();
+            maybe_lsb.map(|a| { dmg.wb(a, value as u8); });
+            maybe_msb.map(|a| { dmg.wb(a, (value >> 8) as u8); });
+        }
+    }
+
+    pub fn set_wave_table_callback(&self) -> impl Fn(&[u8]) {
+        let dmg_cell = self.dmg.clone();
+        move |table: &[u8]| {
+            let mut dmg = dmg_cell.borrow_mut();
+            for (i, v) in table.iter().take(16).enumerate() {
+                dmg.wb((0xff30 + i) as u16, *v);
+            }
+        }
+    }
+
+    pub fn apply_settings(&mut self, settings: &Settings) {
+        let mut output_data = self.output_data.lock().unwrap();
+        output_data.gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
+        output_data.sync_pulse.enabled = settings.sync_enabled;
+    }
+
+    pub fn mute_instruments(&mut self) {
+        let dmg = &mut self.dmg.borrow_mut();
+        // Set the envelopes to 0.
+        dmg.wb(Channel::Square1 as u16 + 2, 0);
+        dmg.wb(Channel::Square2 as u16 + 2, 0);
+        dmg.wb(Channel::Wave as u16 + 2, 0);
+        dmg.wb(Channel::Noise as u16 + 2, 0);
     }
 
     pub fn output_data(&self) -> Arc<Mutex<OutputData>> {
@@ -230,7 +250,7 @@ impl RboySynth {
     }
 
     fn update_ui_channel_states(&self, frame_number: i32) {
-        let mut states = self.dmg.chan_states();
+        let mut states = self.dmg.borrow().chan_states();
         // Let square channels be rendered on top of the wave channel.
         states.reverse();
 
@@ -354,11 +374,28 @@ impl RboySynth {
             })
             .unwrap();
     }
+
+    fn gba_to_gb_addr(gba_addr: i32) -> (Option<u16>, Option<u16>) {
+        match gba_addr {
+            0x4000060 => (None, Some(0xFF10)),         // NR10
+            0x4000062 => (Some(0xFF11), Some(0xFF12)), // NR11, NR12
+            0x4000064 => (Some(0xFF13), Some(0xFF14)), // NR13, NR14
+            0x4000068 => (Some(0xFF16), Some(0xFF17)), // NR21, NR22
+            0x400006C => (Some(0xFF18), Some(0xFF19)), // NR23, NR24
+            0x4000070 => (Some(0xFF1A), None),         // NR30
+            0x4000072 => (Some(0xFF1B), Some(0xFF1C)), // NR31, NR32
+            0x4000074 => (Some(0xFF1D), Some(0xFF1E)), // NR33, NR34
+            0x4000078 => (Some(0xFF20), Some(0xFF21)), // NR41, NR42
+            0x400007C => (Some(0xFF22), Some(0xFF23)), // NR43, NR44
+            _         => (None, None),
+        }
+
+    }
 }
 
 pub fn invoke_on_sound_engine<F>(f: F)
 where
-    F: FnOnce(&mut SoundEngine<RboySynth>) + Send + 'static,
+    F: FnOnce(&mut SoundEngine) + Send + 'static,
 {
     SOUND_SENDER
         .with(|s| {
@@ -375,30 +412,30 @@ pub struct Context {
 
 }
 
-pub struct EmulatedSoundRenderer<LazyF: FnOnce() -> Context> {
-    sound_send: Sender<Box<dyn FnOnce(&mut SoundEngine<RboySynth>) + Send>>,
+pub struct SoundRenderer<LazyF: FnOnce() -> Context> {
+    sound_send: Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>,
     context: Rc<Lazy<Context, LazyF>>,
 }
 
-impl<LazyF: FnOnce() -> Context> SoundRenderer<RboySynth> for EmulatedSoundRenderer<LazyF> {
-    fn invoke_on_sound_engine<F>(&mut self, f: F)
+impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
+    pub fn invoke_on_sound_engine<F>(&mut self, f: F)
     where
-        F: FnOnce(&mut SoundEngine<RboySynth>) + Send + 'static,
+        F: FnOnce(&mut SoundEngine) + Send + 'static,
     {
         Lazy::force(&*self.context);
         self.sound_send.send(Box::new(f)).unwrap();
     }
 
-    fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine<RboySynth>) + Send>> {
+    pub fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>> {
         self.sound_send.clone()
     }
 
-    fn force(&mut self) {
+    pub fn force(&mut self) {
         Lazy::force(&*self.context);
     }
 }
 
-fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine<RboySynth>) -> () {
+fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) -> () {
     while let Ok(msg) = notify_recv.try_recv() {
         let reload = if let Some(instruments_path) = engine.instruments_path() {
             let instruments = instruments_path.file_name();
@@ -479,8 +516,8 @@ fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicB
         }
     }
 }
-pub fn new_emulated_sound_renderer(window: &MainWindow) -> EmulatedSoundRenderer<impl FnOnce() -> Context> {
-    let (sound_send, sound_recv) = mpsc::channel::<Box<dyn FnOnce(&mut SoundEngine<RboySynth>) + Send>>();
+pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() -> Context> {
+    let (sound_send, sound_recv) = mpsc::channel::<Box<dyn FnOnce(&mut SoundEngine) + Send>>();
     let (notify_send, notify_recv) = mpsc::channel();
 
     let cloned_sound_send = sound_send.clone();
@@ -531,7 +568,7 @@ pub fn new_emulated_sound_renderer(window: &MainWindow) -> EmulatedSoundRenderer
                     SOUND_ENGINE.with(|maybe_engine_cell| {
                         let mut maybe_engine = maybe_engine_cell.borrow_mut();
                         if let None = *maybe_engine {
-                            let synth = RboySynth::new(window_weak.clone(), sample_rate, initial_settings.clone());
+                            let synth = Synth::new(window_weak.clone(), sample_rate, initial_settings.clone());
                             *maybe_engine = Some(SoundEngine::new(
                                 synth,
                                 window_weak.clone(),
@@ -596,7 +633,7 @@ pub fn new_emulated_sound_renderer(window: &MainWindow) -> EmulatedSoundRenderer
         }
     }));
 
-    EmulatedSoundRenderer{sound_send, context}
+    SoundRenderer{sound_send, context}
 
 }
 
