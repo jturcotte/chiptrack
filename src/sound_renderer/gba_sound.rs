@@ -8,6 +8,7 @@ use gba::{
 use crate::Settings;
 use crate::MainWindow;
 use crate::sound_engine::SoundEngine;
+use crate::utils::WeakWindowWrapper;
 
 use slint::{ComponentHandle};
 
@@ -69,7 +70,7 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer {
     SOUNDBIAS.write(SoundBias::new().with_bias_level(0x100).with_sample_cycle(SampleCycle::_6bit));
 
     let synth = Synth{ };
-    let sound_engine = SoundEngine::new(synth, window.as_weak());
+    let sound_engine = SoundEngine::new(synth, WeakWindowWrapper::new(window.as_weak()));
 
     SoundRenderer{ sound_engine }
 }

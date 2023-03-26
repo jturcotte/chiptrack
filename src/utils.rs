@@ -1,8 +1,11 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+use crate::MainWindow;
 use alloc::format;
 use alloc::string::String;
+use slint::EventLoopError;
+use slint::Weak;
 
 #[rustfmt::skip]
 // MIDI note number frequencies multiplied by 1024 (5 bits fixed point).
@@ -97,5 +100,30 @@ impl MidiNote {
         };
         let octave = (c3 as i32 - '0' as i32).min(9);
         Ok(MidiNote(12 + octave * 12 + base + accidental_adj))
+    }
+}
+
+#[derive(Clone)]
+pub struct WeakWindowWrapper {
+    inner: Weak<MainWindow>,
+}
+
+impl WeakWindowWrapper {
+    pub fn new(inner: Weak<MainWindow>) -> WeakWindowWrapper {
+        WeakWindowWrapper { inner }
+    }
+
+    #[cfg(feature = "std")]
+    pub fn upgrade_in_event_loop(
+        &self,
+        func: impl FnOnce(MainWindow) + Send + 'static,
+    ) -> Result<(), EventLoopError> {
+        self.inner.upgrade_in_event_loop(func)
+    }
+
+    #[cfg(not(feature = "std"))]
+    pub fn upgrade_in_event_loop(&self, func: impl FnOnce(MainWindow)) -> Result<(), EventLoopError> {
+        func(self.inner.upgrade().unwrap());
+        Ok(())
     }
 }

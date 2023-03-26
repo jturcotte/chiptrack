@@ -9,15 +9,13 @@ use crate::sound_renderer::Synth;
 use crate::sound_renderer::emulated::invoke_on_sound_engine;
 use crate::synth_script::SynthScript;
 use crate::GlobalEngine;
-use crate::MainWindow;
 use crate::Settings;
 use crate::SongSettings;
+use crate::utils::WeakWindowWrapper;
 
 #[cfg(feature = "desktop")]
 use native_dialog::FileDialog;
 use slint::Global;
-
-use slint::Weak;
 
 use alloc::vec::Vec;
 #[cfg(feature = "desktop")]
@@ -51,13 +49,13 @@ pub struct SoundEngine {
     pub synth: Synth,
     script: SynthScript,
     frame_number: usize,
-    main_window: Weak<MainWindow>,
+    main_window: WeakWindowWrapper,
     pressed_note: Option<NoteSource>,
     project_source: ProjectSource,
 }
 
 impl SoundEngine {
-    pub fn new(synth: Synth, main_window: Weak<MainWindow>) -> SoundEngine {
+    pub fn new(synth: Synth, main_window: WeakWindowWrapper) -> SoundEngine {
         let sequencer = Sequencer::new(main_window.clone());
         let script = SynthScript::new(
             synth.set_sound_reg_callback(),

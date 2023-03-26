@@ -10,10 +10,10 @@ use crate::sound_engine::NUM_STEPS;
 use crate::utils::MidiNote;
 use crate::GlobalEngine;
 use crate::GlobalSettings;
-use crate::MainWindow;
 use crate::PatternInstrumentData;
 use crate::SongPatternData;
 use crate::SongSettings;
+use crate::utils::WeakWindowWrapper;
 #[cfg(feature = "desktop")]
 use markdown::{parse_markdown_song, save_markdown_song};
 
@@ -25,7 +25,6 @@ use postcard::to_allocvec;
 use slint::Global;
 use slint::Model;
 use slint::VecModel;
-use slint::Weak;
 
 use alloc::borrow::ToOwned;
 use alloc::collections::BTreeMap;
@@ -238,13 +237,13 @@ pub struct Sequencer {
     // FIXME: Use a bitset
     muted_instruments: BTreeSet<u8>,
     synth_instrument_ids: Vec<String>,
-    main_window: Weak<MainWindow>,
+    main_window: WeakWindowWrapper,
 }
 
 impl Sequencer {
     const DEFAULT_SONG: &'static [u8] = include_bytes!("../res/default.ct.bin");
 
-    pub fn new(main_window: Weak<MainWindow>) -> Sequencer {
+    pub fn new(main_window: WeakWindowWrapper) -> Sequencer {
         Sequencer {
             song: Default::default(),
             current_frame: 0,

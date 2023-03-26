@@ -8,14 +8,14 @@ use crate::GlobalSettings;
 use crate::MainWindow;
 use crate::Settings;
 use crate::sound_engine::SoundEngine;
-
 use crate::utils::MidiNote;
+use crate::utils::WeakWindowWrapper;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
-use slint::{ComponentHandle, Global, Model, Rgba8Pixel, SharedPixelBuffer, VecModel, Weak};
+use slint::{ComponentHandle, Global, Model, Rgba8Pixel, SharedPixelBuffer, VecModel};
 use tiny_skia::*;
 
 use std::cell::RefCell;
@@ -62,7 +62,7 @@ struct FakePlayer {
 pub struct Synth {
     dmg: Rc<RefCell<rboy::Sound>>,
     output_data: Arc<Mutex<OutputData>>,
-    main_window: Weak<MainWindow>,
+    main_window: WeakWindowWrapper,
 }
 
 impl SyncPulse {
@@ -155,7 +155,7 @@ pub enum Channel {
 }
 
 impl Synth {
-    pub fn new(main_window: Weak<MainWindow>, sample_rate: u32, settings: Settings) -> Synth {
+    pub fn new(main_window: WeakWindowWrapper, sample_rate: u32, settings: Settings) -> Synth {
         let gain = if settings.sync_enabled { SYNC_GAIN } else { 1.0 };
 
         let output_data = Arc::new(Mutex::new(OutputData {
@@ -529,7 +529,7 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
     // FIXME: Watch the song file's folder, and update it when saving as.
     watcher.watch(".", RecursiveMode::NonRecursive).unwrap();
 
-    let window_weak = window.as_weak();
+    let window_weak = WeakWindowWrapper::new(window.as_weak());
     let initial_settings = window.global::<GlobalSettings>().get_settings();
     let context: Rc<Lazy<Context, _>> = Rc::new(Lazy::new(|| {
         let host = cpal::default_host();
