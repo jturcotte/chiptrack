@@ -181,6 +181,7 @@ fn run_main() {
                 result
                     .and_then(|res| {
                         if res.ok {
+                            println!("res {:?}", String::from_utf8(res.bytes.clone()));
                             let decoded: serde_json::Value =
                                 serde_json::from_slice(&res.bytes).expect("JSON was not well-formatted");
                             cloned_sound_send
@@ -206,8 +207,8 @@ fn run_main() {
     } else {
         sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.load_default());
     }
-    #[cfg(not(feature = "desktop"))]
-    sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.load_default());
+    #[cfg(feature = "gba")]
+    sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.load_gba_sram().unwrap_or_else(|| se.load_default()));
 
     // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
     // us when that initialization is done and that we can start querying the list of midi
@@ -394,6 +395,11 @@ fn run_main() {
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_save_project(move || {
         cloned_sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.save_project())
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_export_project_as_gba_sav(move || {
+        cloned_sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.export_project_as_gba_sav())
     });
 
     let window_weak = window.as_weak();

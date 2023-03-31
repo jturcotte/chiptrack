@@ -141,7 +141,6 @@ impl SynthScript {
         self.instrument_ids.borrow()
     }
 
-    #[cfg(feature = "desktop")]
     fn reset_instruments(&mut self) {
         for state_col in &mut *self.instrument_states.borrow_mut() {
             state_col.clear();
@@ -152,45 +151,25 @@ impl SynthScript {
         self.wasm_exec_env = None;
     }
 
-    pub fn load_default(&mut self, _frame_number: usize) {
-        // FIXME: Take a slice
-        let module = Rc::new(WasmModule::new(SynthScript::DEFAULT_INSTRUMENTS.to_vec(), self.wasm_runtime.clone()).unwrap());
-        let module_inst = Rc::new(WasmModuleInst::new(module).unwrap());
-        self.wasm_exec_env = Some(WasmExecEnv::new(module_inst).unwrap());
-
-        // self.script_engine
-        //     .compile(SynthScript::DEFAULT_INSTRUMENTS)
-        //     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
-        //     .and_then(|ast| {
-        //         self.set_instruments_ast(ast, frame_number)
-        //             .map_err(|e| e as Box<dyn std::error::Error>)
-        //     })
-        //     .expect("Error loading default instruments.");
+    pub fn load_default(&mut self) {
+        self.load_bytes(SynthScript::DEFAULT_INSTRUMENTS.to_vec()).unwrap();
     }
 
-    #[cfg(feature = "desktop")]
-    pub fn load_str(&mut self, _encoded: &str, _frame_number: usize) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_bytes(&mut self, encoded: Vec<u8>) -> Result<(), String> {
         self.reset_instruments();
-
-        // self.interpreter.run_code(encoded, None)?;
-        // let ast = self.script_engine.compile(encoded)?;
-        // self.set_instruments_ast(ast, frame_number)?;
+        let module = Rc::new(WasmModule::new(encoded, self.wasm_runtime.clone())?);
+        let module_inst = Rc::new(WasmModuleInst::new(module)?);
+        self.wasm_exec_env = Some(WasmExecEnv::new(module_inst)?);
         Ok(())
     }
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-    pub fn load_file(&mut self, instruments_path: &std::path::Path, _frame_number: usize) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_file(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
         self.reset_instruments();
 
         if instruments_path.exists() {
             let buffer = std::fs::read(instruments_path)?;
-            let module = Rc::new(WasmModule::new(buffer, self.wasm_runtime.clone()).unwrap());
-            let module_inst = Rc::new(WasmModuleInst::new(module).unwrap());
-            self.wasm_exec_env = Some(WasmExecEnv::new(module_inst).unwrap());
-
-            // let ast = self.script_engine.compile_file(instruments_path.to_path_buf())?;
-            // self.interpreter.run_file(instruments_path).unwrap();
-            // self.set_instruments_ast(ast, frame_number)?;
+            self.load_bytes(buffer)?;
             Ok(())
         } else {
             return Err(format!("Project instruments file {:?} doesn't exist.", instruments_path).into());
@@ -281,30 +260,7 @@ impl SynthScript {
         }
     }
 
-    // fn set_instruments_ast(
-    //     &mut self,
-    //     ast: AST,
-    //     frame_number: usize,
-    // ) -> Result<(), std::boxed::Box<rhai::EvalAltResult>> {
-    //     self.script_ast = ast;
-
-    //     // The script might also contain sound settings directly in the its root.
-    //     {
-    //         self.script_context.set_frame_number(frame_number);
-    //         self.script_context.mark_pending_settings_as_resettable();
-    //         // FIXME: Also reset the gb states somewhere like gbsplay does
-    //     }
-
-    //     let mut scope = Scope::new();
-    //     scope.push("gb", self.script_context.clone());
-
-    //     self.script_engine.run_ast_with_scope(&mut scope, &self.script_ast)
-    // }
-
     fn note_to_freq(note: u8) -> i32 {
-        // let a = 440.0; // Frequency of A
-        // let key_freq = (a / 32.0) * 2.0_f64.powf((note as f64 - 9.0) / 12.0);
-        // key_freq
         NOTE_FREQUENCIES[note as usize] as i32
     }
 }

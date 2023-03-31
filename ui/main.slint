@@ -69,6 +69,7 @@ export MainWindow := Window {
         key-pressed(event) => {
             if (event.modifiers.control) {
                 if (event.text == "s") { GlobalEngine.save_project(); }
+                else if (event.text == "g") { GlobalEngine.export_project_as_gba_sav(); }
                 else if (event.text == "1") { GlobalEngine.pattern_clicked(0); }
                 else if (event.text == "2") { GlobalEngine.pattern_clicked(1); }
                 else if (event.text == "3") { GlobalEngine.pattern_clicked(2); }

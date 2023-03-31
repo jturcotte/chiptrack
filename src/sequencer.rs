@@ -19,6 +19,7 @@ use markdown::{parse_markdown_song, save_markdown_song};
 
 use serde::Serialize;
 use serde::Deserialize;
+#[cfg(feature = "gba")]
 use postcard::from_bytes;
 #[cfg(feature = "desktop")]
 use postcard::to_allocvec;
@@ -40,27 +41,28 @@ use std::path::Path;
 #[cfg(target_arch = "wasm32")]
 use crate::utils;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum NoteEvent {
     Press,
     Release,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 struct InstrumentStep {
     note: u8,
     press: bool,
     release: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct Instrument {
     id: String,
+    #[serde(skip)]
     synth_index: Option<u8>,
     steps: [InstrumentStep; NUM_STEPS],
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct Pattern {
     instruments: Vec<Instrument>,
 }
@@ -181,15 +183,17 @@ impl Pattern {
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SequencerSong {
     song_patterns: Vec<usize>,
     patterns: Vec<Pattern>,
+    frames_per_step: u32,
+    #[serde(skip)]
     #[cfg(feature = "desktop")]
     markdown_header: String,
+    #[serde(skip)]
     #[cfg(feature = "desktop")]
     instruments_file: String,
-    frames_per_step: u32,
 }
 
 impl Default for InstrumentStep {
@@ -213,11 +217,11 @@ impl Default for SequencerSong {
                 };
                 NUM_PATTERNS
             ],
+            frames_per_step: 7,
             #[cfg(feature = "desktop")]
             markdown_header: String::new(),
             #[cfg(feature = "desktop")]
             instruments_file: String::new(),
-            frames_per_step: 7,
         }
     }
 }
@@ -241,8 +245,6 @@ pub struct Sequencer {
 }
 
 impl Sequencer {
-    const DEFAULT_SONG: &'static [u8] = include_bytes!("../res/default.ct.bin");
-
     pub fn new(main_window: WeakWindowWrapper) -> Sequencer {
         Sequencer {
             song: Default::default(),
@@ -829,13 +831,10 @@ impl Sequencer {
     }
 
     pub fn load_default(&mut self) {
-        let song: SequencerSong = from_bytes(Sequencer::DEFAULT_SONG).expect("Can't load postcard");
-
-        // let instruments_file = song.instruments_file.clone();
-        self.set_song(song);
+        self.set_song(Default::default());
     }
 
-#[cfg(feature = "desktop")]
+    #[cfg(feature = "desktop")]
     pub fn load_str(&mut self, markdown: &str) -> Result<String, Box<dyn Error>> {
         let song = parse_markdown_song(markdown)?;
 
@@ -872,6 +871,18 @@ impl Sequencer {
             .expect("Bad path?")
             .to_owned();
         save_markdown_song(&self.song, song_path)
+    }
+
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
+    pub fn serialize_to_postcard(&self) -> Result<Vec<u8>, Box<dyn Error>> {
+        Ok(to_allocvec(&self.song)?)
+    }
+
+    #[cfg(feature = "gba")]
+    pub fn load_postcard_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
+        let song: SequencerSong = from_bytes(bytes).unwrap();
+        self.set_song(song);
+        Ok(())
     }
 
     pub fn set_synth_instrument_ids(&mut self, instrument_ids: &Vec<String>) {

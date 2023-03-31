@@ -257,10 +257,9 @@ impl SoundEngine {
             .unwrap();
     }
 
-
     pub fn load_default(&mut self) {
         self.sequencer.load_default();
-        self.script.load_default(self.frame_number);
+        self.script.load_default();
         self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
         self.update_script_instrument_in_ui();
     }
@@ -288,7 +287,7 @@ impl SoundEngine {
         let instruments_file = self.sequencer.load_file(song_path)?;
         let instruments_path = song_path.with_file_name(instruments_file);
         log!("Loading project instruments from file {:?}", instruments_path);
-        self.script.load_file(instruments_path.as_path(), self.frame_number)?;
+        self.script.load_file(instruments_path.as_path())?;
         self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
         self.update_script_instrument_in_ui();
         Ok(instruments_path)
@@ -319,9 +318,12 @@ impl SoundEngine {
             .get("content")
             .ok_or("The file should have a content property")?
             .as_str()
-            .ok_or("content should be a string")?;
+            .ok_or("content should be a string")?
+            // FIXME: That doesn't work, I need to either fetch the raw_url or support reading WAT files.
+            .as_bytes()
+            .to_vec();
 
-        self.script.load_str(instruments, self.frame_number)?;
+        self.script.load_bytes(instruments)?;
         self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
         self.update_script_instrument_in_ui();
 
@@ -393,6 +395,56 @@ impl SoundEngine {
         }
     }
 
+    pub fn export_project_as_gba_sav(&self) {
+        #[cfg(feature = "desktop")]
+        || -> Result<(), Box<dyn Error>> {
+            let p = Path::new("chiptrack.sav");
+            let instruments = std::fs::read(self.instruments_path().unwrap())?;
+            let song = self.sequencer.serialize_to_postcard()?;
+            println!("Saving project song to file {:?}, instruments: {} bytes, song: {} bytes.", p, instruments.len(), song.len());
+            let mut full = Vec::new();
+            full.extend_from_slice(&(instruments.len() as u32).to_le_bytes());
+            full.extend_from_slice(&(song.len() as u32).to_le_bytes());
+            full.extend(instruments);
+            full.extend(song);
+            std::fs::write(p, full)?;
+            Ok(())
+        }()
+        .unwrap_or_else(|e| elog!("Error exporting the project: {}", e))
+    }
+
+    #[cfg(feature = "gba")]
+    pub fn load_gba_sram(&mut self) -> Option<()> {
+        unsafe {
+            let mut buf = [0u8; 4];
+            let sram = 0x0E00_0000 as *mut u8;
+            gba::prelude::gba_sram_memcpy(buf.as_mut_ptr(), sram, 4);
+            let instruments_len = u32::from_le_bytes(buf) as usize;
+            if instruments_len == 0xffffffff {
+                // SRAM is empty
+                return None;
+            }
+            gba::prelude::gba_sram_memcpy(buf.as_mut_ptr(), sram.offset(4), 4);
+            let song_len = u32::from_le_bytes(buf) as usize;
+            log!("Loading song ({} bytes) and instruments ({} bytes) from SRAM.", song_len, instruments_len);
+
+            {
+                let mut song_bytes = Vec::<u8>::with_capacity(song_len);
+                gba::prelude::gba_sram_memcpy(song_bytes.as_mut_ptr(), sram.offset(8 + instruments_len as isize), song_len);
+                song_bytes.set_len(song_len);
+                self.sequencer.load_postcard_bytes(&song_bytes).unwrap();
+            }
+
+            let mut instrument_bytes = Vec::<u8>::with_capacity(instruments_len);
+            gba::prelude::gba_sram_memcpy(instrument_bytes.as_mut_ptr(), sram.offset(8), instruments_len);
+            instrument_bytes.set_len(instruments_len);
+            self.script.load_bytes(instrument_bytes).unwrap();
+        }
+        self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
+        self.update_script_instrument_in_ui();
+        Some(())
+    }
+
     #[cfg(feature = "desktop")]
     pub fn instruments_path(&self) -> Option<&Path> {
         match &self.project_source {
@@ -405,7 +457,7 @@ impl SoundEngine {
     pub fn reload_instruments_from_file(&mut self) {
         if let ProjectSource::File((_, path)) = &self.project_source {
             self.script
-                .load_file(&path.as_path(), self.frame_number)
+                .load_file(&path.as_path())
                 .unwrap_or_else(|e| elog!("Couldn't reload instruments from file {:?}.\n\tError: {:?}", path, e));
             self.update_script_instrument_in_ui();
         }
