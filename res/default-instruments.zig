@@ -1,6 +1,7 @@
 const std = @import("std");
 const math = std.math;
-const gba = @import("gba.zig");
+const ct = @import("ct.zig");
+const gba = ct.gba;
 
 const Fraction = struct {
     num: u8,
@@ -93,7 +94,7 @@ const square1_1 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("□", 0, .{
+        ct.setInstrument("□", 0, .{
             .press = "square1_1p",
             .release = "square1_1r",
             .frame = "square1_1f",
@@ -128,7 +129,7 @@ const square1_2 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("◰", 0, .{
+        ct.setInstrument("◰", 0, .{
             .press = "square1_2p",
             .release = "square1_2r",
             .frame = "square1_2f",
@@ -164,7 +165,7 @@ const square1_3 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("🞍", 0, .{
+        ct.setInstrument("🞍", 0, .{
             .press = "square1_3p",
             .frame = "square1_3f",
             });
@@ -205,7 +206,7 @@ const square1_4 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("▦", 0, .{
+        ct.setInstrument("▦", 0, .{
             .press = "square1_4p",
             .release = "square1_4r",
             .frame = "square1_4f",
@@ -233,7 +234,7 @@ const noise_1 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("🟕", 1, .{ .press = "noise_1p" });
+        ct.setInstrument("🟕", 1, .{ .press = "noise_1p" });
     }
 };
 
@@ -433,7 +434,7 @@ const noise_2 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("🟗", 1, .{
+        ct.setInstrument("🟗", 1, .{
             .press = "noise_2p",
             .frame = "noise_2f",
             .frames_after_release = 15,
@@ -462,7 +463,7 @@ const square1_5 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("◎", 1, .{ .press = "square1_5p" });
+        ct.setInstrument("◎", 1, .{ .press = "square1_5p" });
     }
 };
 
@@ -501,7 +502,7 @@ const wave_1 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("🛆", 2, .{
+        ct.setInstrument("🛆", 2, .{
             .press = "wave_1p",
             .release = "wave_env_r",
             .frame = "wave_env_f",
@@ -517,7 +518,7 @@ const wave_2 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("◉", 2, .{
+        ct.setInstrument("◉", 2, .{
             .press = "wave_2p",
             .release = "wave_env_r",
             .frame = "wave_env_f",
@@ -545,7 +546,7 @@ const wave_3 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("▻", 2, .{
+        ct.setInstrument("▻", 2, .{
             .press = "wave_3p",
             .release = "wave_env_r",
             .frame = "wave_3f",
@@ -561,7 +562,7 @@ const wave_4 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("🞠", 2, .{
+        ct.setInstrument("🞠", 2, .{
             .press = "wave_4p",
             .release = "wave_env_r",
             .frame = "wave_env_f",
@@ -596,7 +597,7 @@ const wave_5 = struct {
     }
 
     fn register() void {
-        gba.setInstrument("◺", 3, .{
+        ct.setInstrument("◺", 3, .{
             .press = "wave_5p",
             .frame = "wave_5f",
             .frames_after_release = 16,
