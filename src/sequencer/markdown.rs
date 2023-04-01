@@ -102,7 +102,7 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                                     if text.len() >= 3 && &text[0..3] != "___" {
                                         let MidiNote(note) = MidiNote::from_name(&text)?;
                                         step.press = true;
-                                        step.note = note as u32;
+                                        step.note = note as u8;
                                     }
                                     if text.ends_with('.') {
                                         step.release = true;

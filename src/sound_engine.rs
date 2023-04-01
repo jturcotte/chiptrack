@@ -26,8 +26,8 @@ pub const NUM_PATTERNS: usize = 64;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 enum NoteSource {
-    Key(u32),
-    Sequencer(u32),
+    Key(u8),
+    Sequencer(u8),
 }
 
 enum ProjectSource {
@@ -66,7 +66,7 @@ impl SoundEngine {
         self.sequencer.apply_song_settings(settings);
     }
 
-    fn singularize_note_release(&mut self, source: NoteSource, event: NoteEvent) -> Option<u32> {
+    fn singularize_note_release(&mut self, source: NoteSource, event: NoteEvent) -> Option<u8> {
         let note_to_release = if event == NoteEvent::Press {
             self.pressed_note.replace(source)
         } else {
@@ -95,7 +95,7 @@ impl SoundEngine {
         })
     }
 
-    fn send_note_events_to_synth(&mut self, note_events: Vec<(u8, NoteEvent, u32)>) {
+    fn send_note_events_to_synth(&mut self, note_events: Vec<(u8, NoteEvent, u8)>) {
         for (instrument, typ, note) in note_events {
             let is_selected_instrument = instrument == self.sequencer.selected_instrument;
 
@@ -122,12 +122,12 @@ impl SoundEngine {
                         for row in 0..notes_model.row_count() {
                             let mut row_data = notes_model.row_data(row).unwrap();
                             // A note release might not happen if a press happened in-between.
-                            if note_to_release.map_or(false, |n| n == row_data.note_number as u32) {
+                            if note_to_release.map_or(false, |n| n == row_data.note_number as u8) {
                                 row_data.active = false;
                                 notes_model.set_row_data(row, row_data.clone());
                             }
 
-                            if row_data.note_number as u32 == note {
+                            if row_data.note_number as u8 == note {
                                 row_data.active = pressed;
                                 notes_model.set_row_data(row, row_data);
                             }
@@ -171,13 +171,13 @@ impl SoundEngine {
             .unwrap();
     }
 
-    fn release_note_visually(&mut self, note: u32) -> () {
+    fn release_note_visually(&mut self, note: u8) -> () {
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = handle.get_notes();
                 for row in 0..model.row_count() {
                     let mut row_data = model.row_data(row).unwrap();
-                    if note == row_data.note_number as u32 {
+                    if note == row_data.note_number as u8 {
                         row_data.active = false;
                         model.set_row_data(row, row_data);
                     }
@@ -186,7 +186,7 @@ impl SoundEngine {
             .unwrap();
     }
 
-    pub fn press_note(&mut self, note: u32) -> () {
+    pub fn press_note(&mut self, note: u8) -> () {
         self.synth
             .press_instrument_note(self.sequencer.selected_instrument, note);
         self.sequencer.record_press(note);
@@ -210,7 +210,7 @@ impl SoundEngine {
             .unwrap();
     }
 
-    pub fn release_note(&mut self, note: u32) -> () {
+    pub fn release_note(&mut self, note: u8) -> () {
         // Instruments are monophonic, ignore any note release, either sequenced or live,
         // for the current instrument if it wasn't the last pressed one.
         if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), NoteEvent::Release) {

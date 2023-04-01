@@ -22,7 +22,6 @@ edition = "2018"
 once_cell = "1"
 cpal = { version = "0.13", features = ["wasm-bindgen"] }
 tiny-skia = "0.6"
-rhai = { version = "1", features = ["only_i32"] }
 serde_json = "1"
 notify = "4"
 midir = "0.8"
@@ -46,4 +45,9 @@ version = "0.3"
 git = "https://github.com/jturcotte/rboy.git"
 rev = "836b4e7a58288a29c13bf7f8b967358c7331ee41"
 # Use as a lib, features are used by its bin's main.rs only.
+default-features = false
+
+[dependencies.wamr-sys]
+git = "https://github.com/jturcotte/wamr-sys.git"
+rev = "93546401ecdfb7beb6856d42b6cb7bca3941fa33"
 default-features = false

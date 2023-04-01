@@ -1,15 +1,17 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+use crate::sound_engine::NUM_INSTRUMENT_COLS;
+use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::synth_script::Channel::*;
-
-use rhai::plugin::*;
-use rhai::{Array, Dynamic, Engine, FnPtr, Map, Scope, AST, INT};
+use crate::synth_script::test::WasmExecEnv;
+use crate::synth_script::test::WasmRuntime;
+use crate::utils::NOTE_FREQUENCIES;
 
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::cell::RefMut;
-use std::error::Error;
+use std::ffi::CStr;
 use std::fs::File;
 use std::io::Write;
 use std::ops::BitOr;
@@ -17,70 +19,77 @@ use std::ops::BitOrAssign;
 use std::ops::Range;
 use std::rc::Rc;
 
-use crate::sound_engine::NUM_INSTRUMENTS;
-use crate::sound_engine::NUM_INSTRUMENT_COLS;
+pub mod test;
 
 // Only works if the function's return type is Result<_, Box<EvalAltResult>>
 macro_rules! runtime_check {
     ($cond : expr, $($err : tt) +) => {
         if !$cond {
-            return Err(format!($( $err )*).into());
+            elog!($( $err )*);
         };
     }
 }
 
-macro_rules! set {
-    ($this_rc: ident, $v: ident, $method: ident) => {
-        $this_rc.borrow_mut().$method(0, $v)
-    };
+
+macro_rules! setter_wrapper {
+    ($gb: ident, $method: ident ( $( $arg:ident ),* )) => {{
+        let _gb = $gb.clone();
+        move |chan, $( $arg, )*| {
+            // FIXME: Check bounds
+            let this = &_gb.channels[chan as usize];
+            this.$method(0 $(, $arg )*).unwrap();
+        }
+    }};
+}
+macro_rules! setter_gb_wrapper {
+    ($gb: ident, $method: ident ( $( $arg:ident ),* )) => {{
+        let _gb = $gb.clone();
+        move |$( $arg, )*| {
+            _gb.$method($( $arg, )*).unwrap();
+        }
+    }};
+}
+macro_rules! setter_table_wrapper {
+    ($gb: ident, $method: ident ( $arg:ident )) => {{
+        let _gb = $gb.clone();
+        move |chan, $arg: &[i32]| {
+            // FIXME: Check bounds
+            let this = &_gb.channels[chan as usize];
+            this.$method(0 , $arg).unwrap();
+        }
+    }};
 }
 
-macro_rules! set_multi {
-    ($this_rc: ident, $frame_values: ident, $vtype: ty, $method: ident) => {{
-        runtime_check!(
-            $frame_values.len() == 2 && $frame_values.iter().all(|d| d.is::<Array>()),
-            concat!(
-                stringify!($method),
-                " should only be provided frame values, but got {:?}"
-            ),
-            $frame_values
-        );
-        let timeline = $frame_values[0].clone_cast::<Array>();
-        let values = $frame_values[1].clone_cast::<Array>();
-        runtime_check!(
-            timeline.len() == values.len(),
-            concat!(
-                stringify!($method),
-                " should only be provided a timeline and values of the same length, but got {} vs {}"
-            ),
-            timeline.len(),
-            values.len()
-        );
-        runtime_check!(
-            timeline.iter().all(|d| d.is::<i32>()),
-            concat!(
-                stringify!($method),
-                " should only be provided an i32 timeline, but got {:?}"
-            ),
-            timeline
-        );
-        runtime_check!(
-            values.iter().all(|d| d.is::<$vtype>()),
-            concat!(
-                stringify!($method),
-                " should only be provided ",
-                stringify!($vtype),
-                " values, but got {:?}"
-            ),
-            values
-        );
-        let mut this = $this_rc.borrow_mut();
-        let mut index = 0;
-        for (wait_frames, d) in timeline.iter().zip(values.iter()) {
-            index += wait_frames.clone_cast::<i32>() as usize;
-            this.$method(index, d.clone_cast::<$vtype>())?;
+macro_rules! trigger_wrapper {
+    ($gb: ident, $method: ident ( $( $arg:ident ),* )) => {{
+        let _gb = $gb.clone();
+        move |chan, $( $arg, )*| {
+            let this = &_gb.channels[chan as usize];
+            this.$method($( $arg, )*).unwrap();
         }
-        Ok(())
+    }};
+}
+
+macro_rules! setter_frames_wrapper {
+    ($gb: ident, $method: ident ( $values:ident )) => {{
+        let _gb = $gb.clone();
+        move |chan, timeline: &[i32], $values: &[i32]| {
+            runtime_check!(
+                timeline.len() == $values.len(),
+                concat!(
+                    stringify!($method),
+                    " should only be provided a timeline and values of the same length, but got {} vs {}"
+                ),
+                timeline.len(),
+                $values.len()
+            );
+            let mut index = 0;
+            let this = &_gb.channels[chan as usize];
+            for (wait_frames, d) in timeline.iter().zip($values.iter()) {
+                index += *wait_frames as usize;
+                this.$method(index, *d).unwrap();
+            }
+        }
     }};
 }
 
@@ -94,21 +103,22 @@ pub enum Channel {
 
 trait ScriptChannel {
     fn base(&self) -> u16;
-    fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>>;
-    fn frame_number(&mut self) -> Ref<'_, usize>;
-    fn resettable_settings_range(&mut self) -> &mut Option<Range<usize>>;
-    fn pending_settings_range(&mut self) -> &mut Option<Range<usize>>;
+    fn settings_ring(&self) -> RefMut<'_, Vec<RegSettings>>;
+    fn frame_number(&self) -> Ref<'_, usize>;
+    fn resettable_settings_range(&self) -> RefMut<'_, Option<Range<usize>>>;
+    fn pending_settings_range(&self) -> RefMut<'_, Option<Range<usize>>>;
+    fn trigger(&self) -> Result<(), String>;
 
     fn register_addresses(&self) -> std::iter::Chain<Range<u16>, Range<u16>> {
         let base = self.base();
         (base..base + 5).into_iter().chain((0..0).into_iter())
     }
 
-    fn mark_pending_settings_as_resettable(&mut self) {
+    fn mark_pending_settings_as_resettable(&self) {
         *self.resettable_settings_range() = self.pending_settings_range().take()
     }
 
-    fn unmark_pending_settings_as_resettable(&mut self) {
+    fn unmark_pending_settings_as_resettable(&self) {
         if let Some(range) = self.resettable_settings_range().take() {
             // Any setting marked as active should have reset the pending channel settings first.
             assert!(self.pending_settings_range().is_none());
@@ -117,7 +127,7 @@ trait ScriptChannel {
         }
     }
 
-    fn reset_resettable_settings_range(&mut self) {
+    fn reset_resettable_settings_range(&self) {
         if let Some(mut frame_range) = self.resettable_settings_range().take() {
             let reg_addrs = self.register_addresses();
             // Only clear reg settings in the present or future.
@@ -133,16 +143,16 @@ trait ScriptChannel {
         }
     }
 
-    fn extend_pending_settings_range(&mut self, index: usize) {
+    fn extend_pending_settings_range(&self, index: usize) {
         let to_frame = *self.frame_number() + index;
-        let maybe_range = self.pending_settings_range();
+        let mut maybe_range = self.pending_settings_range();
         match maybe_range.as_mut() {
             Some(range) => range.end = range.end.max(to_frame + 1),
             None => *maybe_range = Some(to_frame..to_frame + 1),
         }
     }
 
-    fn get_reg_settings(&mut self, index: usize) -> RefMut<'_, RegSettings> {
+    fn get_reg_settings(&self, index: usize) -> RefMut<'_, RegSettings> {
         let i = *self.frame_number() + index;
         RefMut::map(self.settings_ring(), |s| {
             let len = s.len();
@@ -150,81 +160,81 @@ trait ScriptChannel {
         })
     }
 
-    fn orit(&mut self, addr: u16, with: RegSetter) {
+    fn orit(&self, addr: u16, with: RegSetter) {
         self.reset_resettable_settings_range();
         self.extend_pending_settings_range(0);
         self.get_reg_settings(0).orit(addr, with)
     }
-    fn orit_at_index(&mut self, index: usize, addr: u16, with: RegSetter) {
+    fn orit_at_index(&self, index: usize, addr: u16, with: RegSetter) {
         self.reset_resettable_settings_range();
         self.extend_pending_settings_range(index);
         self.get_reg_settings(index).orit(addr, with)
     }
 
-    fn set_initialize(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+    fn set_initialize(&self, index: usize, v: i32) -> Result<(), String> {
         runtime_check!(v == 0 || v == 1, "initialize must be 0 or 1, got {}", v);
         self.orit_at_index(index, self.base() + 4, RegSetter::new(0x80, v as u8));
         Ok(())
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GbSquare {
     channel: Channel,
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     frame_number: Rc<RefCell<usize>>,
-    resettable_settings_range: Option<Range<usize>>,
-    pending_settings_range: Option<Range<usize>>,
+    resettable_settings_range: RefCell<Option<Range<usize>>>,
+    pending_settings_range: RefCell<Option<Range<usize>>>,
 }
 
 impl GbSquare {
-    pub fn set_sweep_time(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_sweep_time(&self, index: usize, v: i32) -> Result<(), String> {
         runtime_check!(v >= 0, "sweep_time must be >= 0, got {}", v);
         runtime_check!(v < 8, "sweep_time must be < 8, got {}", v);
         self.orit_at_index(index, self.channel as u16 + 0, RegSetter::new(0x70, v as u8));
         Ok(())
     }
 
-    pub fn set_sweep_dir(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_sweep_dir(&self, index: usize, v: i32) -> Result<(), String> {
         runtime_check!(v == 0 || v == 1, "sweep_dir must be 0 or 1, got {}", v);
         self.orit_at_index(index, self.channel as u16 + 0, RegSetter::new(0x08, v as u8));
         Ok(())
     }
 
-    pub fn set_sweep_shift(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_sweep_shift(&self, index: usize, v: i32) -> Result<(), String> {
         runtime_check!(v >= 0, "sweep_shift must be >= 0, got {}", v);
         runtime_check!(v < 8, "sweep_shift must be < 8, got {}", v);
         self.orit_at_index(index, self.channel as u16 + 0, RegSetter::new(0x07, v as u8));
         Ok(())
     }
 
-    pub fn set_duty(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_duty(&self, index: usize, v: i32) -> Result<(), String> {
         runtime_check!(v >= 0, "duty must be >= 0, got {}", v);
         runtime_check!(v < 4, "duty must be < 4, got {}", v);
         self.orit_at_index(index, self.channel as u16 + 1, RegSetter::new(0xC0, v as u8));
         Ok(())
     }
 
-    pub fn set_env_start(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_env_start(&self, index: usize, v: i32) -> Result<(), String> {
         runtime_check!(v >= 0, "env_start must be >= 0, got {}", v);
         runtime_check!(v < 16, "env_start must be < 16, got {}", v);
         self.orit_at_index(index, self.channel as u16 + 2, RegSetter::new(0xf0, v as u8));
         Ok(())
     }
 
-    pub fn set_env_dir(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_env_dir(&self, index: usize, v: i32) -> Result<(), String> {
         runtime_check!(v == 0 || v == 1, "env_dir must be 0 or 1, got {}", v);
         self.orit_at_index(index, self.channel as u16 + 2, RegSetter::new(0x08, v as u8));
         Ok(())
     }
-    pub fn set_env_period(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_env_period(&self, index: usize, v: i32) -> Result<(), String> {
         runtime_check!(v >= 0, "env_period must be >= 0, got {}", v);
         runtime_check!(v < 8, "env_period must be < 8, got {}", v);
         self.orit_at_index(index, self.channel as u16 + 2, RegSetter::new(0x07, v as u8));
         Ok(())
     }
 
-    pub fn set_gb_freq(&mut self, index: usize, gb_freq: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn set_square_gb_freq(&self, index: usize, gb_freq: i32) -> Result<(), String> {
         runtime_check!(gb_freq >= 0, "gb_freq must be >= 0, got {}", gb_freq);
         runtime_check!(gb_freq < 2048, "gb_freq must be < 2048, got {}", gb_freq);
         self.orit_at_index(
@@ -242,12 +252,13 @@ impl GbSquare {
         Ok(())
     }
 
-    pub fn set_freq(&mut self, index: usize, freq: f64) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(freq >= 64.0, "freq must be >= 64, got {}", freq);
-        self.set_gb_freq(index, GbSquare::to_gb_freq(freq))
+    pub fn set_square_freq(&self, index: usize, freq: i32) -> Result<(), String> {
+        runtime_check!(freq >= 65536, "freq must be >= 65536, got {}", freq);
+        runtime_check!(freq <= (131072 * 1024), "freq must be <= 134217728, got {}", freq);
+        self.set_square_gb_freq(index, GbSquare::to_square_gb_freq(freq))
     }
 
-    pub fn trigger_with_length(&mut self, length: i32) -> Result<(), Box<EvalAltResult>> {
+    pub fn trigger_square_with_length(&self, length: i32) -> Result<(), String> {
         runtime_check!(length >= 1, "length must be >= 1, got {}", length);
         runtime_check!(length <= 64, "length must be <= 64, got {}", length);
         self.orit(
@@ -265,7 +276,162 @@ impl GbSquare {
         Ok(())
     }
 
-    pub fn trigger(&mut self) -> Result<(), Box<EvalAltResult>> {
+    pub fn to_square_gb_freq(freq: i32) -> i32 {
+        2048 - ((131072 * 1024) / freq) as i32
+    }
+
+    pub fn set_wave_playing(&self, index: usize, v: i32) -> Result<(), String> {
+        self.orit_at_index(index, self.channel as u16 + 0, RegSetter::new(0x80, v as u8));
+        Ok(())
+    }
+
+    pub fn set_wave_volume(&self, index: usize, v: i32) -> Result<(), String> {
+        runtime_check!(v >= 0, "volume must be >= 0, got {}", v);
+        runtime_check!(v < 4, "volume must be < 4, got {}", v);
+        self.orit_at_index(index, self.channel as u16 + 2, RegSetter::new(0x60, v as u8));
+        Ok(())
+    }
+
+    pub fn set_wave_table(&self, index: usize, table: &[i32]) -> Result<(), String> {
+        runtime_check!(
+            table.len() == 4,
+            "wave table must have a length of 4, got {}",
+            table.len()
+        );
+
+        for i in 0..table.len() {
+            let v = table[i];
+            self.orit_at_index(index, (0xff30 + i * 4) as u16, RegSetter::new(0xff, (v >> 24) as u8));
+            self.orit_at_index(index, (0xff30 + i * 4 + 1) as u16, RegSetter::new(0xff, (v >> 16) as u8));
+            self.orit_at_index(index, (0xff30 + i * 4 + 2) as u16, RegSetter::new(0xff, (v >> 8) as u8));
+            self.orit_at_index(index, (0xff30 + i * 4 + 3) as u16, RegSetter::new(0xff, v as u8));
+        }
+
+        Ok(())
+    }
+
+    pub fn set_wave_gb_freq(&self, index: usize, gb_freq: i32) -> Result<(), String> {
+        runtime_check!(gb_freq >= 0, "gb_freq must be >= 0, got {}", gb_freq);
+        runtime_check!(gb_freq < 2048, "gb_freq must be < 2048, got {}", gb_freq);
+        self.orit_at_index(
+            index,
+            self.channel as u16 + 3,
+            // Frequency LSB
+            RegSetter::new(0xff, (gb_freq & 0xff) as u8),
+        );
+        self.orit_at_index(
+            index,
+            self.channel as u16 + 4,
+            // Frequency MSB
+            RegSetter::new(0x07, (gb_freq >> 8) as u8),
+        );
+        Ok(())
+    }
+
+    pub fn set_wave_freq(&self, index: usize, freq: i32) -> Result<(), String> {
+        runtime_check!(freq >= 32768, "freq must be >= 32768, got {}", freq);
+        runtime_check!(freq <= (65536 * 1024), "freq must be <= 67108864, got {}", freq);
+        self.set_wave_gb_freq(index, GbSquare::to_wave_gb_freq(freq))
+    }
+
+    pub fn trigger_wave_with_length(&self, length: i32) -> Result<(), String> {
+        runtime_check!(length >= 1, "length must be >= 1, got {}", length);
+        runtime_check!(length <= 256, "length must be <= 256, got {}", length);
+        self.orit(
+            self.channel as u16 + 1,
+            // Length load
+            RegSetter::new(0xff, (256 - length) as u8),
+        );
+        self.orit(
+            self.channel as u16 + 4,
+            // Trigger
+            RegSetter::new(0x80, 1)
+                // Length enable
+                | RegSetter::new(0x40, 1),
+        );
+        Ok(())
+    }
+
+    pub fn to_wave_gb_freq(freq: i32) -> i32 {
+        2048 - ((65536 * 1024) / freq) as i32
+    }
+
+    pub fn set_noise_env_start(&self, index: usize, v: i32) -> Result<(), String> {
+        runtime_check!(v >= 0, "env_start must be >= 0, got {}", v);
+        runtime_check!(v < 16, "env_start must be < 16, got {}", v);
+        self.orit_at_index(index, self.channel as u16 + 2, RegSetter::new(0xf0, v as u8));
+        Ok(())
+    }
+
+    pub fn set_noise_env_dir(&self, index: usize, v: i32) -> Result<(), String> {
+        runtime_check!(v == 0 || v == 1, "env_dir must be 0 or 1, got {}", v);
+        self.orit_at_index(index, self.channel as u16 + 2, RegSetter::new(0x08, v as u8));
+        Ok(())
+    }
+
+    pub fn set_noise_env_period(&self, index: usize, v: i32) -> Result<(), String> {
+        runtime_check!(v >= 0, "env_period must be >= 0, got {}", v);
+        runtime_check!(v < 8, "env_period must be < 8, got {}", v);
+        self.orit_at_index(index, self.channel as u16 + 2, RegSetter::new(0x07, v as u8));
+        Ok(())
+    }
+
+    pub fn set_noise_clock_shift(&self, index: usize, v: i32) -> Result<(), String> {
+        runtime_check!(v >= 0, "clock_shift must be >= 0, got {}", v);
+        runtime_check!(v < 14, "clock_shift must be < 14, got {}", v);
+        self.orit_at_index(index, self.channel as u16 + 3, RegSetter::new(0xf0, v as u8));
+        Ok(())
+    }
+
+    pub fn set_noise_counter_width(&self, index: usize, v: i32) -> Result<(), String> {
+        runtime_check!(v == 0 || v == 1, "counter_width must be 0 or 1, got {}", v);
+        self.orit_at_index(index, self.channel as u16 + 3, RegSetter::new(0x08, v as u8));
+        Ok(())
+    }
+
+    pub fn set_noise_clock_divisor(&self, index: usize, v: i32) -> Result<(), String> {
+        runtime_check!(v >= 0, "clock_divisor must be >= 0, got {}", v);
+        runtime_check!(v < 8, "clock_divisor must be < 8, got {}", v);
+        self.orit_at_index(index, self.channel as u16 + 3, RegSetter::new(0x07, v as u8));
+        Ok(())
+    }
+
+    pub fn trigger_noise_with_length(&self, length: i32) -> Result<(), String> {
+        runtime_check!(length >= 1, "length must be >= 1, got {}", length);
+        runtime_check!(length <= 64, "length must be <= 64, got {}", length);
+        self.orit(
+            self.channel as u16 + 1,
+            // Length load
+            RegSetter::new(0x3f, 64 - length as u8),
+        );
+        self.orit(
+            self.channel as u16 + 4,
+            // Trigger
+            RegSetter::new(0x80, 1)
+                // Length enable
+                | RegSetter::new(0x40, 1),
+        );
+        Ok(())
+    }
+}
+impl ScriptChannel for GbSquare {
+    fn base(&self) -> u16 {
+        self.channel as u16
+    }
+    fn settings_ring(&self) -> RefMut<'_, Vec<RegSettings>> {
+        self.settings_ring.borrow_mut()
+    }
+    fn frame_number(&self) -> Ref<'_, usize> {
+        self.frame_number.borrow()
+    }
+    fn resettable_settings_range(&self) -> RefMut<'_, Option<Range<usize>>> {
+        self.resettable_settings_range.borrow_mut()
+    }
+    fn pending_settings_range(&self) -> RefMut<'_, Option<Range<usize>>> {
+        self.pending_settings_range.borrow_mut()
+    }
+
+    fn trigger(&self) -> Result<(), String> {
         self.orit(
             self.channel as u16 + 4,
             // Trigger
@@ -276,600 +442,56 @@ impl GbSquare {
         Ok(())
     }
 
-    pub fn to_gb_freq(freq: f64) -> i32 {
-        2048 - (131072.0 / freq).round() as i32
+}
+impl std::fmt::Debug for GbSquare {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GbSquare")
     }
 }
-impl ScriptChannel for GbSquare {
-    fn base(&self) -> u16 {
-        self.channel as u16
-    }
-    fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> {
-        self.settings_ring.borrow_mut()
-    }
-    fn frame_number(&mut self) -> Ref<'_, usize> {
-        self.frame_number.borrow()
-    }
-    fn resettable_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.resettable_settings_range
-    }
-    fn pending_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.pending_settings_range
-    }
-}
-pub type SharedGbSquare = Rc<RefCell<GbSquare>>;
 
-#[derive(Debug, Clone)]
-pub struct GbWave {
-    channel: Channel,
-    settings_ring: Rc<RefCell<Vec<RegSettings>>>,
-    frame_number: Rc<RefCell<usize>>,
-    resettable_settings_range: Option<Range<usize>>,
-    pending_settings_range: Option<Range<usize>>,
-}
-impl GbWave {
-    pub fn set_playing(&mut self, index: usize, v: bool) -> Result<(), Box<EvalAltResult>> {
-        self.orit_at_index(index, Wave as u16 + 0, RegSetter::new(0x80, v as u8));
-        Ok(())
-    }
 
-    pub fn set_volume(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(v >= 0, "volume must be >= 0, got {}", v);
-        runtime_check!(v < 4, "volume must be < 4, got {}", v);
-        self.orit_at_index(index, Wave as u16 + 2, RegSetter::new(0x60, v as u8));
-        Ok(())
-    }
-
-    pub fn set_table(&mut self, index: usize, hex_string: String) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(
-            hex_string.len() == 32,
-            "table must have a length of 32, got {}",
-            hex_string.len()
-        );
-        runtime_check!(
-            hex_string.chars().all(|c| c >= '0' && c <= '9' || c >= 'a' && c <= 'f'),
-            "table must only contain characters [0-9a-f], got {}",
-            hex_string
-        );
-
-        // Each hexadecimal character in the hex string is one 4 bits sample.
-        for i in (0..hex_string.len()).step_by(2) {
-            let byte = u8::from_str_radix(&hex_string[i..i + 2], 16).unwrap();
-            self.orit_at_index(index, (0xff30 + i / 2) as u16, RegSetter::new(0xff, byte));
-        }
-
-        Ok(())
-    }
-
-    pub fn set_gb_freq(&mut self, index: usize, gb_freq: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(gb_freq >= 0, "gb_freq must be >= 0, got {}", gb_freq);
-        runtime_check!(gb_freq < 2048, "gb_freq must be < 2048, got {}", gb_freq);
-        self.orit_at_index(
-            index,
-            Wave as u16 + 3,
-            // Frequency LSB
-            RegSetter::new(0xff, (gb_freq & 0xff) as u8),
-        );
-        self.orit_at_index(
-            index,
-            Wave as u16 + 4,
-            // Frequency MSB
-            RegSetter::new(0x07, (gb_freq >> 8) as u8),
-        );
-        Ok(())
-    }
-
-    pub fn set_freq(&mut self, index: usize, freq: f64) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(freq >= 32.0, "freq must be >= 32, got {}", freq);
-        self.set_gb_freq(index, GbWave::to_gb_freq(freq))
-    }
-
-    pub fn trigger_with_length(&mut self, length: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(length >= 1, "length must be >= 1, got {}", length);
-        runtime_check!(length <= 256, "length must be <= 256, got {}", length);
-        self.orit(
-            Wave as u16 + 1,
-            // Length load
-            RegSetter::new(0xff, (256 - length) as u8),
-        );
-        self.orit(
-            Wave as u16 + 4,
-            // Trigger
-            RegSetter::new(0x80, 1)
-                // Length enable
-                | RegSetter::new(0x40, 1),
-        );
-        Ok(())
-    }
-
-    pub fn trigger(&mut self) -> Result<(), Box<EvalAltResult>> {
-        self.orit(
-            Wave as u16 + 4,
-            // Trigger
-            RegSetter::new(0x80, 1)
-                // Length enable
-                | RegSetter::new(0x40, 0),
-        );
-        Ok(())
-    }
-
-    pub fn to_gb_freq(freq: f64) -> i32 {
-        2048 - (65536.0 / freq).round() as i32
-    }
-}
-impl ScriptChannel for GbWave {
-    fn base(&self) -> u16 {
-        self.channel as u16
-    }
-
-    fn register_addresses(&self) -> std::iter::Chain<Range<u16>, Range<u16>> {
-        let base = self.base();
-        // Also reset the wave table registers when the wave channel is stolen.
-        (base..base + 5).into_iter().chain((0xff30..0xff40).into_iter())
-    }
-
-    fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> {
-        self.settings_ring.borrow_mut()
-    }
-    fn frame_number(&mut self) -> Ref<'_, usize> {
-        self.frame_number.borrow()
-    }
-    fn resettable_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.resettable_settings_range
-    }
-    fn pending_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.pending_settings_range
-    }
-}
-pub type SharedGbWave = Rc<RefCell<GbWave>>;
-
-#[derive(Debug, Clone)]
-pub struct GbNoise {
-    channel: Channel,
-    settings_ring: Rc<RefCell<Vec<RegSettings>>>,
-    frame_number: Rc<RefCell<usize>>,
-    resettable_settings_range: Option<Range<usize>>,
-    pending_settings_range: Option<Range<usize>>,
-}
-impl GbNoise {
-    pub fn set_env_start(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(v >= 0, "env_start must be >= 0, got {}", v);
-        runtime_check!(v < 16, "env_start must be < 16, got {}", v);
-        self.orit_at_index(index, Noise as u16 + 2, RegSetter::new(0xf0, v as u8));
-        Ok(())
-    }
-
-    pub fn set_env_dir(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(v == 0 || v == 1, "env_dir must be 0 or 1, got {}", v);
-        self.orit_at_index(index, Noise as u16 + 2, RegSetter::new(0x08, v as u8));
-        Ok(())
-    }
-
-    pub fn set_env_period(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(v >= 0, "env_period must be >= 0, got {}", v);
-        runtime_check!(v < 8, "env_period must be < 8, got {}", v);
-        self.orit_at_index(index, Noise as u16 + 2, RegSetter::new(0x07, v as u8));
-        Ok(())
-    }
-
-    pub fn set_clock_shift(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(v >= 0, "clock_shift must be >= 0, got {}", v);
-        runtime_check!(v < 14, "clock_shift must be < 14, got {}", v);
-        self.orit_at_index(index, Noise as u16 + 3, RegSetter::new(0xf0, v as u8));
-        Ok(())
-    }
-
-    pub fn set_counter_width(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(v == 0 || v == 1, "counter_width must be 0 or 1, got {}", v);
-        self.orit_at_index(index, Noise as u16 + 3, RegSetter::new(0x08, v as u8));
-        Ok(())
-    }
-
-    pub fn set_clock_divisor(&mut self, index: usize, v: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(v >= 0, "clock_divisor must be >= 0, got {}", v);
-        runtime_check!(v < 8, "clock_divisor must be < 8, got {}", v);
-        self.orit_at_index(index, Noise as u16 + 3, RegSetter::new(0x07, v as u8));
-        Ok(())
-    }
-
-    pub fn trigger_with_length(&mut self, length: i32) -> Result<(), Box<EvalAltResult>> {
-        runtime_check!(length >= 1, "length must be >= 1, got {}", length);
-        runtime_check!(length <= 64, "length must be <= 64, got {}", length);
-        self.orit(
-            Noise as u16 + 1,
-            // Length load
-            RegSetter::new(0x3f, 64 - length as u8),
-        );
-        self.orit(
-            Noise as u16 + 4,
-            // Trigger
-            RegSetter::new(0x80, 1)
-                // Length enable
-                | RegSetter::new(0x40, 1),
-        );
-        Ok(())
-    }
-
-    pub fn trigger(&mut self) -> Result<(), Box<EvalAltResult>> {
-        self.orit(
-            Noise as u16 + 4,
-            // Trigger
-            RegSetter::new(0x80, 1),
-        );
-        Ok(())
-    }
-}
-impl ScriptChannel for GbNoise {
-    fn base(&self) -> u16 {
-        self.channel as u16
-    }
-    fn settings_ring(&mut self) -> RefMut<'_, Vec<RegSettings>> {
-        self.settings_ring.borrow_mut()
-    }
-    fn frame_number(&mut self) -> Ref<'_, usize> {
-        self.frame_number.borrow()
-    }
-    fn resettable_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.resettable_settings_range
-    }
-    fn pending_settings_range(&mut self) -> &mut Option<Range<usize>> {
-        &mut self.pending_settings_range
-    }
-}
-pub type SharedGbNoise = Rc<RefCell<GbNoise>>;
-
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GbBindings {
     settings_ring: Rc<RefCell<Vec<RegSettings>>>,
     frame_number: Rc<RefCell<usize>>,
-    square1: SharedGbSquare,
-    square2: SharedGbSquare,
-    wave: SharedGbWave,
-    noise: SharedGbNoise,
+    channels: [GbSquare; 4],
 }
-pub type SharedGbBindings = Rc<RefCell<GbBindings>>;
+impl std::fmt::Debug for GbBindings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GbBindings")
+    }
+}
 
 impl GbBindings {
-    fn set_frame_number(&mut self, v: usize) {
-        *self.frame_number.borrow_mut() = v;
-    }
-    fn mark_pending_settings_as_resettable(&mut self) {
-        self.square1.borrow_mut().mark_pending_settings_as_resettable();
-        self.square2.borrow_mut().mark_pending_settings_as_resettable();
-        self.wave.borrow_mut().mark_pending_settings_as_resettable();
-        self.noise.borrow_mut().mark_pending_settings_as_resettable();
-    }
-    fn unmark_pending_settings_as_resettable(&mut self) {
-        self.square1.borrow_mut().unmark_pending_settings_as_resettable();
-        self.square2.borrow_mut().unmark_pending_settings_as_resettable();
-        self.wave.borrow_mut().unmark_pending_settings_as_resettable();
-        self.noise.borrow_mut().unmark_pending_settings_as_resettable();
-    }
-}
-
-#[export_module]
-pub mod gb_api {
-
-    pub const SWE_INC: i32 = 0;
-    pub const SWE_DEC: i32 = 1;
-    pub const ENV_DEC: i32 = 0;
-    pub const ENV_INC: i32 = 1;
-    pub const DUT_1_8: i32 = 0;
-    pub const DUT_1_4: i32 = 1;
-    pub const DUT_2_4: i32 = 2;
-    pub const DUT_3_4: i32 = 3;
-    pub const VOL_0: i32 = 0;
-    pub const VOL_100: i32 = 1;
-    pub const VOL_50: i32 = 2;
-    pub const VOL_25: i32 = 3;
-    pub const WID_15: i32 = 0;
-    pub const WID_7: i32 = 1;
-    pub const DIV_8: i32 = 0;
-    pub const DIV_16: i32 = 1;
-    pub const DIV_32: i32 = 2;
-    pub const DIV_48: i32 = 3;
-    pub const DIV_64: i32 = 4;
-    pub const DIV_80: i32 = 5;
-    pub const DIV_96: i32 = 6;
-    pub const DIV_112: i32 = 7;
-
-    /// Just a clearer wrapper for [[t1, t2, ...], [v1, v2, ...]], which is what multi setters expect.
-    #[rhai_fn(global, name = "frames", return_raw)]
-    pub fn frames(timeline: Array, values: Array) -> Result<Array, Box<EvalAltResult>> {
-        Ok(vec![timeline.into(), values.into()])
-    }
-
-    #[rhai_fn(global)]
-    pub fn to_square_gb_freq(freq: f64) -> i32 {
-        GbSquare::to_gb_freq(freq)
-    }
-
-    #[rhai_fn(global)]
-    pub fn to_wave_gb_freq(freq: f64) -> i32 {
-        GbWave::to_gb_freq(freq)
-    }
-
-    #[rhai_fn(get = "square1", pure)]
-    pub fn get_square1(this_rc: &mut SharedGbBindings) -> SharedGbSquare {
-        this_rc.borrow().square1.clone()
-    }
-    #[rhai_fn(get = "square2", pure)]
-    pub fn get_square2(this_rc: &mut SharedGbBindings) -> SharedGbSquare {
-        this_rc.borrow().square2.clone()
-    }
-    #[rhai_fn(get = "wave", pure)]
-    pub fn get_wave(this_rc: &mut SharedGbBindings) -> SharedGbWave {
-        this_rc.borrow().wave.clone()
-    }
-    #[rhai_fn(get = "noise", pure)]
-    pub fn get_noise(this_rc: &mut SharedGbBindings) -> SharedGbNoise {
-        this_rc.borrow().noise.clone()
-    }
-
-    #[rhai_fn(global, return_raw)]
-    pub fn wait_frames(gb: &mut SharedGbBindings, frames: i32) -> Result<(), Box<EvalAltResult>> {
-        let this = gb.borrow_mut();
-        let len = this.settings_ring.borrow().len();
+    pub fn wait_frames(&self, frames: i32) -> Result<(), String> {
+        let len = self.settings_ring.borrow().len();
         // FIXME: Check that this isn't going back past the current frame
         // runtime_check!(frames >= 0, "frames must be >= 0, got {}", frames);
         runtime_check!(frames < len as i32, "frames must be < {}, got {}", len, frames);
-        let mut frame_number = this.frame_number.borrow_mut();
+        let mut frame_number = self.frame_number.borrow_mut();
         *frame_number = (*frame_number as i64 + frames as i64) as usize;
         Ok(())
     }
 
-    #[rhai_fn(set = "sweep_time", pure, return_raw)]
-    pub fn set_sweep_time(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_sweep_time)
+    fn set_frame_number(&self, v: usize) {
+        *self.frame_number.borrow_mut() = v;
     }
-    #[rhai_fn(set = "sweep_time", pure, return_raw)]
-    pub fn set_multi_sweep_time(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_sweep_time)
+    fn mark_pending_settings_as_resettable(&self) {
+        self.channels[0].mark_pending_settings_as_resettable();
+        self.channels[1].mark_pending_settings_as_resettable();
+        self.channels[2].mark_pending_settings_as_resettable();
+        self.channels[3].mark_pending_settings_as_resettable();
     }
+    fn unmark_pending_settings_as_resettable(&self) {
+        self.channels[0].unmark_pending_settings_as_resettable();
+        self.channels[1].unmark_pending_settings_as_resettable();
+        self.channels[2].unmark_pending_settings_as_resettable();
+        self.channels[3].unmark_pending_settings_as_resettable();
+    }
+}
 
-    #[rhai_fn(set = "sweep_dir", pure, return_raw)]
-    pub fn set_sweep_dir(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_sweep_dir)
-    }
-    #[rhai_fn(set = "sweep_dir", pure, return_raw)]
-    pub fn set_multi_sweep_dir(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_sweep_dir)
-    }
-
-    #[rhai_fn(set = "sweep_shift", pure, return_raw)]
-    pub fn set_sweep_shift(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_sweep_shift)
-    }
-    #[rhai_fn(set = "sweep_shift", pure, return_raw)]
-    pub fn set_multi_sweep_shift(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_sweep_shift)
-    }
-
-    #[rhai_fn(set = "duty", pure, return_raw)]
-    pub fn set_duty(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_duty)
-    }
-    #[rhai_fn(set = "duty", pure, return_raw)]
-    pub fn set_multi_duty(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_duty)
-    }
-
-    #[rhai_fn(set = "env_start", pure, return_raw)]
-    pub fn set_square_env_start(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_env_start)
-    }
-    #[rhai_fn(set = "env_start", pure, return_raw)]
-    pub fn set_multi_square_env_start(
-        this_rc: &mut SharedGbSquare,
-        values: Vec<Dynamic>,
-    ) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_env_start)
-    }
-
-    #[rhai_fn(set = "env_dir", pure, return_raw)]
-    pub fn set_square_env_dir(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_env_dir)
-    }
-    #[rhai_fn(set = "env_dir", pure, return_raw)]
-    pub fn set_multi_square_env_dir(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_env_dir)
-    }
-
-    #[rhai_fn(set = "env_period", pure, return_raw)]
-    pub fn set_square_env_period(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_env_period)
-    }
-    #[rhai_fn(set = "env_period", pure, return_raw)]
-    pub fn set_multi_square_env_period(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_env_period)
-    }
-
-    #[rhai_fn(set = "gb_freq", pure, return_raw)]
-    pub fn set_square_gb_freq(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_gb_freq)
-    }
-    #[rhai_fn(set = "gb_freq", pure, return_raw)]
-    pub fn set_multi_square_gb_freq(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_gb_freq)
-    }
-
-    #[rhai_fn(set = "freq", pure, return_raw)]
-    pub fn set_square_freq(this_rc: &mut SharedGbSquare, v: f64) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_freq)
-    }
-    #[rhai_fn(set = "freq", pure, return_raw)]
-    pub fn set_multi_square_freq(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, f64, set_freq)
-    }
-
-    #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_square_initialize(this_rc: &mut SharedGbSquare, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_initialize)
-    }
-    #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_square_initialize_bool(this_rc: &mut SharedGbSquare, b: bool) -> Result<(), Box<EvalAltResult>> {
-        let v = b as i32;
-        set!(this_rc, v, set_initialize)
-    }
-    #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_multi_square_initialize(this_rc: &mut SharedGbSquare, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_initialize)
-    }
-
-    #[rhai_fn(global, name = "trigger_with_length", return_raw)]
-    pub fn square_trigger_with_length(this_rc: &mut SharedGbSquare, length: i32) -> Result<(), Box<EvalAltResult>> {
-        this_rc.borrow_mut().trigger_with_length(length)
-    }
-
-    #[rhai_fn(global, name = "trigger", return_raw)]
-    pub fn square_trigger(this_rc: &mut SharedGbSquare) -> Result<(), Box<EvalAltResult>> {
-        this_rc.borrow_mut().trigger()
-    }
-
-    #[rhai_fn(set = "playing", pure, return_raw)]
-    pub fn set_playing(this_rc: &mut SharedGbWave, v: bool) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_playing)
-    }
-    #[rhai_fn(set = "playing", pure, return_raw)]
-    pub fn set_multi_playing(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, bool, set_playing)
-    }
-
-    #[rhai_fn(set = "volume", pure, return_raw)]
-    pub fn set_volume(this_rc: &mut SharedGbWave, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_volume)
-    }
-    #[rhai_fn(set = "volume", pure, return_raw)]
-    pub fn set_multi_volume(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_volume)
-    }
-
-    #[rhai_fn(set = "table", pure, return_raw)]
-    pub fn set_table(this_rc: &mut SharedGbWave, v: String) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_table)
-    }
-    #[rhai_fn(set = "table", pure, return_raw)]
-    pub fn set_multi_table(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, String, set_table)
-    }
-
-    #[rhai_fn(set = "gb_freq", pure, return_raw)]
-    pub fn set_wave_gb_freq(this_rc: &mut SharedGbWave, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_gb_freq)
-    }
-    #[rhai_fn(set = "gb_freq", pure, return_raw)]
-    pub fn set_multi_wave_gb_freq(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_gb_freq)
-    }
-
-    #[rhai_fn(set = "freq", pure, return_raw)]
-    pub fn set_wave_freq(this_rc: &mut SharedGbWave, v: f64) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_freq)
-    }
-    #[rhai_fn(set = "freq", pure, return_raw)]
-    pub fn set_multi_wave_freq(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, f64, set_freq)
-    }
-
-    #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_wave_initialize(this_rc: &mut SharedGbWave, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_initialize)
-    }
-    #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_wave_initialize_bool(this_rc: &mut SharedGbWave, b: bool) -> Result<(), Box<EvalAltResult>> {
-        let v = b as i32;
-        set!(this_rc, v, set_initialize)
-    }
-    #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_multi_wave_initialize(this_rc: &mut SharedGbWave, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_initialize)
-    }
-
-    #[rhai_fn(global, name = "trigger_with_length", return_raw)]
-    pub fn wave_trigger_with_length(this_rc: &mut SharedGbWave, length: i32) -> Result<(), Box<EvalAltResult>> {
-        this_rc.borrow_mut().trigger_with_length(length)
-    }
-    #[rhai_fn(global, name = "trigger", return_raw)]
-    pub fn wave_trigger(this_rc: &mut SharedGbWave) -> Result<(), Box<EvalAltResult>> {
-        this_rc.borrow_mut().trigger()
-    }
-
-    #[rhai_fn(set = "env_start", pure, return_raw)]
-    pub fn set_noise_env_start(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_env_start)
-    }
-    #[rhai_fn(set = "env_start", pure, return_raw)]
-    pub fn set_multi_noise_env_start(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_env_start)
-    }
-
-    #[rhai_fn(set = "env_dir", pure, return_raw)]
-    pub fn set_noise_env_dir(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_env_dir)
-    }
-    #[rhai_fn(set = "env_dir", pure, return_raw)]
-    pub fn set_multi_noise_env_dir(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_env_dir)
-    }
-
-    #[rhai_fn(set = "env_period", pure, return_raw)]
-    pub fn set_noise_env_period(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_env_period)
-    }
-    #[rhai_fn(set = "env_period", pure, return_raw)]
-    pub fn set_multi_noise_env_period(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_env_period)
-    }
-
-    #[rhai_fn(set = "clock_shift", pure, return_raw)]
-    pub fn set_clock_shift(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_clock_shift)
-    }
-    #[rhai_fn(set = "clock_shift", pure, return_raw)]
-    pub fn set_multi_clock_shift(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_clock_shift)
-    }
-
-    #[rhai_fn(set = "counter_width", pure, return_raw)]
-    pub fn set_counter_width(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_counter_width)
-    }
-    #[rhai_fn(set = "counter_width", pure, return_raw)]
-    pub fn set_multi_counter_width(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_counter_width)
-    }
-
-    #[rhai_fn(set = "clock_divisor", pure, return_raw)]
-    pub fn set_clock_divisor(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_clock_divisor)
-    }
-    #[rhai_fn(set = "clock_divisor", pure, return_raw)]
-    pub fn set_multi_clock_divisor(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_clock_divisor)
-    }
-
-    #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_noise_initialize(this_rc: &mut SharedGbNoise, v: i32) -> Result<(), Box<EvalAltResult>> {
-        set!(this_rc, v, set_initialize)
-    }
-    #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_noise_initialize_bool(this_rc: &mut SharedGbNoise, b: bool) -> Result<(), Box<EvalAltResult>> {
-        let v = b as i32;
-        set!(this_rc, v, set_initialize)
-    }
-    #[rhai_fn(set = "initialize", pure, return_raw)]
-    pub fn set_multi_noise_initialize(this_rc: &mut SharedGbNoise, values: Array) -> Result<(), Box<EvalAltResult>> {
-        set_multi!(this_rc, values, i32, set_initialize)
-    }
-
-    #[rhai_fn(global, name = "trigger_with_length", return_raw)]
-    pub fn noise_trigger_with_length(this_rc: &mut SharedGbNoise, length: i32) -> Result<(), Box<EvalAltResult>> {
-        this_rc.borrow_mut().trigger_with_length(length)
-    }
-    #[rhai_fn(global, name = "trigger", return_raw)]
-    pub fn noise_trigger(this_rc: &mut SharedGbNoise) -> Result<(), Box<EvalAltResult>> {
-        this_rc.borrow_mut().trigger()
-    }
+fn instrument_print(v: i32) {
+  println!("Instruments: {:?}", v);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -953,16 +575,16 @@ impl RegSettings {
 
 #[derive(Clone, Copy)]
 struct PressedNote {
-    note: u32,
+    note: u8,
     pressed_frame: usize,
     extended_frames: Option<usize>,
 }
 
 #[derive(Clone)]
 struct InstrumentState {
-    press_function: Option<FnPtr>,
-    release_function: Option<FnPtr>,
-    frame_function: Option<FnPtr>,
+    press_function: Option<test::WasmFunction>,
+    release_function: Option<test::WasmFunction>,
+    frame_function: Option<test::WasmFunction>,
     frames_after_release: i32,
     pressed_note: Option<PressedNote>,
 }
@@ -992,15 +614,15 @@ impl InstrumentColArrayExt for [Vec<InstrumentState>; NUM_INSTRUMENT_COLS] {
 }
 
 pub struct SynthScript {
-    script_engine: Engine,
-    script_ast: AST,
-    script_context: SharedGbBindings,
+    wasm_runtime: Rc<WasmRuntime>,
+    wasm_exec_env: Option<WasmExecEnv>,
+    script_context: Rc<GbBindings>,
     instrument_ids: Rc<RefCell<Vec<String>>>,
     instrument_states: Rc<RefCell<[Vec<InstrumentState>; NUM_INSTRUMENT_COLS]>>,
 }
 
 impl SynthScript {
-    const DEFAULT_INSTRUMENTS: &'static str = include_str!("../res/default-instruments.rhai");
+    const DEFAULT_INSTRUMENTS: &'static [u8; 16733] = include_bytes!("../res/default-instruments.wasm");
 
     pub fn new(settings_ring: Rc<RefCell<Vec<RegSettings>>>) -> SynthScript {
         let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(vec![Default::default(); NUM_INSTRUMENTS]));
@@ -1008,141 +630,113 @@ impl SynthScript {
         let instrument_ids_clone = instrument_ids.clone();
         let instrument_states_clone = instrument_states.clone();
 
-        let mut engine = Engine::new();
+        let set_instrument_at_column = move |module: &test::WasmModuleInst, cid: &CStr, col: i32, press: &CStr, release: &CStr, frame: &CStr| -> () {
+            let id = cid.to_str().unwrap();
+            assert!(!id.is_empty(), "set_instrument_at_column: id must not be empty, got {:?}", id);
+            assert!(!instrument_ids_clone.borrow().iter().any(|i| i == id), "set_instrument_at_column: id {} must be unique, but was already set", id);
+            assert!(col >= 0 && col <= NUM_INSTRUMENT_COLS as i32,
+                "set_instrument_at_column: column must be 0 <= col <= {}, got {}",
+                NUM_INSTRUMENT_COLS, col);
 
-        engine.set_max_expr_depths(1024, 1024);
-        engine
-            .register_type::<SharedGbBindings>()
-            .register_type::<SharedGbSquare>();
-        engine.register_fn("set_instrument_at_column",
-            move |id: &str, col: i32, instrument: Dynamic| -> Result<(), Box<EvalAltResult>> {
-                runtime_check!(!id.is_empty(), "set_instrument_at_column: id must not be empty, got {}", id);
-                runtime_check!(!instrument_ids_clone.borrow().iter().any(|i| i == id), "set_instrument_at_column: id {} must be unique, but was already set", id);
-                runtime_check!(col >= 0 && col <= NUM_INSTRUMENT_COLS as i32,
-                    "set_instrument_at_column: column must be 0 <= col <= {}, got {}",
-                    NUM_INSTRUMENT_COLS, col);
-                runtime_check!(instrument.type_id() == TypeId::of::<Map>(),
-                    "set_instrument_at_column: The instrument must be an object map, got {}",
-                    instrument.type_name());
-
-                let mut state_cols = instrument_states_clone.borrow_mut();
-                let (state, index) = {
-                    let state_col = &mut state_cols[col as usize];
-                    if state_col.len() >= 16 {
-                        return Err(format!("set_instrument_at_column: column {} already contains 16 instruments", col).into());
-                    }
-                    state_col.push(Default::default());
-                    // Column index is in the two lsb
-                    // 0, 1, 2, 3,
-                    // 4, 5, 6, 7,
-                    // ...
-                    let index = ((state_col.len() - 1) << 2) + col as usize;
-                    (&mut state_col.last_mut().unwrap(), index)
-                };
-
-                instrument_ids_clone.borrow_mut()[index] = id.to_owned();
-
-                let mut map = instrument.try_cast::<Map>().unwrap();
-
-                state.release_function = match map.remove("release") {
-                    None =>
-                        None,
-
-                    Some(f_dyn) => {
-                        runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(),
-                            "set_instrument: The \"release\" property must be a function pointer or an anonymous function, got a {}",
-                            f_dyn.type_name());
-
-                        let f = f_dyn.try_cast::<FnPtr>().unwrap();
-                        Some(f)
-                    }
-                };
-
-                state.frame_function = match map.remove("frame") {
-                    None =>
-                        None,
-
-                    Some(f_dyn) => {
-                        runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(),
-                            "set_instrument: The \"frame\" property must be a function pointer or an anonymous function, got a {}",
-                            f_dyn.type_name());
-
-                        let f = f_dyn.try_cast::<FnPtr>().unwrap();
-                        Some(f)
-                    }
-                };
-
-                state.frames_after_release = match map.remove("frames_after_release") {
-                    None =>
-                        0,
-
-                    Some(val) => {
-                        runtime_check!(val.type_id() == TypeId::of::<INT>(),
-                            "set_instrument: The \"frames_after_release\" property must be an integer, got a {}",
-                            val.type_name());
-
-                        val.try_cast::<i32>().unwrap()
-                    }
-                };
-
-                match map.remove("press") {
-                    None =>
-                        Err(format!("set_instrument: The instrument must have a \"press\" property").into()),
-
-                    Some(f_dyn) => {
-                        runtime_check!(f_dyn.type_id() == TypeId::of::<FnPtr>(),
-                            "set_instrument: The \"press\" property must be a function pointer or an anonymous function, got a {}",
-                            f_dyn.type_name());
-
-                        let f = f_dyn.try_cast::<FnPtr>().unwrap();
-                        state.press_function = Some(f);
-                        Ok(())
-                    },
+            let mut state_cols = instrument_states_clone.borrow_mut();
+            let (state, index) = {
+                let state_col = &mut state_cols[col as usize];
+                if state_col.len() >= 16 {
+                    elog!("set_instrument_at_column: column {} already contains 16 instruments", col);
                 }
-            });
-        engine.register_static_module("gb", exported_module!(gb_api).into());
+                state_col.push(Default::default());
+                // Column index is in the two lsb
+                // 0, 1, 2, 3,
+                // 4, 5, 6, 7,
+                // ...
+                let index = ((state_col.len() - 1) << 2) + col as usize;
+                (&mut state_col.last_mut().unwrap(), index)
+            };
+
+            instrument_ids_clone.borrow_mut()[index] = id.to_owned();
+
+            state.press_function = module.lookup_function(press);
+            state.release_function = module.lookup_function(release);
+            state.frame_function = module.lookup_function(frame);
+        };
 
         let frame_number = Rc::new(RefCell::new(0));
-        let square1 = Rc::new(RefCell::new(GbSquare {
+        let square1 = GbSquare {
             channel: Square1,
             settings_ring: settings_ring.clone(),
             frame_number: frame_number.clone(),
-            resettable_settings_range: None,
-            pending_settings_range: None,
-        }));
-        let square2 = Rc::new(RefCell::new(GbSquare {
+            resettable_settings_range: RefCell::new(None),
+            pending_settings_range: RefCell::new(None),
+        };
+        let square2 = GbSquare {
             channel: Square2,
             settings_ring: settings_ring.clone(),
             frame_number: frame_number.clone(),
-            resettable_settings_range: None,
-            pending_settings_range: None,
-        }));
-        let wave = Rc::new(RefCell::new(GbWave {
+            resettable_settings_range: RefCell::new(None),
+            pending_settings_range: RefCell::new(None),
+        };
+        let wave = GbSquare {
             channel: Wave,
             settings_ring: settings_ring.clone(),
             frame_number: frame_number.clone(),
-            resettable_settings_range: None,
-            pending_settings_range: None,
-        }));
-        let noise = Rc::new(RefCell::new(GbNoise {
+            resettable_settings_range: RefCell::new(None),
+            pending_settings_range: RefCell::new(None),
+        };
+        let noise = GbSquare {
             channel: Noise,
             settings_ring: settings_ring.clone(),
             frame_number: frame_number.clone(),
-            resettable_settings_range: None,
-            pending_settings_range: None,
-        }));
-        let gb = Rc::new(RefCell::new(GbBindings {
+            resettable_settings_range: RefCell::new(None),
+            pending_settings_range: RefCell::new(None),
+        };
+
+        let gb = Rc::new(GbBindings {
             settings_ring: settings_ring.clone(),
             frame_number: frame_number,
-            square1: square1,
-            square2: square2,
-            wave: wave,
-            noise: noise,
-        }));
+            channels: [square1, square2, wave, noise],
+        });
+
+        let functions: Vec<Box<dyn test::HostFunction>> = vec![
+            Box::new(test::HostFunctionSISSS::new("set_instrument_at_column", set_instrument_at_column)),
+            Box::new(test::HostFunctionI::new("print", instrument_print)),
+            Box::new(test::HostFunctionIi::new("to_square_gb_freq", GbSquare::to_square_gb_freq)),
+            Box::new(test::HostFunctionIi::new("to_wave_gb_freq", GbSquare::to_wave_gb_freq)),
+            Box::new(test::HostFunctionI::new("wait_frames", setter_gb_wrapper!(gb, wait_frames(v)))),
+            Box::new(test::HostFunctionI::new("trigger", trigger_wrapper!(gb, trigger()))),
+            Box::new(test::HostFunctionII::new("set_square_duty", setter_wrapper!(gb, set_square_duty(v)))),
+            Box::new(test::HostFunctionII::new("set_square_sweep_time", setter_wrapper!(gb, set_square_sweep_time(v)))),
+            Box::new(test::HostFunctionII::new("set_square_sweep_dir", setter_wrapper!(gb, set_square_sweep_dir(v)))),
+            Box::new(test::HostFunctionII::new("set_square_sweep_shift", setter_wrapper!(gb, set_square_sweep_shift(v)))),
+            Box::new(test::HostFunctionII::new("set_square_duty", setter_wrapper!(gb, set_square_duty(v)))),
+            Box::new(test::HostFunctionII::new("set_square_env_start", setter_wrapper!(gb, set_square_env_start(v)))),
+            Box::new(test::HostFunctionII::new("set_square_env_dir", setter_wrapper!(gb, set_square_env_dir(v)))),
+            Box::new(test::HostFunctionII::new("set_square_env_period", setter_wrapper!(gb, set_square_env_period(v)))),
+            Box::new(test::HostFunctionII::new("set_square_gb_freq", setter_wrapper!(gb, set_square_gb_freq(v)))),
+            Box::new(test::HostFunctionII::new("set_square_freq", setter_wrapper!(gb, set_square_freq(v)))),
+            Box::new(test::HostFunctionII::new("trigger_square_with_length", trigger_wrapper!(gb, trigger_square_with_length(v)))),
+            Box::new(test::HostFunctionII::new("set_wave_playing", setter_wrapper!(gb, set_wave_playing(v)))),
+            Box::new(test::HostFunctionII::new("set_wave_volume", setter_wrapper!(gb, set_wave_volume(v)))),
+            Box::new(test::HostFunctionIA::new("set_wave_table", setter_table_wrapper!(gb, set_wave_table(v)))),
+            Box::new(test::HostFunctionII::new("set_wave_gb_freq", setter_wrapper!(gb, set_wave_gb_freq(v)))),
+            Box::new(test::HostFunctionII::new("set_wave_freq", setter_wrapper!(gb, set_wave_freq(v)))),
+            Box::new(test::HostFunctionII::new("trigger_wave_with_length", trigger_wrapper!(gb, trigger_wave_with_length(v)))),
+            Box::new(test::HostFunctionII::new("set_noise_env_start", setter_wrapper!(gb, set_noise_env_start(v)))),
+            Box::new(test::HostFunctionII::new("set_noise_env_dir", setter_wrapper!(gb, set_noise_env_dir(v)))),
+            Box::new(test::HostFunctionII::new("set_noise_env_period", setter_wrapper!(gb, set_noise_env_period(v)))),
+            Box::new(test::HostFunctionII::new("set_noise_clock_shift", setter_wrapper!(gb, set_noise_clock_shift(v)))),
+            Box::new(test::HostFunctionIAA::new("set_noise_clock_shift_frames", setter_frames_wrapper!(gb, set_noise_clock_shift(v) ))),
+            Box::new(test::HostFunctionII::new("set_noise_counter_width", setter_wrapper!(gb, set_noise_counter_width(v)))),
+            Box::new(test::HostFunctionIAA::new("set_noise_counter_width_frames", setter_frames_wrapper!(gb, set_noise_counter_width(v) ))),
+            Box::new(test::HostFunctionII::new("set_noise_clock_divisor", setter_wrapper!(gb, set_noise_clock_divisor(v)))),
+            Box::new(test::HostFunctionIAA::new("set_noise_clock_divisor_frames", setter_frames_wrapper!(gb, set_noise_clock_divisor(v) ))),
+            Box::new(test::HostFunctionII::new("trigger_noise_with_length", trigger_wrapper!(gb, trigger_noise_with_length(v)))),
+        ];
+      
+        let runtime = Rc::new(test::WasmRuntime::new(functions).unwrap());
 
         SynthScript {
-            script_engine: engine,
-            script_ast: Default::default(),
+            wasm_runtime: runtime,
+            wasm_exec_env: None,
             script_context: gb,
             instrument_ids: instrument_ids,
             instrument_states: instrument_states,
@@ -1162,32 +756,39 @@ impl SynthScript {
         }
     }
 
-    pub fn load_default(&mut self, frame_number: usize) {
-        self.script_engine
-            .compile(SynthScript::DEFAULT_INSTRUMENTS)
-            .map_err(|e| Box::new(e) as Box<dyn Error>)
-            .and_then(|ast| {
-                self.set_instruments_ast(ast, frame_number)
-                    .map_err(|e| e as Box<dyn Error>)
-            })
-            .expect("Error loading default instruments.");
+    pub fn load_default(&mut self, _frame_number: usize) {
+        // self.script_engine
+        //     .compile(SynthScript::DEFAULT_INSTRUMENTS)
+        //     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
+        //     .and_then(|ast| {
+        //         self.set_instruments_ast(ast, frame_number)
+        //             .map_err(|e| e as Box<dyn std::error::Error>)
+        //     })
+        //     .expect("Error loading default instruments.");
     }
 
-    pub fn load_str(&mut self, encoded: &str, frame_number: usize) -> Result<(), Box<dyn Error>> {
+    pub fn load_str(&mut self, _encoded: &str, _frame_number: usize) -> Result<(), Box<dyn std::error::Error>> {
         self.reset_instruments();
 
-        let ast = self.script_engine.compile(encoded)?;
-        self.set_instruments_ast(ast, frame_number)?;
+        // self.interpreter.run_code(encoded, None)?;
+        // let ast = self.script_engine.compile(encoded)?;
+        // self.set_instruments_ast(ast, frame_number)?;
         Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn load_file(&mut self, instruments_path: &std::path::Path, frame_number: usize) -> Result<(), Box<dyn Error>> {
+    pub fn load_file(&mut self, instruments_path: &std::path::Path, _frame_number: usize) -> Result<(), Box<dyn std::error::Error>> {
         self.reset_instruments();
 
         if instruments_path.exists() {
-            let ast = self.script_engine.compile_file(instruments_path.to_path_buf())?;
-            self.set_instruments_ast(ast, frame_number)?;
+            let buffer = std::fs::read(instruments_path)?;
+            let module = Rc::new(test::WasmModule::new(buffer, self.wasm_runtime.clone()).unwrap());
+            let module_inst = Rc::new(test::WasmModuleInst::new(module).unwrap());
+            self.wasm_exec_env = Some(test::WasmExecEnv::new(module_inst).unwrap());
+
+            // let ast = self.script_engine.compile_file(instruments_path.to_path_buf())?;
+            // self.interpreter.run_file(instruments_path).unwrap();
+            // self.set_instruments_ast(ast, frame_number)?;
             Ok(())
         } else {
             return Err(format!("Project instruments file {:?} doesn't exist.", instruments_path).into());
@@ -1195,19 +796,18 @@ impl SynthScript {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
         let mut f = File::create(instruments_path)?;
-        f.write_all(SynthScript::DEFAULT_INSTRUMENTS.as_bytes())?;
+        f.write_all(SynthScript::DEFAULT_INSTRUMENTS)?;
         f.flush()?;
         Ok(())
     }
 
-    pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u8, note: u32) -> () {
+    pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u8, note: u8) -> () {
         {
-            let mut gb = self.script_context.borrow_mut();
             // The script themselves are modifying this state, so reset it.
-            gb.set_frame_number(frame_number);
-            gb.mark_pending_settings_as_resettable();
+            self.script_context.set_frame_number(frame_number);
+            self.script_context.mark_pending_settings_as_resettable();
         }
 
         let mut states = self.instrument_states.borrow_mut();
@@ -1218,38 +818,24 @@ impl SynthScript {
                     pressed_frame: frame_number,
                     extended_frames: None,
                 });
-                let result: Result<(), _> = f.call(
-                    &self.script_engine,
-                    &self.script_ast,
-                    (note as i32, Self::note_to_freq(note)),
-                );
-                if let Err(e) = result {
-                    elog!("{}", e)
-                }
+                self.wasm_exec_env.as_ref().unwrap().call_ii(*f, note as i32, Self::note_to_freq(note)).unwrap();
             }
         }
 
         // Only a press should be able to steal a channel, so unmark the channel settings
         // of non-reset channels after the press so that any frame or release function
         // running on top of those pending settings won't be resetting them first.
-        self.script_context.borrow_mut().unmark_pending_settings_as_resettable();
+        self.script_context.unmark_pending_settings_as_resettable();
     }
 
     pub fn release_instrument(&mut self, frame_number: usize, instrument: u8) -> () {
         // The script themselves are modifying this state, so reset it.
-        self.script_context.borrow_mut().set_frame_number(frame_number);
+        self.script_context.set_frame_number(frame_number);
 
         let mut states = self.instrument_states.borrow_mut();
         if let Some(state) = states.get_instrument(instrument) {
             if let (Some(f), Some(PressedNote { note, .. })) = (&state.release_function, &mut state.pressed_note) {
-                let result: Result<(), _> = f.call(
-                    &self.script_engine,
-                    &self.script_ast,
-                    (*note as i32, Self::note_to_freq(*note)),
-                );
-                if let Err(e) = result {
-                    elog!("{}", e)
-                }
+                self.wasm_exec_env.as_ref().unwrap().call_ii(*f, *note as i32, Self::note_to_freq(*note)).unwrap();
             }
             if let Some(PressedNote {
                 note: _,
@@ -1286,20 +872,13 @@ impl SynthScript {
                 ) = (&state.frame_function, &mut state.pressed_note)
                 {
                     // The script themselves are modifying this state, so reset it.
-                    self.script_context.borrow_mut().set_frame_number(frame_number);
+                    self.script_context.set_frame_number(frame_number);
 
-                    let result: Result<(), _> = f.call(
-                        &self.script_engine,
-                        &self.script_ast,
-                        (
-                            *note as i32,
-                            Self::note_to_freq(*note),
-                            (frame_number - *pressed_frame) as i32,
-                        ),
-                    );
-                    if let Err(e) = result {
-                        elog!("{}", e)
-                    }
+                    self.wasm_exec_env.as_ref().unwrap().call_iii(
+                        *f,
+                        *note as i32,
+                        Self::note_to_freq(*note),
+                        (frame_number - *pressed_frame) as i32).unwrap();
                     if let Some(remaining) = extended_frames {
                         *remaining -= 1;
                         if *remaining == 0 {
@@ -1313,30 +892,30 @@ impl SynthScript {
         }
     }
 
-    fn set_instruments_ast(
-        &mut self,
-        ast: AST,
-        frame_number: usize,
-    ) -> Result<(), std::boxed::Box<rhai::EvalAltResult>> {
-        self.script_ast = ast;
+    // fn set_instruments_ast(
+    //     &mut self,
+    //     ast: AST,
+    //     frame_number: usize,
+    // ) -> Result<(), std::boxed::Box<rhai::EvalAltResult>> {
+    //     self.script_ast = ast;
 
-        // The script might also contain sound settings directly in the its root.
-        {
-            let mut gb = self.script_context.borrow_mut();
-            gb.set_frame_number(frame_number);
-            gb.mark_pending_settings_as_resettable();
-            // FIXME: Also reset the gb states somewhere like gbsplay does
-        }
+    //     // The script might also contain sound settings directly in the its root.
+    //     {
+    //         self.script_context.set_frame_number(frame_number);
+    //         self.script_context.mark_pending_settings_as_resettable();
+    //         // FIXME: Also reset the gb states somewhere like gbsplay does
+    //     }
 
-        let mut scope = Scope::new();
-        scope.push("gb", self.script_context.clone());
+    //     let mut scope = Scope::new();
+    //     scope.push("gb", self.script_context.clone());
 
-        self.script_engine.run_ast_with_scope(&mut scope, &self.script_ast)
-    }
+    //     self.script_engine.run_ast_with_scope(&mut scope, &self.script_ast)
+    // }
 
-    fn note_to_freq(note: u32) -> f64 {
-        let a = 440.0; // Frequency of A
-        let key_freq = (a / 32.0) * 2.0_f64.powf((note as f64 - 9.0) / 12.0);
-        key_freq
+    fn note_to_freq(note: u8) -> i32 {
+        // let a = 440.0; // Frequency of A
+        // let key_freq = (a / 32.0) * 2.0_f64.powf((note as f64 - 9.0) / 12.0);
+        // key_freq
+        NOTE_FREQUENCIES[note as usize] as i32
     }
 }

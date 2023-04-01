@@ -496,14 +496,14 @@ pub fn main() {
     global_engine.on_note_pressed(move |note| {
         Lazy::force(&*cloned_context);
         cloned_sound_send
-            .send(Box::new(move |se| se.press_note(note as u32)))
+            .send(Box::new(move |se| se.press_note(note as u8)))
             .unwrap();
     });
 
     let cloned_sound_send = sound_send.clone();
     global_engine.on_note_released(move |note| {
         cloned_sound_send
-            .send(Box::new(move |se| se.release_note(note as u32)))
+            .send(Box::new(move |se| se.release_note(note as u8)))
             .unwrap();
     });
 
@@ -512,7 +512,7 @@ pub fn main() {
     global_engine.on_note_key_pressed(move |note| {
         let cloned_sound_send2 = cloned_sound_send.clone();
         cloned_sound_send
-            .send(Box::new(move |se| se.press_note(note as u32)))
+            .send(Box::new(move |se| se.press_note(note as u8)))
             .unwrap();
 
         // We have only one timer for direct interactions, and we don't handle
@@ -522,7 +522,7 @@ pub fn main() {
             std::time::Duration::from_millis(15 * 6),
             Box::new(move || {
                 cloned_sound_send2
-                    .send(Box::new(move |se| se.release_note(note as u32)))
+                    .send(Box::new(move |se| se.release_note(note as u8)))
                     .unwrap();
             }),
         );

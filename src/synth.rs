@@ -225,7 +225,7 @@ impl Synth {
         self.frame_number += 1;
     }
 
-    pub fn press_instrument_note(&mut self, instrument: u8, note: u32) -> () {
+    pub fn press_instrument_note(&mut self, instrument: u8, note: u8) -> () {
         self.script.press_instrument_note(self.frame_number, instrument, note);
     }
 

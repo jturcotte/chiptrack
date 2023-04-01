@@ -36,7 +36,7 @@ pub enum NoteEvent {
 
 #[derive(Clone, Copy, Debug)]
 struct InstrumentStep {
-    note: u32,
+    note: u8,
     press: bool,
     release: bool,
 }
@@ -91,7 +91,7 @@ impl Pattern {
         step_num: usize,
         set_press: Option<bool>,
         set_release: Option<bool>,
-        set_note: Option<u32>,
+        set_note: Option<u8>,
     ) -> bool {
         let mut step = &mut self.get_steps_mut(instrument_id, Some(instrument))[step_num];
         if set_press.map_or(true, |v| v == step.press)
@@ -413,7 +413,7 @@ impl Sequencer {
         pattern: usize,
         set_press: Option<bool>,
         set_release: Option<bool>,
-        set_note: Option<u32>,
+        set_note: Option<u8>,
     ) -> () {
         let instrument_id = &self.synth_instrument_ids[self.selected_instrument as usize];
         let pattern_empty = self.song.patterns[pattern].set_step_events(
@@ -448,7 +448,7 @@ impl Sequencer {
             })
             .unwrap();
     }
-    pub fn set_playing(&mut self, val: bool) -> Vec<(u8, NoteEvent, u32)> {
+    pub fn set_playing(&mut self, val: bool) -> Vec<(u8, NoteEvent, u8)> {
         self.playing = val;
         // Reset the current_frame so that it's aligned with full
         // steps and that record_press would record any key while
@@ -459,7 +459,7 @@ impl Sequencer {
             // The first advance_frame after playing will move from frame 0 to frame 1 and skip presses
             // of frame 0. Since we don't care about releases of the non-existant previous frame, do the
             // presses now, right after starting the playback.
-            let mut note_events: Vec<(u8, NoteEvent, u32)> = Vec::new();
+            let mut note_events: Vec<(u8, NoteEvent, u8)> = Vec::new();
             self.handle_current_step_presses(&mut note_events);
             note_events
         } else {
@@ -475,12 +475,12 @@ impl Sequencer {
         self.set_step_events(self.current_step, self.selected_pattern, Some(false), Some(false), None);
     }
 
-    fn handle_current_step_presses(&mut self, note_events: &mut Vec<(u8, NoteEvent, u32)>) {
+    fn handle_current_step_presses(&mut self, note_events: &mut Vec<(u8, NoteEvent, u8)>) {
         for instrument in &self.song.patterns[self.selected_pattern].instruments {
             let i = match instrument.synth_index {
                 Some(i) => i,
                 None => {
-                    elog!("The song is attempting to press instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
+                    // elog!("The song is attempting to press instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
                     continue;
                 }
             };
@@ -501,7 +501,7 @@ impl Sequencer {
             {
                 if press {
                     println!(
-                        "➕ REL {} note {}",
+                        "➕ PRS {} note {}",
                         self.synth_instrument_ids[i as usize],
                         MidiNote(note as i32).name()
                     );
@@ -511,12 +511,12 @@ impl Sequencer {
         }
     }
 
-    fn handle_current_step_releases(&mut self, note_events: &mut Vec<(u8, NoteEvent, u32)>) {
+    fn handle_current_step_releases(&mut self, note_events: &mut Vec<(u8, NoteEvent, u8)>) {
         for instrument in &self.song.patterns[self.selected_pattern].instruments {
             let i = match instrument.synth_index {
                 Some(i) => i,
                 None => {
-                    elog!("The song is attempting to release instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
+                    // elog!("The song is attempting to release instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
                     continue;
                 }
             };
@@ -537,7 +537,7 @@ impl Sequencer {
             {
                 if release {
                     println!(
-                        "➖ PRS {} note {}",
+                        "➖ REL {} note {}",
                         self.synth_instrument_ids[i as usize],
                         MidiNote(note as i32).name()
                     );
@@ -547,8 +547,8 @@ impl Sequencer {
         }
     }
 
-    pub fn advance_frame(&mut self) -> (Option<u32>, Vec<(u8, NoteEvent, u32)>) {
-        let mut note_events: Vec<(u8, NoteEvent, u32)> = Vec::new();
+    pub fn advance_frame(&mut self) -> (Option<u32>, Vec<(u8, NoteEvent, u8)>) {
+        let mut note_events: Vec<(u8, NoteEvent, u8)> = Vec::new();
 
         if !self.playing {
             return (None, note_events);
@@ -573,7 +573,7 @@ impl Sequencer {
         }
     }
 
-    fn record_event(&mut self, event: NoteEvent, note: Option<u32>) {
+    fn record_event(&mut self, event: NoteEvent, note: Option<u8>) {
         if !self.recording {
             return;
         }
@@ -649,12 +649,12 @@ impl Sequencer {
         self.set_step_events(step, pattern, press, release, note);
     }
 
-    pub fn record_press(&mut self, note: u32) {
+    pub fn record_press(&mut self, note: u8) {
         self.record_event(NoteEvent::Press, Some(note));
         self.last_press_frame = Some(self.current_frame);
     }
 
-    pub fn record_release(&mut self, _note: u32) {
+    pub fn record_release(&mut self, _note: u8) {
         // The note release won't be passed to the synth on playback,
         // so don't overwrite the note in the step just in case it contained something useful.
         self.record_event(NoteEvent::Release, None);
