@@ -1,2 +1,3 @@
 [target.thumbv4t-none-eabi]
 runner = "mgba -l 15 -2"
+rustflags = ["-Clink-arg=-Tlinker_scripts/mono_boot.ld"]
