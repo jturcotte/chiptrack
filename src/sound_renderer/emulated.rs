@@ -221,6 +221,7 @@ impl Synth {
         let dmg_cell = self.dmg.clone();
         move |table: &[u8]| {
             let mut dmg = dmg_cell.borrow_mut();
+            // FIXME: Set playing off and then on
             for (i, v) in table.iter().take(16).enumerate() {
                 dmg.wb((0xff30 + i) as u16, *v);
             }
@@ -457,6 +458,7 @@ fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine
     }
 }
 
+#[cfg(feature = "desktop")]
 fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicBool>) {
     let was_non_zero = !window.get_waveform_is_zero();
     let res_divider = 2.;

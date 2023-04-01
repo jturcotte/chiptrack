@@ -2,16 +2,10 @@
 name = "chiptrack"
 version = "0.2.0"
 authors = ["Jocelyn Turcotte <turcotte.j@gmail.com>"]
-edition = "2018"
-
-[features]
-std = ["slint/std", "cpal", "rboy", "once_cell", "tiny-skia", "serde_json", "notify", "midir", "midly", "url", "ehttp", "pulldown-cmark", "regex", "native-dialog"]
-
-default = ["std"]
+edition = "2021"
 
 ## wasm build stuff
 ## Uncomment and build with: wasm-pack build --release --target web
-# resolver = "2"
 # [lib]
 # crate-type = ["cdylib"]
 # path = "src/main.rs"
@@ -22,6 +16,36 @@ default = ["std"]
 # [patch.crates-io]
 # blip_buf = { path = "../blip_buf-rs"}
 
+
+[features]
+default = ["desktop"]
+std = ["slint/std", "wamr-sys/std"]
+desktop = ["std", "slint/backend-winit", "slint/renderer-winit-femtovg", "cpal", "rboy", "once_cell", "tiny-skia", "serde_json", "notify", "midir", "midly", "url", "ehttp", "pulldown-cmark", "regex", "native-dialog"]
+gba = ["dep:gba", "libm", "slint/unsafe-single-threaded", "i-slint-core/unsafe-single-threaded", "slint/libm", "embedded-alloc", "critical-section/restore-state-bool"]
+
+[build-dependencies.slint-build]
+version = "0.3.3"
+[dependencies.slint]
+version = "0.3.3"
+default-features = false
+features = ["compat-0-3-0"]
+[dependencies.i-slint-core]
+version = "=0.3.3"
+default-features = false
+optional = true
+
+
+[dependencies.rboy]
+git = "https://github.com/jturcotte/rboy.git"
+rev = "836b4e7a58288a29c13bf7f8b967358c7331ee41"
+# Use as a lib, features are used by its bin's main.rs only.
+default-features = false
+optional = true
+
+[dependencies.wamr-sys]
+git = "https://github.com/jturcotte/wamr-sys.git"
+rev = "93546401ecdfb7beb6856d42b6cb7bca3941fa33"
+default-features = false
 
 [dependencies]
 cpal = { version = "0.13", features = ["wasm-bindgen"], optional = true }
@@ -37,23 +61,10 @@ pulldown-cmark = { version = "0.9", optional = true }
 regex = { version = "1", optional = true }
 native-dialog = { version = "0.6", optional = true }
 
-[dependencies.slint]
-version = "0.3"
-default-features = false
-# Re-enable everything except "backend-qt"
-features = ["std", "backend-winit", "renderer-winit-femtovg", "compat-0-3-0"]
+gba = { version = "0.10", optional = true }
+libm = { version = "0.2", optional = true }
+critical-section = { version = "1", optional = true }
+embedded-alloc = { version = "0.5", optional = true }
 
-[build-dependencies.slint-build]
-version = "0.3"
-
-[dependencies.rboy]
-git = "https://github.com/jturcotte/rboy.git"
-rev = "836b4e7a58288a29c13bf7f8b967358c7331ee41"
-# Use as a lib, features are used by its bin's main.rs only.
-default-features = false
-optional = true
-
-[dependencies.wamr-sys]
-git = "https://github.com/jturcotte/wamr-sys.git"
-rev = "93546401ecdfb7beb6856d42b6cb7bca3941fa33"
-default-features = false
+# [profile.release]
+# debug = true

@@ -1,15 +1,18 @@
-// extern crate wamr_sys;
+// Copyright © 2022 Jocelyn Turcotte <turcotte.j@gmail.com>
+// SPDX-License-Identifier: MIT
 
 extern crate alloc;
 
+use alloc::alloc::realloc;
+use alloc::alloc::dealloc;
+use alloc::alloc::alloc;
+use alloc::alloc::Layout;
 use alloc::boxed::Box;
 use alloc::ffi::CString;
-use alloc::format;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
-use alloc::vec;
 use core::mem;
 use core::ptr;
 use core::ffi::c_void;
@@ -159,7 +162,6 @@ pub struct WasmRuntime {
     _module_name: CString,
     _functions: Vec<Box<dyn HostFunction>>,
     _native_symbols: Vec<NativeSymbol>,
-    _heap_pool: Vec<u8>,
 }
 
 pub struct WasmModule {
@@ -186,20 +188,47 @@ const INSTANCE_STACK_SIZE: u32 = 8092;
 // WASM code is creating memory objects for their own memory and are allocated separately from this setting.
 const INSTANCE_HEAP_SIZE: u32 = 0;
 
+const PTR_SIZE: usize = mem::size_of::<usize>();
+unsafe fn malloc_func(size: usize) -> *mut u8 {
+    let layout = Layout::from_size_align(size + PTR_SIZE, PTR_SIZE).unwrap();
+    let ptr = alloc(layout);
+    // free only provides the allocated pointer, so we need to expand the allocation,
+    // store the size at the beginning and return the address just after to the application.
+    core::slice::from_raw_parts_mut(ptr as *mut usize, 1)[0] = size;
+    ptr.offset(PTR_SIZE as isize)
+}
+
+unsafe fn free_func(ptr: *mut u8) {
+    let alloc_ptr = ptr.offset(-(PTR_SIZE as isize));
+    let size = core::slice::from_raw_parts_mut(alloc_ptr as *mut usize, 1)[0];
+    let layout = Layout::from_size_align(size, PTR_SIZE).unwrap();
+    dealloc(alloc_ptr, layout);
+}
+
+unsafe fn realloc_func(ptr: *mut u8, new_size: usize) -> *mut u8 {
+    let alloc_ptr = ptr.offset(-(PTR_SIZE as isize));
+    let size = core::slice::from_raw_parts_mut(alloc_ptr as *mut usize, 1)[0];
+    let layout = Layout::from_size_align(size, PTR_SIZE).unwrap();
+    let new_ptr = realloc(alloc_ptr, layout, new_size);
+    core::slice::from_raw_parts_mut(alloc_ptr as *mut usize, 1)[0] = new_size;
+    new_ptr.offset(PTR_SIZE as isize)
+}
+
 impl WasmRuntime {
     pub fn new(mut functions: Vec<Box<dyn HostFunction>>) -> Result<WasmRuntime, String> { unsafe {
-        // let init_args = RuntimeInitArgs{};
         let mut init_args: RuntimeInitArgs = mem::zeroed();
 
-        // configure memory allocation 
-        let mut heap_pool: Vec<u8> = vec![0; 128*1024];
-        init_args.mem_alloc_type = mem_alloc_type_t_Alloc_With_Pool;
-        init_args.mem_alloc_option.pool.heap_buf = heap_pool.as_mut_ptr() as *mut c_void;
-        init_args.mem_alloc_option.pool.heap_size = heap_pool.len() as u32;
+        // Configure memory allocation.
+        // Use a manual allocator that uses the Rust global allocator
+        // to support no_std builds.
+        init_args.mem_alloc_type = mem_alloc_type_t_Alloc_With_Allocator;
+        init_args.mem_alloc_option.allocator.malloc_func = malloc_func as *mut c_void;
+        init_args.mem_alloc_option.allocator.free_func = free_func as *mut c_void;
+        init_args.mem_alloc_option.allocator.realloc_func = realloc_func as *mut c_void;
 
         // initialize the runtime before registering the native functions
         if !wasm_runtime_full_init(&mut init_args as *mut _) {
-            return Err("CANT INIT RUNTIME".to_string());
+            panic!("CANT INIT RUNTIME");
         }
 
         let mut native_symbols: Vec<NativeSymbol> = 
@@ -209,13 +238,12 @@ impl WasmRuntime {
         if !wasm_runtime_register_natives(module_name.as_ptr(),
                                          native_symbols.as_mut_ptr(), 
                                          native_symbols.len() as u32) {
-            return Err("wasm_runtime_register_natives failed".to_string());
+            panic!("wasm_runtime_register_natives failed");
         }
         Ok(WasmRuntime{
             _module_name: module_name,
             _functions: functions,
             _native_symbols: native_symbols,
-            _heap_pool: heap_pool
             })
     } }
 }
@@ -233,7 +261,7 @@ impl WasmModule {
         // parse the WASM file from buffer and create a WASM module 
         let module = wasm_runtime_load(wasm_buffer.as_mut_ptr(), wasm_buffer.len() as u32, error_buf.as_mut_ptr(), error_buf.len() as u32);
         if module == ptr::null_mut() {
-            return Err(format!("wasm_runtime_load failed: {:?}", CStr::from_ptr(error_buf.as_ptr())));
+            panic!("wasm_runtime_load failed: {:?}", CStr::from_ptr(error_buf.as_ptr()));
         }
         Ok(WasmModule{module, _wasm_buffer: wasm_buffer, _runtime: Some(runtime)})
     } }
@@ -254,7 +282,7 @@ impl WasmModuleInst {
         let module_inst = wasm_runtime_instantiate(module.module, INSTANCE_STACK_SIZE, INSTANCE_HEAP_SIZE,
                                              error_buf.as_mut_ptr(), error_buf.len() as u32);
         if module_inst == ptr::null_mut() {
-            return Err(format!("wasm_runtime_instantiate failed: {:?}", CStr::from_ptr(error_buf.as_ptr())));
+            panic!("wasm_runtime_instantiate failed: {:?}", CStr::from_ptr(error_buf.as_ptr()));
         }
         Ok(WasmModuleInst{module_inst: Some(module_inst), _module: Some(module)})
     } }
@@ -316,7 +344,7 @@ impl WasmExecEnv {
         else {
             // exception is thrown if call fails 
             let cstr = CStr::from_ptr(wasm_runtime_get_exception(wasm_runtime_get_module_inst(self.exec_env)));
-            return Err(format!("wasm_runtime_call_wasm failed: {:?}", cstr));
+            panic!("wasm_runtime_call_wasm failed: {:?}", cstr);
         }
     } }
 }

@@ -109,7 +109,7 @@ pub const Sweep = packed struct {
             Channel.square1 => nr10,
             else => unreachable,
         };
-        gbaSetSoundReg(address, @bitCast(u16, self));
+        gba_set_sound_reg(address, @bitCast(u16, self));
     }
 };
 
@@ -227,6 +227,7 @@ pub fn wav(comptime t: u128) WavTable {
     return WavTable{ .v = @bitCast([16]u8, @byteSwap(t)) };
 }
 
+var current_bank: u1 = 0;
 /// (NR30) - Channel 3 Stop/Wave RAM select (R/W)
 pub const WaveRam = packed struct {
     ///  Bit        Expl.
@@ -258,9 +259,11 @@ pub const WaveRam = packed struct {
         gba_set_sound_reg(address, @bitCast(u16, self));
     }
     pub fn setTable(table: *const WavTable) void {
-        (WaveRam{ .playing = 0 }).write(wave);
+        // Write to the unselected bank
         gba_set_wave_table(&table.v, table.v.len);
-        (WaveRam{ .playing = 1 }).write(wave);
+        // Then select it
+        current_bank ^= 1;
+        (WaveRam{ .playing = 1, .bank = current_bank }).write(wave);
     }
 };
 

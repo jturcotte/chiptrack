@@ -19,9 +19,9 @@ use alloc::string::String;
 use core::cell::Ref;
 use core::cell::RefCell;
 use core::ffi::CStr;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use std::fs::File;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use std::io::Write;
 
 pub mod wasm;
@@ -78,7 +78,7 @@ pub struct SynthScript {
 }
 
 impl SynthScript {
-    const DEFAULT_INSTRUMENTS: &'static [u8] = include_bytes!("../res/default-instruments.rhai");
+    const DEFAULT_INSTRUMENTS: &'static [u8] = include_bytes!("../res/default-instruments.wasm");
 
     pub fn new<F, G>(synth_set_sound_reg: F, synth_set_wave_table: G) -> SynthScript
         where
@@ -141,6 +141,7 @@ impl SynthScript {
         self.instrument_ids.borrow()
     }
 
+    #[cfg(feature = "desktop")]
     fn reset_instruments(&mut self) {
         for state_col in &mut *self.instrument_states.borrow_mut() {
             state_col.clear();
@@ -152,6 +153,11 @@ impl SynthScript {
     }
 
     pub fn load_default(&mut self, _frame_number: usize) {
+        // FIXME: Take a slice
+        let module = Rc::new(WasmModule::new(SynthScript::DEFAULT_INSTRUMENTS.to_vec(), self.wasm_runtime.clone()).unwrap());
+        let module_inst = Rc::new(WasmModuleInst::new(module).unwrap());
+        self.wasm_exec_env = Some(WasmExecEnv::new(module_inst).unwrap());
+
         // self.script_engine
         //     .compile(SynthScript::DEFAULT_INSTRUMENTS)
         //     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
@@ -162,7 +168,7 @@ impl SynthScript {
         //     .expect("Error loading default instruments.");
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     pub fn load_str(&mut self, _encoded: &str, _frame_number: usize) -> Result<(), Box<dyn std::error::Error>> {
         self.reset_instruments();
 
@@ -172,7 +178,7 @@ impl SynthScript {
         Ok(())
     }
 
-    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     pub fn load_file(&mut self, instruments_path: &std::path::Path, _frame_number: usize) -> Result<(), Box<dyn std::error::Error>> {
         self.reset_instruments();
 
@@ -191,7 +197,7 @@ impl SynthScript {
         }
     }
 
-    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
         let mut f = File::create(instruments_path)?;
         f.write_all(SynthScript::DEFAULT_INSTRUMENTS)?;

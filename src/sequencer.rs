@@ -1,7 +1,7 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 mod markdown;
 
 use crate::sound_engine::NUM_INSTRUMENTS;
@@ -11,11 +11,17 @@ use crate::utils::MidiNote;
 use crate::GlobalEngine;
 use crate::GlobalSettings;
 use crate::MainWindow;
+use crate::PatternInstrumentData;
 use crate::SongPatternData;
 use crate::SongSettings;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use markdown::{parse_markdown_song, save_markdown_song};
 
+use serde::Serialize;
+use serde::Deserialize;
+use postcard::from_bytes;
+#[cfg(feature = "desktop")]
+use postcard::to_allocvec;
 use slint::Global;
 use slint::Model;
 use slint::VecModel;
@@ -27,9 +33,9 @@ use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use std::error::Error;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use std::path::Path;
 
 #[cfg(target_arch = "wasm32")]
@@ -41,14 +47,14 @@ pub enum NoteEvent {
     Release,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct InstrumentStep {
     note: u8,
     press: bool,
     release: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct Instrument {
     id: String,
     synth_index: Option<u8>,
@@ -70,6 +76,28 @@ impl Pattern {
             .iter()
             .find(|i| i.synth_index == Some(instrument))
             .map(|i| &i.steps)
+    }
+
+    fn next_instrument(&self, current_instrument: u8, forwards: bool) -> Option<u8> {
+        let maybe_current_position = self.instruments
+            .iter()
+            .position(|i| i.synth_index == Some(current_instrument));
+        match maybe_current_position {
+            Some(ii) if forwards => self.instruments.iter().cycle().skip(ii + 1).take(self.instruments.len() - 1).find_map(|i| i.synth_index),
+            Some(ii) => self.instruments.iter().rev().cycle().skip(self.instruments.len() - ii).take(self.instruments.len() - 1).find_map(|i| i.synth_index),
+            // The selected instrument isn't yet in the pattern, use the first available instrument.
+            None => self.instruments.iter().find_map(|i| i.synth_index),
+        }
+    }
+
+    fn find_instrument_pos(&self, instrument: u8) -> Option<usize> {
+        self.instruments
+            .iter()
+            .position(|i| i.synth_index == Some(instrument))
+    }
+
+    fn instruments(&self) -> &Vec<Instrument> {
+        &self.instruments
     }
 
     fn get_steps_mut<'a>(
@@ -158,9 +186,9 @@ impl Pattern {
 pub struct SequencerSong {
     song_patterns: Vec<usize>,
     patterns: Vec<Pattern>,
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     markdown_header: String,
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     instruments_file: String,
     frames_per_step: u32,
 }
@@ -186,9 +214,9 @@ impl Default for SequencerSong {
                 };
                 NUM_PATTERNS
             ],
-            #[cfg(feature = "std")]
+            #[cfg(feature = "desktop")]
             markdown_header: String::new(),
-            #[cfg(feature = "std")]
+            #[cfg(feature = "desktop")]
             instruments_file: String::new(),
             frames_per_step: 7,
         }
@@ -214,6 +242,8 @@ pub struct Sequencer {
 }
 
 impl Sequencer {
+    const DEFAULT_SONG: &'static [u8] = include_bytes!("../res/default.ct.bin");
+
     pub fn new(main_window: Weak<MainWindow>) -> Sequencer {
         Sequencer {
             song: Default::default(),
@@ -314,8 +344,17 @@ impl Sequencer {
                 let mut row_data = model.row_data(instrument as usize).unwrap();
                 row_data.selected = true;
                 model.set_row_data(instrument as usize, row_data);
+
+                GlobalEngine::get(&handle).set_current_instrument(instrument as i32);
             })
             .unwrap();
+    }
+
+    pub fn cycle_pattern_instrument(&mut self, forwards: bool) -> () {
+        let maybe_next = self.song.patterns[self.selected_pattern].next_instrument(self.selected_instrument, forwards);
+        if let Some(instrument) = maybe_next {
+            self.select_instrument(instrument)
+        }
     }
 
     pub fn toggle_mute_instrument(&mut self, instrument: u8) -> () {
@@ -352,9 +391,14 @@ impl Sequencer {
     }
 
     fn update_steps(&mut self) -> () {
-        let maybe_steps = self.song.patterns[self.selected_pattern]
-            .get_steps(self.selected_instrument)
-            .map(|s| s.clone());
+        let pattern = &self.song.patterns[self.selected_pattern];
+        let maybe_steps = pattern.get_steps(self.selected_instrument).map(|s| s.clone());
+        let instruments = pattern.instruments().clone();
+        // FIXME: Falling back to 0 makes the navigation difficult.
+        //        It would be nice to have the right insertion point, but without having instruments
+        //        ordered by synth_index in the patterns this will be difficult.
+        let instruments_to_skip = pattern.find_instrument_pos(self.selected_instrument).map(|i| i + 1).unwrap_or(0);
+
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_sequencer_steps();
@@ -362,9 +406,29 @@ impl Sequencer {
                     let mut row_data = model.row_data(i).unwrap();
                     row_data.press = step.press;
                     row_data.release = step.release;
+                    // FIXME: Pre-create the note SharedStrings somewhere
                     row_data.note_name = MidiNote(step.note as i32).name().into();
                     model.set_row_data(i, row_data);
                 }
+
+                let model2 = GlobalEngine::get(&handle).get_sequencer_pattern_instruments();
+                let vec_model = model2.as_any().downcast_ref::<VecModel<PatternInstrumentData>>().unwrap();
+
+                let modeled: Vec<PatternInstrumentData> =
+                    instruments.iter()
+                        .cycle()
+                        .skip(instruments_to_skip)
+                        .take(if instruments_to_skip == 0 { instruments.len() } else { instruments.len() - 1 })
+                        .map(|mi| {
+                            let steps_empty: Vec<bool> = mi.steps.iter()
+                                .map(|s| !(s.press || s.release))
+                                .collect();
+                            PatternInstrumentData {
+                                id: (&mi.id).into(),
+                                steps_empty: slint::ModelRc::new(VecModel::from(steps_empty)),
+                            }
+                        }).collect();
+                vec_model.set_vec(modeled);
             })
             .unwrap();
     }
@@ -628,12 +692,14 @@ impl Sequencer {
                 // We're going to sequence full steps anyway.
                 // This is to prevent the release to be offset only by one frame but still end up
                 // one step later just because the press would already have been on the step's edge itself.
-                let steps_note_length = ((self.current_frame as f32 - self.last_press_frame.unwrap() as f32)
-                    / self.song.frames_per_step as f32)
-                    .round() as u32;
+                // To do so, first find the frames length rounded to the number of frames per step,
+                // and add it to the press frame.
+                fn round(n: u32, to: u32) -> u32 { (n + to / 2) / to * to }
+                let rounded_steps_note_length =
+                    round(self.current_frame - self.last_press_frame.unwrap(), self.song.frames_per_step);
                 // We need to place the release in the previous step (its end), so substract one step.
                 let rounded_end_frame =
-                    self.last_press_frame.unwrap() + (steps_note_length.max(1) - 1) * self.song.frames_per_step;
+                    self.last_press_frame.unwrap() + (rounded_steps_note_length.max(1) - 1);
 
                 let is_end_in_prev_step =
                     rounded_end_frame / self.song.frames_per_step < self.current_frame / self.song.frames_per_step;
@@ -764,10 +830,13 @@ impl Sequencer {
     }
 
     pub fn load_default(&mut self) {
-        self.set_song(Default::default());
+        let song: SequencerSong = from_bytes(Sequencer::DEFAULT_SONG).expect("Can't load postcard");
+
+        // let instruments_file = song.instruments_file.clone();
+        self.set_song(song);
     }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
     pub fn load_str(&mut self, markdown: &str) -> Result<String, Box<dyn Error>> {
         let song = parse_markdown_song(markdown)?;
 
@@ -776,7 +845,7 @@ impl Sequencer {
         Ok(instruments_file)
     }
 
-    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     pub fn load_file(&mut self, song_path: &Path) -> Result<String, Box<dyn Error>> {
         if song_path.exists() {
             let md = std::fs::read_to_string(song_path)?;
@@ -790,12 +859,12 @@ impl Sequencer {
         }
     }
 
-    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     pub fn save(&self, song_path: &Path) -> Result<(), Box<dyn Error>> {
         save_markdown_song(&self.song, song_path)
     }
 
-    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     pub fn save_as(&mut self, song_path: &Path, instruments_path: &Path) -> Result<(), Box<dyn Error>> {
         self.song.instruments_file = instruments_path
             .file_name()

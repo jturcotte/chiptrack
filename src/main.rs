@@ -2,30 +2,39 @@
 // SPDX-License-Identifier: MIT
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "gba", no_main)]
+// The following no-std features are usually needed.
+#![cfg_attr(feature = "gba", feature(error_in_core, alloc_error_handler, start, core_intrinsics, lang_items, link_cfg))]
+
 extern crate alloc;
 
 mod log;
-#[cfg(feature = "std")]
-mod midi;
 mod sequencer;
 mod sound_engine;
 mod sound_renderer;
 mod synth_script;
 mod utils;
+#[cfg(feature = "desktop")]
+mod midi;
+#[cfg(feature = "gba")]
+mod gba_platform;
+
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 use crate::sound_renderer::new_sound_renderer;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use crate::midi::Midi;
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
 use crate::utils::MidiNote;
 
-use slint::{Model, Timer, TimerMode};
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
+use slint::Model;
+use slint::{Timer, TimerMode};
+#[cfg(feature = "desktop")]
 use url::Url;
 
 use alloc::borrow::ToOwned;
@@ -34,24 +43,39 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use std::env;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use std::path::PathBuf;
 use core::time::Duration;
-
 
 
 slint::include_modules!();
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
+#[cfg(not(feature = "gba"))]
 pub fn main() {
+    run_main()
+}
+
+// FIXME: Can it be moved?
+#[cfg(any(feature = "gba"))]
+#[no_mangle]
+extern "C" fn main() -> ! {
+    // mcu_board_support::init();
+    gba_platform::init();
+    run_main();
+
+    panic!("Should not return")
+}
+
+fn run_main() {
     // This provides better error messages in debug mode.
     // It's disabled in release mode so it doesn't bloat up the file size.
     #[cfg(all(debug_assertions, target_arch = "wasm32"))]
     console_error_panic_hook::set_once();
 
-    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     let (maybe_file_path, maybe_gist_path) = match env::args().nth(1).map(|u| Url::parse(&u)) {
         None => (None, None),
         Some(Ok(url)) => {
@@ -97,31 +121,36 @@ pub fn main() {
         InstrumentData::default();
         NUM_INSTRUMENTS
     ]));
-    let note_model = Rc::new(slint::VecModel::default());
-    let start: i32 = 60;
-    let start_octave: i32 = MidiNote(start).octave();
-    let notes: Vec<NoteData> = (start..(start + 13))
-        .map(|i| {
-            let note = MidiNote(i);
-            let pos = note.key_pos() + (note.octave() - start_octave) * 7;
-            NoteData {
-                note_number: i,
-                key_pos: pos,
-                is_black: note.is_black(),
-                active: false,
-            }
-        })
-        .collect();
-    for n in notes.iter().filter(|n| !n.is_black) {
-        note_model.push(n.clone());
-    }
-    // Push the black notes at the end of the model so that they appear on top of the white ones.
-    for n in notes.iter().filter(|n| n.is_black) {
-        note_model.push(n.clone());
-    }
 
     let window = MainWindow::new();
-    window.set_notes(slint::ModelRc::from(note_model.clone()));
+
+    #[cfg(feature = "desktop")]
+    {
+        let note_model = Rc::new(slint::VecModel::default());
+        let start: i32 = 60;
+        let start_octave: i32 = MidiNote(start).octave();
+        let notes: Vec<NoteData> = (start..(start + 13))
+            .map(|i| {
+                let note = MidiNote(i);
+                let pos = note.key_pos() + (note.octave() - start_octave) * 7;
+                NoteData {
+                    note_number: i,
+                    key_pos: pos,
+                    is_black: note.is_black(),
+                    active: false,
+                }
+            })
+            .collect();
+        for n in notes.iter().filter(|n| !n.is_black) {
+            note_model.push(n.clone());
+        }
+        // Push the black notes at the end of the model so that they appear on top of the white ones.
+        for n in notes.iter().filter(|n| n.is_black) {
+            note_model.push(n.clone());
+        }
+
+        window.set_notes(slint::ModelRc::from(note_model.clone()));
+    }
 
     #[cfg(target_arch = "wasm32")]
     if !web_sys::window().unwrap().location().search().unwrap().is_empty() {
@@ -141,7 +170,7 @@ pub fn main() {
 
     let sound_renderer = Rc::new(RefCell::new(new_sound_renderer(&window)));
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     if let Some(gist_path) = maybe_gist_path {
         let api_url = "https://api.github.com/gists/".to_owned() + gist_path.splitn(2, '/').last().unwrap();
         log!("Loading the project from gist API URL {}", api_url.to_string());
@@ -177,7 +206,7 @@ pub fn main() {
     } else {
         sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.load_default());
     }
-    #[cfg(not(feature = "std"))]
+    #[cfg(not(feature = "desktop"))]
     sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.load_default());
 
     // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
@@ -186,7 +215,7 @@ pub fn main() {
     // request, so I'll need this to be enabled explicitly for the Web version.
     // The aldio latency is still so bad with the web version though,
     // so I'm not sure if that's really worth it.
-    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     let _midi = {
         let cloned_sound_renderer = sound_renderer.borrow().sender();
         let cloned_sound_renderer2 = sound_renderer.borrow().sender();
@@ -199,9 +228,10 @@ pub fn main() {
         Some(Midi::new(press, release))
     };
 
-    let window_weak = window.as_weak();
+    let _window_weak = window.as_weak();
+    #[cfg(feature = "desktop")]
     window.on_octave_increased(move |octave_delta| {
-        let window = window_weak.clone().upgrade().unwrap();
+        let window = _window_weak.clone().upgrade().unwrap();
         let first_note = window.get_first_note();
         if first_note <= 24 && octave_delta < 0 || first_note >= 96 && octave_delta > 0 {
             return;
@@ -256,6 +286,13 @@ pub fn main() {
     global_engine.on_select_instrument(move |instrument| {
         cloned_sound_renderer
             .borrow_mut().invoke_on_sound_engine(move |se| se.select_instrument(instrument as u8));
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_pattern_instrument(move |forwards| {
+        // FIXME: This might need to go through the SoundEngine as with select_instrument.
+        cloned_sound_renderer
+            .borrow_mut().invoke_on_sound_engine(move |se| se.sequencer.cycle_pattern_instrument(forwards));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -406,6 +443,11 @@ pub fn main() {
     // lazy context immediately.
     #[cfg(not(target_arch = "wasm32"))]
     sound_renderer.borrow_mut().force();
+
+    #[cfg(feature = "gba")]
+    gba_platform::set_sound_renderer(sound_renderer);
+    #[cfg(feature = "gba")]
+    gba_platform::set_main_window(window.as_weak());
 
     window.run();
 }

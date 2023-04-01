@@ -1,10 +1,11 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+use slint::Model;
 use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
 use crate::sound_renderer::Synth;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use crate::sound_renderer::emulated::invoke_on_sound_engine;
 use crate::synth_script::SynthScript;
 use crate::GlobalEngine;
@@ -12,19 +13,18 @@ use crate::MainWindow;
 use crate::Settings;
 use crate::SongSettings;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use native_dialog::FileDialog;
 use slint::Global;
-use slint::Model;
-use slint::SharedString;
+
 use slint::Weak;
 
 use alloc::vec::Vec;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use std::error::Error;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use std::ffi::OsString;
-#[cfg(feature = "std")]
+#[cfg(feature = "desktop")]
 use std::path::{Path, PathBuf};
 
 pub const NUM_INSTRUMENTS: usize = 64;
@@ -40,9 +40,9 @@ enum NoteSource {
 
 enum ProjectSource {
     New,
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     File((PathBuf, PathBuf)),
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     Gist,
 }
 
@@ -130,6 +130,7 @@ impl SoundEngine {
                 self.script.release_instrument(self.frame_number, instrument);
             };
 
+            #[cfg(feature = "desktop")]
             self.main_window
                 .upgrade_in_event_loop(move |handle| {
                     let pressed = typ == NoteEvent::Press;
@@ -180,6 +181,7 @@ impl SoundEngine {
         self.pressed_note = None;
 
         // Release all notes visually that might have been pressed for the previous instrument.
+        #[cfg(feature = "desktop")]
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = handle.get_notes();
@@ -192,13 +194,14 @@ impl SoundEngine {
             .unwrap();
     }
 
-    fn release_note_visually(&mut self, note: u8) -> () {
+    fn release_note_visually(&mut self, _note: u8) -> () {
+        #[cfg(feature = "desktop")]
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = handle.get_notes();
                 for row in 0..model.row_count() {
                     let mut row_data = model.row_data(row).unwrap();
-                    if note == row_data.note_number as u8 {
+                    if _note == row_data.note_number as u8 {
                         row_data.active = false;
                         model.set_row_data(row, row_data);
                     }
@@ -217,6 +220,7 @@ impl SoundEngine {
             self.release_note_visually(note_to_release)
         }
 
+        #[cfg(feature = "desktop")]
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = handle.get_notes();
@@ -248,7 +252,7 @@ impl SoundEngine {
                 let model = GlobalEngine::get(&handle).get_instruments();
                 for (i, id) in ids.iter().enumerate() {
                     let mut row_data = model.row_data(i).unwrap();
-                    row_data.id = SharedString::from(id);
+                    row_data.id = id.into();
                     model.set_row_data(i, row_data);
                 }
             })
@@ -263,7 +267,7 @@ impl SoundEngine {
         self.update_script_instrument_in_ui();
     }
 
-    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     pub fn load_file(&mut self, song_path: &Path) {
         match self.load_file_internal(song_path) {
             Ok(instruments_path) => self.project_source = ProjectSource::File((song_path.to_owned(), instruments_path)),
@@ -271,7 +275,7 @@ impl SoundEngine {
         }
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     pub fn load_gist(&mut self, json: serde_json::Value) {
         match self.load_gist_internal(json) {
             Ok(_) => self.project_source = ProjectSource::Gist,
@@ -279,7 +283,8 @@ impl SoundEngine {
         }
     }
 
-    #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
+
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     fn load_file_internal(&mut self, song_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
         log!("Loading the project song from file {:?}", song_path);
         let instruments_file = self.sequencer.load_file(song_path)?;
@@ -291,7 +296,7 @@ impl SoundEngine {
         Ok(instruments_path)
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     fn load_gist_internal(&mut self, json: serde_json::Value) -> Result<(), Box<dyn Error>> {
         let files = json
             .get("files")
@@ -325,7 +330,7 @@ impl SoundEngine {
         Ok(())
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     fn save_project_as(&mut self) {
         // On some platforms the native dialog needs to be invoked from the
         // main thread, but the state needed to decide whether or not we need
@@ -373,24 +378,24 @@ impl SoundEngine {
         })
         .unwrap();
     }
-    #[cfg(not(feature = "std"))]
+    #[cfg(not(feature = "desktop"))]
     fn save_project_as(&mut self) {
     }
 
     pub fn save_project(&mut self) {
         match &self.project_source {
             ProjectSource::New => self.save_project_as(),
-            #[cfg(feature = "std")]
+            #[cfg(feature = "desktop")]
             ProjectSource::File((song_path, _)) => self
                 .sequencer
                 .save(song_path.as_path())
                 .unwrap_or_else(|e| elog!("Error saving the project: {}", e)),
-            #[cfg(feature = "std")]
+            #[cfg(feature = "desktop")]
             ProjectSource::Gist => elog!("Can't save a project loaded from a gist URL."),
         }
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     pub fn instruments_path(&self) -> Option<&Path> {
         match &self.project_source {
             ProjectSource::File((_, instruments_path)) => Some(instruments_path.as_path()),
@@ -398,7 +403,7 @@ impl SoundEngine {
         }
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "desktop")]
     pub fn reload_instruments_from_file(&mut self) {
         if let ProjectSource::File((_, path)) = &self.project_source {
             self.script

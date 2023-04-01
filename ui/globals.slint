@@ -9,6 +9,10 @@ export struct PatternData := {
     empty: bool,
     active: bool,
 }
+export struct PatternInstrumentData := {
+    id: string,
+    steps_empty: [bool],
+}
 export struct StepData := {
     press: bool,
     release: bool,
@@ -65,6 +69,13 @@ export global GlobalEngine := {
         {empty: true}, {empty: true}, {empty: true}, {empty: true},
         {empty: true}, {empty: true}, {empty: true}, {empty: true},
         ];
+    property<[PatternInstrumentData]> sequencer_pattern_instruments: [
+        {id: "S1", steps_empty: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false] },
+        {id: "T2", steps_empty: [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false] },
+        {id: "W1", steps_empty: [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true] },
+        {id: "N2", steps_empty: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false] },
+        {id: "N4", steps_empty: [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false] },
+    ];
     property<[StepData]> sequencer_steps: [
         {press: true, note_name: "C-4"},
         {press: false}, {press: false}, {press: false},
@@ -81,6 +92,7 @@ export global GlobalEngine := {
         {active: false}, {active: false}, {active: false}, {active: false},
         ];
 
+    property<int> current_instrument: 0;
     property<int> synth_tick: 0;
     callback phase_visualization_tick(float) -> float;
 
@@ -99,6 +111,7 @@ export global GlobalEngine := {
     callback note_pressed(int);
     callback note_released(int);
     callback select_instrument(int);
+    callback cycle_pattern_instrument(bool);
     callback toggle_mute_instrument(int);
     callback pattern_clicked(int);
     callback toggle_step(int);
