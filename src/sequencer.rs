@@ -8,21 +8,21 @@ use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
 use crate::utils::MidiNote;
+use crate::utils::WeakWindowWrapper;
 use crate::GlobalEngine;
 use crate::GlobalSettings;
 use crate::PatternInstrumentData;
 use crate::SongPatternData;
 use crate::SongSettings;
-use crate::utils::WeakWindowWrapper;
+
 #[cfg(feature = "desktop")]
 use markdown::{parse_markdown_song, save_markdown_song};
-
-use serde::Serialize;
-use serde::Deserialize;
 #[cfg(feature = "gba")]
 use postcard::from_bytes;
 #[cfg(feature = "desktop")]
 use postcard::to_allocvec;
+use serde::Deserialize;
+use serde::Serialize;
 use slint::Global;
 use slint::Model;
 use slint::VecModel;
@@ -37,9 +37,6 @@ use alloc::vec::Vec;
 use std::error::Error;
 #[cfg(feature = "desktop")]
 use std::path::Path;
-
-#[cfg(target_arch = "wasm32")]
-use crate::utils;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum NoteEvent {
@@ -80,21 +77,33 @@ impl Pattern {
     }
 
     fn next_instrument(&self, current_instrument: u8, forwards: bool) -> Option<u8> {
-        let maybe_current_position = self.instruments
+        let maybe_current_position = self
+            .instruments
             .iter()
             .position(|i| i.synth_index == Some(current_instrument));
         match maybe_current_position {
-            Some(ii) if forwards => self.instruments.iter().cycle().skip(ii + 1).take(self.instruments.len() - 1).find_map(|i| i.synth_index),
-            Some(ii) => self.instruments.iter().rev().cycle().skip(self.instruments.len() - ii).take(self.instruments.len() - 1).find_map(|i| i.synth_index),
+            Some(ii) if forwards => self
+                .instruments
+                .iter()
+                .cycle()
+                .skip(ii + 1)
+                .take(self.instruments.len() - 1)
+                .find_map(|i| i.synth_index),
+            Some(ii) => self
+                .instruments
+                .iter()
+                .rev()
+                .cycle()
+                .skip(self.instruments.len() - ii)
+                .take(self.instruments.len() - 1)
+                .find_map(|i| i.synth_index),
             // The selected instrument isn't yet in the pattern, use the first available instrument.
             None => self.instruments.iter().find_map(|i| i.synth_index),
         }
     }
 
     fn find_instrument_pos(&self, instrument: u8) -> Option<usize> {
-        self.instruments
-            .iter()
-            .position(|i| i.synth_index == Some(instrument))
+        self.instruments.iter().position(|i| i.synth_index == Some(instrument))
     }
 
     fn instruments(&self) -> &Vec<Instrument> {
@@ -398,7 +407,10 @@ impl Sequencer {
         // FIXME: Falling back to 0 makes the navigation difficult.
         //        It would be nice to have the right insertion point, but without having instruments
         //        ordered by synth_index in the patterns this will be difficult.
-        let instruments_to_skip = pattern.find_instrument_pos(self.selected_instrument).map(|i| i + 1).unwrap_or(0);
+        let instruments_to_skip = pattern
+            .find_instrument_pos(self.selected_instrument)
+            .map(|i| i + 1)
+            .unwrap_or(0);
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
@@ -413,22 +425,28 @@ impl Sequencer {
                 }
 
                 let model2 = GlobalEngine::get(&handle).get_sequencer_pattern_instruments();
-                let vec_model = model2.as_any().downcast_ref::<VecModel<PatternInstrumentData>>().unwrap();
+                let vec_model = model2
+                    .as_any()
+                    .downcast_ref::<VecModel<PatternInstrumentData>>()
+                    .unwrap();
 
-                let modeled: Vec<PatternInstrumentData> =
-                    instruments.iter()
-                        .cycle()
-                        .skip(instruments_to_skip)
-                        .take(if instruments_to_skip == 0 { instruments.len() } else { instruments.len() - 1 })
-                        .map(|mi| {
-                            let steps_empty: Vec<bool> = mi.steps.iter()
-                                .map(|s| !(s.press || s.release))
-                                .collect();
-                            PatternInstrumentData {
-                                id: (&mi.id).into(),
-                                steps_empty: slint::ModelRc::new(VecModel::from(steps_empty)),
-                            }
-                        }).collect();
+                let modeled: Vec<PatternInstrumentData> = instruments
+                    .iter()
+                    .cycle()
+                    .skip(instruments_to_skip)
+                    .take(if instruments_to_skip == 0 {
+                        instruments.len()
+                    } else {
+                        instruments.len() - 1
+                    })
+                    .map(|mi| {
+                        let steps_empty: Vec<bool> = mi.steps.iter().map(|s| !(s.press || s.release)).collect();
+                        PatternInstrumentData {
+                            id: (&mi.id).into(),
+                            steps_empty: slint::ModelRc::new(VecModel::from(steps_empty)),
+                        }
+                    })
+                    .collect();
                 vec_model.set_vec(modeled);
             })
             .unwrap();
@@ -695,12 +713,15 @@ impl Sequencer {
                 // one step later just because the press would already have been on the step's edge itself.
                 // To do so, first find the frames length rounded to the number of frames per step,
                 // and add it to the press frame.
-                fn round(n: u32, to: u32) -> u32 { (n + to / 2) / to * to }
-                let rounded_steps_note_length =
-                    round(self.current_frame - self.last_press_frame.unwrap(), self.song.frames_per_step);
+                fn round(n: u32, to: u32) -> u32 {
+                    (n + to / 2) / to * to
+                }
+                let rounded_steps_note_length = round(
+                    self.current_frame - self.last_press_frame.unwrap(),
+                    self.song.frames_per_step,
+                );
                 // We need to place the release in the previous step (its end), so substract one step.
-                let rounded_end_frame =
-                    self.last_press_frame.unwrap() + (rounded_steps_note_length.max(1) - 1);
+                let rounded_end_frame = self.last_press_frame.unwrap() + (rounded_steps_note_length.max(1) - 1);
 
                 let is_end_in_prev_step =
                     rounded_end_frame / self.song.frames_per_step < self.current_frame / self.song.frames_per_step;

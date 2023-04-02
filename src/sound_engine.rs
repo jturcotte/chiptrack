@@ -1,21 +1,22 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-use slint::Model;
+use crate::log;
 use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
-use crate::sound_renderer::Synth;
 #[cfg(feature = "desktop")]
 use crate::sound_renderer::emulated::invoke_on_sound_engine;
+use crate::sound_renderer::Synth;
 use crate::synth_script::SynthScript;
+use crate::utils::WeakWindowWrapper;
 use crate::GlobalEngine;
 use crate::Settings;
 use crate::SongSettings;
-use crate::utils::WeakWindowWrapper;
 
 #[cfg(feature = "desktop")]
 use native_dialog::FileDialog;
 use slint::Global;
+use slint::Model;
 
 use alloc::vec::Vec;
 #[cfg(feature = "desktop")]
@@ -57,9 +58,7 @@ pub struct SoundEngine {
 impl SoundEngine {
     pub fn new(synth: Synth, main_window: WeakWindowWrapper) -> SoundEngine {
         let sequencer = Sequencer::new(main_window.clone());
-        let script = SynthScript::new(
-            synth.set_sound_reg_callback(),
-            synth.set_wave_table_callback());
+        let script = SynthScript::new(synth.set_sound_reg_callback(), synth.set_wave_table_callback());
 
         SoundEngine {
             sequencer: sequencer,
@@ -237,7 +236,8 @@ impl SoundEngine {
         // Instruments are monophonic, ignore any note release, either sequenced or live,
         // for the current instrument if it wasn't the last pressed one.
         if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), NoteEvent::Release) {
-            self.script.release_instrument(self.frame_number, self.sequencer.selected_instrument);
+            self.script
+                .release_instrument(self.frame_number, self.sequencer.selected_instrument);
             self.sequencer.record_release(note);
             self.release_note_visually(note_to_release);
         }
@@ -279,7 +279,6 @@ impl SoundEngine {
             Err(err) => elog!("Error extracting project from gist: {}", err),
         }
     }
-
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     fn load_file_internal(&mut self, song_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
@@ -379,8 +378,7 @@ impl SoundEngine {
         .unwrap();
     }
     #[cfg(not(feature = "desktop"))]
-    fn save_project_as(&mut self) {
-    }
+    fn save_project_as(&mut self) {}
 
     pub fn save_project(&mut self) {
         match &self.project_source {
@@ -401,7 +399,12 @@ impl SoundEngine {
             let p = Path::new("chiptrack.sav");
             let instruments = std::fs::read(self.instruments_path().unwrap())?;
             let song = self.sequencer.serialize_to_postcard()?;
-            println!("Saving project song to file {:?}, instruments: {} bytes, song: {} bytes.", p, instruments.len(), song.len());
+            println!(
+                "Saving project song to file {:?}, instruments: {} bytes, song: {} bytes.",
+                p,
+                instruments.len(),
+                song.len()
+            );
             let mut full = Vec::new();
             full.extend_from_slice(&(instruments.len() as u32).to_le_bytes());
             full.extend_from_slice(&(song.len() as u32).to_le_bytes());
@@ -426,11 +429,19 @@ impl SoundEngine {
             }
             gba::mem_fns::__aeabi_memcpy1(buf.as_mut_ptr(), sram.offset(4), 4);
             let song_len = u32::from_le_bytes(buf) as usize;
-            log!("Loading song ({} bytes) and instruments ({} bytes) from SRAM.", song_len, instruments_len);
+            log!(
+                "Loading song ({} bytes) and instruments ({} bytes) from SRAM.",
+                song_len,
+                instruments_len
+            );
 
             {
                 let mut song_bytes = Vec::<u8>::with_capacity(song_len);
-                gba::mem_fns::__aeabi_memcpy1(song_bytes.as_mut_ptr(), sram.offset(8 + instruments_len as isize), song_len);
+                gba::mem_fns::__aeabi_memcpy1(
+                    song_bytes.as_mut_ptr(),
+                    sram.offset(8 + instruments_len as isize),
+                    song_len,
+                );
                 song_bytes.set_len(song_len);
                 self.sequencer.load_postcard_bytes(&song_bytes).unwrap();
             }

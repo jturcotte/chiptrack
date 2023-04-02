@@ -4,31 +4,34 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "gba", no_main)]
 // The following no-std features are usually needed.
-#![cfg_attr(feature = "gba", feature(error_in_core, alloc_error_handler, start, core_intrinsics, lang_items, link_cfg))]
+#![cfg_attr(
+    feature = "gba",
+    feature(error_in_core, alloc_error_handler, start, core_intrinsics, lang_items, link_cfg)
+)]
 
 extern crate alloc;
 
+#[cfg(feature = "gba")]
+mod gba_platform;
+// #[macro_use]
 mod log;
+#[cfg(feature = "desktop")]
+mod midi;
 mod sequencer;
 mod sound_engine;
 mod sound_renderer;
 mod synth_script;
 mod utils;
-#[cfg(feature = "desktop")]
-mod midi;
-#[cfg(feature = "gba")]
-mod gba_platform;
-
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::sound_renderer::new_sound_renderer;
 #[cfg(feature = "desktop")]
 use crate::midi::Midi;
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
+use crate::sound_renderer::new_sound_renderer;
 use crate::utils::MidiNote;
 
 #[cfg(feature = "desktop")]
@@ -43,12 +46,11 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
+use core::time::Duration;
 #[cfg(feature = "desktop")]
 use std::env;
 #[cfg(feature = "desktop")]
 use std::path::PathBuf;
-use core::time::Duration;
-
 
 slint::include_modules!();
 
@@ -203,12 +205,18 @@ fn run_main() {
             },
         );
     } else if let Some(file_path) = maybe_file_path {
-        sound_renderer.borrow_mut().invoke_on_sound_engine(move |se| se.load_file(&file_path));
+        sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.load_file(&file_path));
     } else {
-        sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.load_default());
+        sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(|se| se.load_default());
     }
     #[cfg(feature = "gba")]
-    sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.load_gba_sram().unwrap_or_else(|| se.load_default()));
+    sound_renderer
+        .borrow_mut()
+        .invoke_on_sound_engine(|se| se.load_gba_sram().unwrap_or_else(|| se.load_default()));
 
     // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
     // us when that initialization is done and that we can start querying the list of midi
@@ -220,7 +228,11 @@ fn run_main() {
     let _midi = {
         let cloned_sound_renderer = sound_renderer.borrow().sender();
         let cloned_sound_renderer2 = sound_renderer.borrow().sender();
-        let press = move |key| cloned_sound_renderer2.send(Box::new(move |se| se.press_note(key))).unwrap();
+        let press = move |key| {
+            cloned_sound_renderer2
+                .send(Box::new(move |se| se.press_note(key)))
+                .unwrap()
+        };
         let release = move |key| {
             cloned_sound_renderer
                 .send(Box::new(move |se| se.release_note(key)))
@@ -262,7 +274,8 @@ fn run_main() {
                         // Key.Backspace
                         '\u{8}' => {
                             cloned_sound_renderer
-                                .borrow_mut().invoke_on_sound_engine(|se| se.sequencer.set_erasing(true));
+                                .borrow_mut()
+                                .invoke_on_sound_engine(|se| se.sequencer.set_erasing(true));
                         }
                         _ => (),
                     }
@@ -272,7 +285,8 @@ fn run_main() {
                     // Key.Backspace
                     '\u{8}' => {
                         cloned_sound_renderer
-                            .borrow_mut().invoke_on_sound_engine(|se| se.sequencer.set_erasing(false));
+                            .borrow_mut()
+                            .invoke_on_sound_engine(|se| se.sequencer.set_erasing(false));
                     }
                     _ => (),
                 };
@@ -286,34 +300,37 @@ fn run_main() {
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_select_instrument(move |instrument| {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.select_instrument(instrument as u8));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.select_instrument(instrument as u8));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_cycle_pattern_instrument(move |forwards| {
         // FIXME: This might need to go through the SoundEngine as with select_instrument.
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.sequencer.cycle_pattern_instrument(forwards));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.cycle_pattern_instrument(forwards));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_toggle_mute_instrument(move |instrument| {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| {
-                se.sequencer.toggle_mute_instrument(instrument as u8)
-            });
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.toggle_mute_instrument(instrument as u8));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_note_pressed(move |note| {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.press_note(note as u8));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.press_note(note as u8));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_note_released(move |note| {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.release_note(note as u8));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.release_note(note as u8));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -321,7 +338,8 @@ fn run_main() {
     global_engine.on_note_key_pressed(move |note| {
         let cloned_sound_renderer2 = cloned_sound_renderer.clone();
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.press_note(note as u8));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.press_note(note as u8));
 
         // We have only one timer for direct interactions, and we don't handle
         // keys being held or even multiple keys at time yet, so just visually release all notes.
@@ -330,7 +348,8 @@ fn run_main() {
             Duration::from_millis(15 * 6),
             Box::new(move || {
                 cloned_sound_renderer2
-                    .borrow_mut().invoke_on_sound_engine(move |se| se.release_note(note as u8));
+                    .borrow_mut()
+                    .invoke_on_sound_engine(move |se| se.release_note(note as u8));
             }),
         );
     });
@@ -338,25 +357,29 @@ fn run_main() {
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_pattern_clicked(move |pattern_num| {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.sequencer.select_pattern(pattern_num as u32));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.select_pattern(pattern_num as u32));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_toggle_step(move |step_num| {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.sequencer.toggle_step(step_num as u32));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.toggle_step(step_num as u32));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_toggle_step_release(move |step_num| {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.sequencer.toggle_step_release(step_num as u32));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.toggle_step_release(step_num as u32));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_manually_advance_step(move |forwards| {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.sequencer.manually_advance_step(forwards));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.manually_advance_step(forwards));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -364,42 +387,51 @@ fn run_main() {
     global_engine.on_play_clicked(move |toggled| {
         // FIXME: Stop the sound device
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.set_playing(toggled));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.set_playing(toggled));
         window_weak.unwrap().set_playing(toggled);
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_record_clicked(move |toggled| {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.sequencer.set_recording(toggled));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.set_recording(toggled));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_append_song_pattern(move |pattern_num| {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.sequencer.append_song_pattern(pattern_num as u32));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.append_song_pattern(pattern_num as u32));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_remove_last_song_pattern(move || {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(|se| se.sequencer.remove_last_song_pattern());
+            .borrow_mut()
+            .invoke_on_sound_engine(|se| se.sequencer.remove_last_song_pattern());
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_clear_song_patterns(move || {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(|se| se.sequencer.clear_song_patterns());
+            .borrow_mut()
+            .invoke_on_sound_engine(|se| se.sequencer.clear_song_patterns());
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_save_project(move || {
-        cloned_sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.save_project())
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(|se| se.save_project())
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_export_project_as_gba_sav(move || {
-        cloned_sound_renderer.borrow_mut().invoke_on_sound_engine(|se| se.export_project_as_gba_sav())
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(|se| se.export_project_as_gba_sav())
     });
 
     let window_weak = window.as_weak();
@@ -421,14 +453,16 @@ fn run_main() {
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_mute_instruments(move || {
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(|se| se.synth.mute_instruments());
+            .borrow_mut()
+            .invoke_on_sound_engine(|se| se.synth.mute_instruments());
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     window.global::<GlobalSettings>().on_settings_changed(move |settings| {
         log!("SET {:?}", settings);
         cloned_sound_renderer
-            .borrow_mut().invoke_on_sound_engine(move |se| se.apply_settings(&settings));
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.apply_settings(&settings));
     });
     let cloned_sound_renderer = sound_renderer.clone();
     window
@@ -436,7 +470,8 @@ fn run_main() {
         .on_song_settings_changed(move |settings| {
             log!("SET {:?}", settings);
             cloned_sound_renderer
-                .borrow_mut().invoke_on_sound_engine(move |se| se.apply_song_settings(&settings));
+                .borrow_mut()
+                .invoke_on_sound_engine(move |se| se.apply_song_settings(&settings));
         });
 
     window

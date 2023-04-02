@@ -3,31 +3,32 @@
 
 extern crate alloc;
 
-use i_slint_core::model::ModelChangeListenerContainer;
-use slint::Model;
-use slint::Global;
+use crate::log;
+use crate::sound_renderer::SoundRenderer;
 use crate::GlobalEngine;
 use crate::MainWindow;
-use crate::sound_renderer::SoundRenderer;
-use slint::Brush::SolidColor;
-use i_slint_core::renderer::Renderer;
-use core::pin::Pin;
-use core::cell::Cell;
-use slint::Window;
-use slint::platform::software_renderer::SoftwareRenderer;
-use alloc::rc::Weak;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
+use alloc::rc::Weak;
+use core::cell::Cell;
+use core::pin::Pin;
+use i_slint_core::model::ModelChangeListenerContainer;
+use i_slint_core::renderer::Renderer;
+use slint::platform::software_renderer::SoftwareRenderer;
+use slint::Brush::SolidColor;
+use slint::Global;
+use slint::Model;
+use slint::Window;
 
-use embedded_alloc::Heap;
 use core::cell::RefCell;
+use embedded_alloc::Heap;
 
 use slint::platform::WindowEvent;
 
 use core::fmt::Write;
 use gba::{
-  mgba::{MgbaBufferedLogger, MgbaMessageLevel},
-  prelude::*,
+    mgba::{MgbaBufferedLogger, MgbaMessageLevel},
+    prelude::*,
 };
 
 #[cfg(feature = "panic-probe")]
@@ -40,10 +41,10 @@ fn oom(layout: core::alloc::Layout) -> ! {
 
 #[panic_handler]
 fn panic_handler(info: &core::panic::PanicInfo) -> ! {
-  if let Ok(mut logger) = MgbaBufferedLogger::try_new(MgbaMessageLevel::Fatal) {
-    write!(logger, "{info}").ok();
-  }
-  loop {}
+    if let Ok(mut logger) = MgbaBufferedLogger::try_new(MgbaMessageLevel::Fatal) {
+        write!(logger, "{info}").ok();
+    }
+    loop {}
 }
 
 const HEAP_SIZE: usize = 256 * 1024;
@@ -73,8 +74,10 @@ struct GbaCriticalSection;
 critical_section::set_impl!(GbaCriticalSection);
 
 unsafe impl critical_section::Impl for GbaCriticalSection {
-    unsafe fn acquire() -> RawRestoreState { true }
-    unsafe fn release(_token: RawRestoreState) { }
+    unsafe fn acquire() -> RawRestoreState {
+        true
+    }
+    unsafe fn release(_token: RawRestoreState) {}
 }
 
 pub struct MinimalGbaWindow {
@@ -82,7 +85,8 @@ pub struct MinimalGbaWindow {
     renderer: SoftwareRenderer<0>,
     needs_redraw: Cell<bool>,
     sequencer_steps_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
-    sequencer_pattern_instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
+    sequencer_pattern_instruments_tracker:
+        Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
 }
 
 struct ModelDirtinessTracker {
@@ -91,7 +95,9 @@ struct ModelDirtinessTracker {
 
 impl Default for ModelDirtinessTracker {
     fn default() -> Self {
-        ModelDirtinessTracker { is_dirty: RefCell::new(true) }
+        ModelDirtinessTracker {
+            is_dirty: RefCell::new(true),
+        }
     }
 }
 
@@ -127,29 +133,36 @@ impl MinimalGbaWindow {
         }
 
         BG0CNT.write(BackgroundControl::new().with_screenblock(31));
-        DISPCNT.write(DisplayControl::new()
-            // .with_video_mode(VideoMode::_0)
-            .with_show_bg0(true));
+        DISPCNT.write(
+            DisplayControl::new()
+                // .with_video_mode(VideoMode::_0)
+                .with_show_bg0(true),
+        );
 
         Rc::new_cyclic(|w: &Weak<Self>| Self {
             window: Window::new(w.clone()),
             renderer: SoftwareRenderer::new(w.clone()),
             needs_redraw: Default::default(),
             sequencer_steps_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
-            sequencer_pattern_instruments_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
+            sequencer_pattern_instruments_tracker: Box::pin(
+                ModelChangeListenerContainer::<ModelDirtinessTracker>::default(),
+            ),
         })
     }
 
     fn attach_trackers(&self) {
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
-        GlobalEngine::get(&handle).get_sequencer_steps().model_tracker().attach_peer(Pin::as_ref(&self.sequencer_steps_tracker).model_peer());
-        GlobalEngine::get(&handle).get_sequencer_pattern_instruments().model_tracker().attach_peer(Pin::as_ref(&self.sequencer_pattern_instruments_tracker).model_peer());
+        GlobalEngine::get(&handle)
+            .get_sequencer_steps()
+            .model_tracker()
+            .attach_peer(Pin::as_ref(&self.sequencer_steps_tracker).model_peer());
+        GlobalEngine::get(&handle)
+            .get_sequencer_pattern_instruments()
+            .model_tracker()
+            .attach_peer(Pin::as_ref(&self.sequencer_pattern_instruments_tracker).model_peer());
     }
 
-    pub fn draw_if_needed(
-        &self,
-        render_callback: impl FnOnce(&SoftwareRenderer<0>),
-    ) -> bool {
+    pub fn draw_if_needed(&self, render_callback: impl FnOnce(&SoftwareRenderer<0>)) -> bool {
         // FIXME: Check if this could be casted from the component of self somehow
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
         let global_engine = GlobalEngine::get(&handle);
@@ -166,47 +179,54 @@ impl MinimalGbaWindow {
             }
 
             let sequencer_steps = global_engine.get_sequencer_steps();
-            for i in 0 .. sequencer_steps.row_count() {
+            for i in 0..sequencer_steps.row_count() {
                 let vid_row = tsb.get_row(i + 1).unwrap();
                 let row_data = sequencer_steps.row_data(i).unwrap();
                 for (j, c) in row_data.note_name.chars().enumerate() {
-                    let tile_index = if row_data.press {
-                        c as u16
-                    } else {
-                        0
-                    };
+                    let tile_index = if row_data.press { c as u16 } else { 0 };
                     vid_row.index(j + 6).write(TextEntry::new().with_tile(tile_index));
                 }
-                vid_row.index(4).write(TextEntry::new().with_tile(row_data.active as u16 * 7));
-                vid_row.index(5).write(TextEntry::new().with_tile(row_data.press as u16 * '[' as u16));
-                vid_row.index(9).write(TextEntry::new().with_tile(row_data.release as u16 * ']' as u16));
+                vid_row
+                    .index(4)
+                    .write(TextEntry::new().with_tile(row_data.active as u16 * 7));
+                vid_row
+                    .index(5)
+                    .write(TextEntry::new().with_tile(row_data.press as u16 * '[' as u16));
+                vid_row
+                    .index(9)
+                    .write(TextEntry::new().with_tile(row_data.release as u16 * ']' as u16));
             }
         }
         if self.sequencer_pattern_instruments_tracker.take_dirtiness() {
             let top_vid_row = tsb.get_row(0).unwrap();
             let sequencer_pattern_instruments = global_engine.get_sequencer_pattern_instruments();
-            for i in 0 .. 6 {
+            for i in 0..6 {
                 if i < sequencer_pattern_instruments.row_count() {
                     let row_data = sequencer_pattern_instruments.row_data(i).unwrap();
 
                     top_vid_row.index(i * 3 + 11 + 1).write(TextEntry::new());
                     top_vid_row.index(i * 3 + 11 + 2).write(TextEntry::new());
                     for (j, c) in row_data.id.chars().enumerate() {
-                        top_vid_row.index(i * 3 + 11 + j).write(TextEntry::new().with_tile(c as u16));
+                        top_vid_row
+                            .index(i * 3 + 11 + j)
+                            .write(TextEntry::new().with_tile(c as u16));
                     }
 
                     let steps_empty = row_data.steps_empty;
-                    for j in 0 .. steps_empty.row_count() {
+                    for j in 0..steps_empty.row_count() {
                         let empty = steps_empty.row_data(j).unwrap();
-                        tsb.get_row(j + 1).unwrap().index(i * 3 + 11).write(TextEntry::new().with_tile(!empty as u16 * 7));
-                    }                    
+                        tsb.get_row(j + 1)
+                            .unwrap()
+                            .index(i * 3 + 11)
+                            .write(TextEntry::new().with_tile(!empty as u16 * 7));
+                    }
                 } else {
                     top_vid_row.index(i * 3 + 11).write(TextEntry::new());
                     top_vid_row.index(i * 3 + 11 + 1).write(TextEntry::new());
                     top_vid_row.index(i * 3 + 11 + 2).write(TextEntry::new());
-                    for j in 1 .. 17 {
+                    for j in 1..17 {
                         tsb.get_row(j).unwrap().index(i * 3 + 11).write(TextEntry::new());
-                    }                    
+                    }
                 }
             }
         }
@@ -219,8 +239,7 @@ impl MinimalGbaWindow {
     }
 }
 
-impl i_slint_core::window::WindowAdapterSealed for MinimalGbaWindow
-{
+impl i_slint_core::window::WindowAdapterSealed for MinimalGbaWindow {
     fn request_redraw(&self) {
         self.needs_redraw.set(true);
     }
@@ -331,27 +350,20 @@ pub fn init() {
     TIMER3_CONTROL.write(TimerControl::new().with_enabled(true).with_cascade(true));
 
     BG0CNT.write(BackgroundControl::new().with_screenblock(31));
-    DISPCNT.write(DisplayControl::new()
-        .with_video_mode(VideoMode::_3)
-        .with_show_bg2(true));
+    DISPCNT.write(DisplayControl::new().with_video_mode(VideoMode::_3).with_show_bg2(true));
 
     let window = MinimalGbaWindow::new();
-    slint::platform::set_platform(Box::new(GbaPlatform{window: window.clone()}))
+    slint::platform::set_platform(Box::new(GbaPlatform { window: window.clone() }))
         .expect("backend already initialized");
-
 }
 
 pub fn set_sound_renderer(sound_renderer: Rc<RefCell<SoundRenderer>>) {
-    unsafe {
-        SOUND_RENDERER = Some(sound_renderer)
-    }
+    unsafe { SOUND_RENDERER = Some(sound_renderer) }
 }
 
 // FIXME: Move as a platform method and attach here.
 pub fn set_main_window(main_window: slint::Weak<MainWindow>) {
-    unsafe {
-        WINDOW = Some(main_window)
-    }
+    unsafe { WINDOW = Some(main_window) }
 }
 
 impl slint::platform::Platform for GbaPlatform {
@@ -408,12 +420,17 @@ impl slint::platform::Platform for GbaPlatform {
             VBlankIntrWait();
             let keys = KEYINPUT.read().to_u16();
 
-            let cps = 16*1024*1024 / 1024;
+            let cps = 16 * 1024 * 1024 / 1024;
             TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
             TIMER0_RELOAD.write(0);
             TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
             unsafe {
-                SOUND_RENDERER.as_ref().unwrap().borrow_mut().sound_engine.advance_frame();
+                SOUND_RENDERER
+                    .as_ref()
+                    .unwrap()
+                    .borrow_mut()
+                    .sound_engine
+                    .advance_frame();
             }
             let time = TIMER0_COUNT.read() as u32 * 1000 / cps;
             if time > 0 {

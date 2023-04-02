@@ -1,15 +1,15 @@
 // Copyright © 2023 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+use crate::sound_engine::SoundEngine;
+use crate::utils::MidiNote;
+use crate::utils::WeakWindowWrapper;
 use crate::ChannelActiveNote;
 use crate::ChannelTraceNote;
 use crate::GlobalEngine;
 use crate::GlobalSettings;
 use crate::MainWindow;
 use crate::Settings;
-use crate::sound_engine::SoundEngine;
-use crate::utils::MidiNote;
-use crate::utils::WeakWindowWrapper;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat};
@@ -20,10 +20,10 @@ use tiny_skia::*;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
 use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -212,8 +212,12 @@ impl Synth {
         move |addr: i32, value: i32| {
             let (maybe_lsb, maybe_msb) = Synth::gba_to_gb_addr(addr);
             let mut dmg = dmg_cell.borrow_mut();
-            maybe_lsb.map(|a| { dmg.wb(a, value as u8); });
-            maybe_msb.map(|a| { dmg.wb(a, (value >> 8) as u8); });
+            maybe_lsb.map(|a| {
+                dmg.wb(a, value as u8);
+            });
+            maybe_msb.map(|a| {
+                dmg.wb(a, (value >> 8) as u8);
+            });
         }
     }
 
@@ -385,9 +389,8 @@ impl Synth {
             0x4000074 => (Some(0xFF1D), Some(0xFF1E)), // NR33, NR34
             0x4000078 => (Some(0xFF20), Some(0xFF21)), // NR41, NR42
             0x400007C => (Some(0xFF22), Some(0xFF23)), // NR43, NR44
-            _         => (None, None),
+            _ => (None, None),
         }
-
     }
 }
 
@@ -407,7 +410,6 @@ where
 
 pub struct Context {
     _stream: cpal::Stream,
-
 }
 
 pub struct SoundRenderer<LazyF: FnOnce() -> Context> {
@@ -569,10 +571,7 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
                         let mut maybe_engine = maybe_engine_cell.borrow_mut();
                         if let None = *maybe_engine {
                             let synth = Synth::new(window_weak.clone(), sample_rate, initial_settings.clone());
-                            *maybe_engine = Some(SoundEngine::new(
-                                synth,
-                                window_weak.clone(),
-                            ));
+                            *maybe_engine = Some(SoundEngine::new(synth, window_weak.clone()));
                         }
                         let engine = maybe_engine.as_mut().unwrap();
 
@@ -628,12 +627,12 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
 
         stream.play().unwrap();
 
-        Context {
-            _stream: stream,
-        }
+        Context { _stream: stream }
     }));
 
-    SoundRenderer{sound_send, context, _watcher: watcher}
-
+    SoundRenderer {
+        sound_send,
+        context,
+        _watcher: watcher,
+    }
 }
-

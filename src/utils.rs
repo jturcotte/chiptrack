@@ -114,10 +114,7 @@ impl WeakWindowWrapper {
     }
 
     #[cfg(feature = "std")]
-    pub fn upgrade_in_event_loop(
-        &self,
-        func: impl FnOnce(MainWindow) + Send + 'static,
-    ) -> Result<(), EventLoopError> {
+    pub fn upgrade_in_event_loop(&self, func: impl FnOnce(MainWindow) + Send + 'static) -> Result<(), EventLoopError> {
         self.inner.upgrade_in_event_loop(func)
     }
 
