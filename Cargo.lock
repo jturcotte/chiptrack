@@ -4092,7 +4092,7 @@ dependencies = [
 [[package]]
 name = "wamr-sys"
 version = "1.2.0"
-source = "git+https://github.com/jturcotte/wamr-sys.git?rev=93546401ecdfb7beb6856d42b6cb7bca3941fa33#93546401ecdfb7beb6856d42b6cb7bca3941fa33"
+source = "git+https://github.com/jturcotte/wamr-sys.git?rev=aa1447d9a97971dd2fbccd215b7a473b3b4718a5#aa1447d9a97971dd2fbccd215b7a473b3b4718a5"
 dependencies = [
  "bindgen 0.56.0",
  "cc",
