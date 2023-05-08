@@ -3,33 +3,59 @@
 
 import {
     Button,
-    GridBox
+    HorizontalBox,
+    ScrollView
 } from "std-widgets.slint";
+import { InstrumentsPanel } from "instruments.slint";
+
+import {
+    GlobalUI,
+    PatternsFocusScope,
+    StepsFocusScope
+} from "common.slint";
 
 import {
     PatternData,
+    PatternInstrumentData,
     StepData,
-    GlobalEngine
+    GlobalEngine,
+    GlobalUtils
 } from "globals.slint";
 
-import { PageBar } from "widgets.slint";
-
-SequencerPattern := Rectangle {
-    callback clicked();
-    property<int> number;
-    property<bool> highlighted;
-    property<bool> fill;
-    background: fill ? #c0c0c0 : white;
+component Cursor inherits Rectangle {
+    // FIXME: Why did I need this?
+    in property<length> parent_width;
+    in property<length> parent_height;
+    width: parent_width;
+    height: parent_height;
+    background: transparent;
     border_width: 1px;
-    border_color: highlighted ? black : #a0a0a0;
-    border_radius: width/8;
+    border_color: black;
+    border_radius: self.height / 8;
+}
+
+component SequencerPattern {
+    callback clicked();
+    in property<int> number;
+    in property<bool> highlighted;
+    in property<bool> fill;
+    if highlighted:
+    Cursor {
+        parent_width: parent.width;
+        parent_height: parent.height;
+    }
     Text {
-        text: "P" + (number + 1);
-        width: 100%;
+        text: number + 1;
+        x: 2px;
+        width: parent.width - 4px;
         height: 100%;
-        font_size: min(width, height) / 2.5;
-        color: highlighted ? #505050 : #a0a0a0;
-        horizontal_alignment: center;
+        font_size: min(self.width, self.height) * 0.7;
+        color: highlighted
+            ? black
+            : fill 
+                ? #a0a0a0
+                : #d0d0d0;
+        horizontal_alignment: left;
         vertical_alignment: center;
     }
     TouchArea {
@@ -39,32 +65,24 @@ SequencerPattern := Rectangle {
     }
 }
 
-SequencerStep := Rectangle {
+component SequencerStep inherits Rectangle {
     callback pressed();
     callback right_pressed();
-    property<bool> highlighted;
-    property<bool> press;
-    property<bool> release;
-    property<string> name;
-    property<bool> beat;
-    background: press
-        ? #c0c0c0
-        : release 
-            ? #f0f0f0
-            : white;
-    border_width: beat || highlighted ? 2px : 1px;
-    border_color: highlighted ? black : #c0c0c0;
-    border_radius: width/8;
+    in property<bool> highlighted;
+    in property<bool> press;
+    in property<bool> release;
+    in property<string> name;
+    border_width: 1px;
+    border_color: highlighted ? black : transparent;
+    border_radius: self.height / 8;
     l := Text {
         text:
-            (press ? name : "") + 
-            (press && release ? "" : (release ? "\n⇥" : "\n↦"));
-        visible: press || release;
-        y: (parent.height - height) / 2;
+            (press ? "[" : " ") + (press ? name : "---") + (release ? "]" : " ");
+        y: (parent.height - self.height) / 2;
         width: 100%;
-        // height: 100%;
-        font_size: width / 3;
-        color: #505050;
+        height: 100%;
+        font_size: min(self.width, self.height) * 0.75;
+        color: press || release ? black : #a0a0a0;
         horizontal_alignment: center;
         vertical_alignment: center;
     }
@@ -83,52 +101,154 @@ SequencerStep := Rectangle {
     }
 }
 
-PatternsList := Rectangle {
-    property<length> scroll_gutter_width <=> page_bar.width;
+component PatternsList {
+    out property<length> height_of_cell: (self.height - layout.spacing * 16) / 17;
     callback clicked(int);
 
-    HorizontalLayout {
-        spacing: 2px;
+    title := Rectangle {
+        x: 0px;
+        y: 0px;
+        height: root.height_of_cell;
 
-        for pos in 16:
-        SequencerPattern {
-            number: page_bar.current_page * 16 + pos;
-            property<PatternData> pattern: GlobalEngine.sequencer_patterns[number];
-            highlighted: pattern.active;
-            fill: !pattern.empty;
-            clicked => { root.clicked(number); }
+        Text {
+            x: 0px;
+            text: GlobalUI.song_mode ? "Song" : "Patt";
+            height: 100%;
+            font_size: self.height * 0.8;
         }
     }
 
-    page_bar := PageBar {
-        // Float to the right of the parent, in the gutter.
-        x: parent.width + 1px;
-    }
-}
+    Flickable {
+        property<[PatternData]> model: GlobalUI.song_mode
+            ? GlobalEngine.sequencer_song_patterns
+            : GlobalEngine.sequencer_patterns;
+        y: root.height_of_cell + layout.spacing;
+        interactive: false;
+        height: parent.height - self.y;
+        viewport_height: self.height * model.length / 16;
 
-PatternsPanel := GridBox {
-    property<length> scroll_gutter_width <=> patterns_list.scroll_gutter_width;
-    Row {
-        patterns_list := PatternsList {
-            clicked(idx) => { GlobalEngine.pattern_clicked(idx); }
-        }
-    }
-    Row {
-        HorizontalLayout {
-            spacing: 2px;
-
-            for step[idx] in GlobalEngine.sequencer_steps:
-            SequencerStep {
-                highlighted: step.active;
-                press: step.press;
-                release: step.release;
-                name: step.note_name;
-                beat: mod(idx, 4) == 0;
-                pressed => { GlobalEngine.toggle_step(idx); }
-                right_pressed => { GlobalEngine.toggle_step_release(idx); }
+        layout := VerticalLayout {
+            spacing: 1px;
+            for pattern in parent.model:
+            SequencerPattern {
+                number: pattern.number;
+                property<PatternData> pattern: GlobalEngine.sequencer_patterns[self.number];
+                highlighted: pattern.active;
+                fill: !pattern.empty;
+                clicked => { GlobalEngine.pattern_clicked(self.number); }
             }
         }
     }
+
+    @children
 }
 
-export { SequencerPattern, PatternsList, PatternsPanel }
+export component PatternsPanel inherits HorizontalLayout {
+    callback root_key_pressed(KeyEvent) -> EventResult;
+    callback root_key_released(KeyEvent) -> EventResult;
+    forward_focus: steps_key_handler;
+
+    spacing: 12px;
+    patterns_list := PatternsList {
+        width: self.height_of_cell * 2;
+        fs := PatternsFocusScope {
+            root_key_pressed(e) => { root.root_key_pressed(e); }
+            root_key_released(e) => { root.root_key_released(e); }
+        }
+        Rectangle {
+            x: -5px;
+            y: -5px;
+            width: parent.width + 10px;
+            height: parent.height + 10px;
+            border-color: fs.has_focus ? grey : transparent;
+            border-width: 1px;
+            border-radius: min(self.width, self.height) / 8;
+        }
+
+
+    }
+
+    current_pattern := Rectangle { 
+       VerticalLayout {
+            spacing: 1px;
+            label := Rectangle {
+                Text {
+                    x: 0px;
+                    text: GlobalEngine.script_instrument_ids[GlobalEngine.current_instrument];
+                    height: 100%;
+                    width: 100%;
+                    font_size: self.height * 0.8;
+                    horizontal-alignment: center;
+                }
+            }
+
+            for step[idx] in GlobalEngine.sequencer_steps:
+            HorizontalLayout {
+                SequencerStep {
+                    highlighted: step.active;
+                    press: step.press;
+                    release: step.release;
+                    name: GlobalUtils.get_midi_note_name(step.note);
+                    pressed => { GlobalEngine.toggle_step(idx); }
+                    right_pressed => { GlobalEngine.toggle_step_release(idx); }
+                }
+            }
+        }
+        Rectangle {
+            x: -5px;
+            y: -5px;
+            width: parent.width + 10px;
+            height: parent.height + 10px;
+            border-color: steps_key_handler.has_focus ? grey : transparent;
+            border-width: 1px;
+            border-radius: min(self.width, self.height) / 8;
+        }
+        steps_key_handler := StepsFocusScope {
+            root_key_pressed(e) => { root.root_key_pressed(e); }
+            root_key_released(e) => { root.root_key_released(e); }
+        }
+    }
+
+    HorizontalLayout {
+        width: self.height;
+
+        if !GlobalUI.instruments_grid:
+        pattern_instruments := HorizontalLayout {
+            spacing: 8px;
+            for idx in GlobalEngine.sequencer_pattern_instruments_len:
+            VerticalLayout {
+                property<PatternInstrumentData> instrument: GlobalEngine.sequencer_pattern_instruments[idx];
+                width: (self.height - self.spacing * 16) / 17 * 2;
+                spacing: 1px;
+
+                Rectangle {
+                    Text {
+                        x: 0px;
+                        text: instrument.id;
+                        height: 100%;
+                        width: 100%;
+                        font_size: self.height * 0.8;
+                        horizontal-alignment: center;
+                    }
+                }
+
+                for note in instrument.notes:
+                Rectangle {
+                    Text {
+                        x: 0px;
+                        height: 100%;
+                        width: 100%;
+                        text: note != -1 ? GlobalUtils.get_midi_note_short_name(note) : "--";
+                        font_size: min(self.width, self.height) * 0.75;
+                        color: note != -1 ? black : #a0a0a0;
+                        vertical_alignment: center;
+                        horizontal_alignment: center;
+                    }
+                }
+            }
+        }
+
+        if GlobalUI.instruments_grid:
+        InstrumentsPanel { }
+    }
+}

@@ -3,10 +3,10 @@
 
 import { NoteData, GlobalEngine, GlobalUtils } from "globals.slint";
 
-PianoKey :=  Rectangle {
-    property<bool> highlighted;
-    property<bool> is_black: false;
-    property<string> note_name;
+component PianoKey inherits Rectangle {
+    in property<bool> highlighted;
+    in property<bool> is_black: false;
+    in property<string> note_name;
     callback pressed();
     callback released();
     background: {
@@ -22,7 +22,7 @@ PianoKey :=  Rectangle {
         text: note_name;
         width: 100%;
         height: 98%;
-        font_size: width / 3;
+        font_size: self.width / 3;
         color: #505050;
         horizontal_alignment: center;
         vertical_alignment: bottom;
@@ -42,21 +42,22 @@ PianoKey :=  Rectangle {
     }
 }
 
-Piano := Rectangle {
-    property<[NoteData]> notes;
+export component Piano {
+    in property<[NoteData]> notes;
 
     for note[idx] in notes:
     PianoKey {
         note_name: idx == 0 ? GlobalUtils.get_midi_note_name(note.note_number) : "";
         is_black: note.is_black;
         x: note.is_black
-            ? (note.key_pos + 1) * floor(parent.width / 8px) * 1px - width / 2
+            ? (note.key_pos + 1) * floor(parent.width / 8px) * 1px - self.width / 2
             : note.key_pos * floor(parent.width / 8px) * 1px;
-        width: is_black
+        y: 0px;
+        width: self.is_black
             ? parent.width / 8 * 0.8
             : floor(parent.width / 8px) * 1px + 1px;
 
-        height: is_black ? 60% : 100%;
+        height: self.is_black ? 60% : 100%;
         highlighted: note.active;
         pressed => { GlobalEngine.note_pressed(note.note_number); }
         released => { GlobalEngine.note_released(note.note_number); }

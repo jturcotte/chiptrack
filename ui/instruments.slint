@@ -1,26 +1,25 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-import { InstrumentData, GlobalEngine, GlobalUtils } from "globals.slint";
-import { PageBar } from "widgets.slint";
+import { InstrumentData, GlobalEngine } from "globals.slint";
 
-InstrumentButton := Rectangle {
+component InstrumentButton inherits Rectangle {
     callback pressed();
     callback right_pressed();
-    property<string> id;
-    property<bool> highlighted;
-    property<bool> active;
-    property<bool> muted;
-    width: height;
+    in property<string> id;
+    in property<bool> highlighted;
+    in property<bool> active;
+    in property<bool> muted;
+    width: self.height;
     background: active ? #e0e0e0 : white;
     border_color: highlighted ? black : #a0a0a0;
     border_width: 1px;
-    border_radius: width/16;
+    border_radius: self.width/16;
     Text {
         text: muted ? "🔇" : id;
         width: 100%;
         height: 100%;
-        font_size: height / 3;
+        font_size: self.height / 4;
         horizontal_alignment: center;
         vertical_alignment: center;
         color: muted ? #a0a0a0 : black;
@@ -40,31 +39,23 @@ InstrumentButton := Rectangle {
     }
 }
 
-InstrumentsPanel := Rectangle {
+export component InstrumentsPanel inherits Flickable {
     property<length> spacing: 5px;
     property<int> grid_size: 4;
-    property<length> item_size: (width - (spacing * (grid_size - 1))) / grid_size;
-    property<length> scroll_gutter_width <=> page_bar.width;
-    vertical-stretch: (grid_size / (grid_size + 1));
-    width: height;
+    property<length> item_size: (self.width - (spacing * (grid_size - 1))) / grid_size;
+    viewport_height: item_size * (GlobalEngine.instruments.length / 4) + (GlobalEngine.instruments.length / 4 - 1) * spacing;
+    interactive: false;
 
-    for pos in 16:
+    for instrument[idx] in GlobalEngine.instruments:
     InstrumentButton {
-        property<int> idx: page_bar.current_page * 16 + pos;
-        property<InstrumentData> instrument: GlobalEngine.instruments[idx];
         id: instrument.id;
         highlighted: instrument.selected;
         active: instrument.active;
         muted: instrument.muted;
         pressed => { GlobalEngine.select_instrument(idx); }
         right_pressed => { GlobalEngine.toggle_mute_instrument(idx); }
-        x: GlobalUtils.mod(pos, 4) * (width + parent.spacing);
-        y: floor(pos / 4) * (height + parent.spacing);
+        x: mod(idx, 4) * (self.width + parent.spacing);
+        y: floor(idx / 4) * (self.height + parent.spacing);
         height: parent.item_size;
-    }
-
-    page_bar := PageBar {
-        // Float to the right of the parent, in the gutter.
-        x: parent.width + 1px;
     }
 }

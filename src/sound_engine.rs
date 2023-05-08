@@ -17,6 +17,7 @@ use crate::SongSettings;
 use native_dialog::FileDialog;
 use slint::Global;
 use slint::Model;
+use slint::SharedString;
 
 use alloc::vec::Vec;
 #[cfg(feature = "desktop")]
@@ -127,10 +128,10 @@ impl SoundEngine {
                 self.script.release_instrument(self.frame_number, instrument);
             };
 
-            #[cfg(feature = "desktop")]
             self.main_window
                 .upgrade_in_event_loop(move |handle| {
                     let pressed = typ == NoteEvent::Press;
+                    #[cfg(feature = "desktop")]
                     if is_selected_instrument {
                         let notes_model = handle.get_notes();
                         for row in 0..notes_model.row_count() {
@@ -243,14 +244,13 @@ impl SoundEngine {
         }
     }
 
-    fn update_script_instrument_in_ui(&self) {
-        let ids = self.script.instrument_ids().clone();
+    fn update_script_instrument_in_ui(&self, instrument_ids: Vec<SharedString>) {
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_instruments();
-                for (i, id) in ids.iter().enumerate() {
+                for (i, id) in instrument_ids.iter().enumerate() {
                     let mut row_data = model.row_data(i).unwrap();
-                    row_data.id = id.into();
+                    row_data.id = id.clone();
                     model.set_row_data(i, row_data);
                 }
             })
@@ -259,9 +259,9 @@ impl SoundEngine {
 
     pub fn load_default(&mut self) {
         self.sequencer.load_default();
-        self.script.load_default();
-        self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
-        self.update_script_instrument_in_ui();
+        let instrument_ids = self.script.load_default().expect("Error loading default instruments");
+        self.sequencer.set_synth_instrument_ids(instrument_ids.clone());
+        self.update_script_instrument_in_ui(instrument_ids);
     }
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
@@ -286,9 +286,9 @@ impl SoundEngine {
         let instruments_file = self.sequencer.load_file(song_path)?;
         let instruments_path = song_path.with_file_name(instruments_file);
         log!("Loading project instruments from file {:?}", instruments_path);
-        self.script.load_file(instruments_path.as_path())?;
-        self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
-        self.update_script_instrument_in_ui();
+        let instrument_ids = self.script.load_file(instruments_path.as_path())?;
+        self.sequencer.set_synth_instrument_ids(instrument_ids.clone());
+        self.update_script_instrument_in_ui(instrument_ids);
         Ok(instruments_path)
     }
 
@@ -322,9 +322,9 @@ impl SoundEngine {
             .as_bytes()
             .to_vec();
 
-        self.script.load_bytes(instruments)?;
-        self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
-        self.update_script_instrument_in_ui();
+        let instrument_ids = self.script.load_bytes(instruments)?;
+        self.sequencer.set_synth_instrument_ids(instrument_ids.clone());
+        self.update_script_instrument_in_ui(instrument_ids);
 
         Ok(())
     }
@@ -418,7 +418,7 @@ impl SoundEngine {
 
     #[cfg(feature = "gba")]
     pub fn load_gba_sram(&mut self) -> Option<()> {
-        unsafe {
+        let instrument_ids = unsafe {
             let mut buf = [0u8; 4];
             let sram = 0x0E00_0000 as *mut u8;
             gba::mem_fns::__aeabi_memcpy1(buf.as_mut_ptr(), sram, 4);
@@ -449,10 +449,10 @@ impl SoundEngine {
             let mut instrument_bytes = Vec::<u8>::with_capacity(instruments_len);
             gba::mem_fns::__aeabi_memcpy1(instrument_bytes.as_mut_ptr(), sram.offset(8), instruments_len);
             instrument_bytes.set_len(instruments_len);
-            self.script.load_bytes(instrument_bytes).unwrap();
-        }
-        self.sequencer.set_synth_instrument_ids(&self.script.instrument_ids());
-        self.update_script_instrument_in_ui();
+            self.script.load_bytes(instrument_bytes).unwrap()
+        };
+        self.sequencer.set_synth_instrument_ids(instrument_ids.clone());
+        self.update_script_instrument_in_ui(instrument_ids);
         Some(())
     }
 
@@ -467,10 +467,13 @@ impl SoundEngine {
     #[cfg(feature = "desktop")]
     pub fn reload_instruments_from_file(&mut self) {
         if let ProjectSource::File((_, path)) = &self.project_source {
-            self.script
+            let instrument_ids = self
+                .script
                 .load_file(&path.as_path())
-                .unwrap_or_else(|e| elog!("Couldn't reload instruments from file {:?}.\n\tError: {:?}", path, e));
-            self.update_script_instrument_in_ui();
+                .map_err(|e| elog!("Couldn't reload instruments from file {:?}.\n\tError: {:?}", path, e))
+                .unwrap();
+            self.sequencer.set_synth_instrument_ids(instrument_ids.clone());
+            self.update_script_instrument_in_ui(instrument_ids);
         }
     }
 }

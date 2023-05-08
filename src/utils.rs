@@ -5,6 +5,7 @@ use crate::MainWindow;
 use alloc::format;
 use alloc::string::String;
 use slint::EventLoopError;
+use slint::SharedString;
 use slint::Weak;
 
 #[rustfmt::skip]
@@ -60,10 +61,23 @@ impl MidiNote {
             semitone % 2 == 0
         }
     }
-    pub fn name(&self) -> String {
-        let note_name = ('A' as u8 + (self.key_pos() as u8 + 2) % 7) as char;
+    pub fn base_note_name(&self) -> char {
+        ('A' as u8 + (self.key_pos() as u8 + 2) % 7) as char
+    }
+    pub fn char_desc(&self) -> [char; 3] {
+        let note_name = self.base_note_name();
         let sharp_char = if self.is_black() { '#' } else { '-' };
-        format!("{}{}{}", note_name, sharp_char, self.octave())
+        let octave_char = ('0' as u8 + self.octave() as u8) as char;
+        [note_name, sharp_char, octave_char]
+    }
+    pub fn name(&self) -> String {
+        let desc = self.char_desc();
+        format!("{}{}{}", desc[0], desc[1], desc[2])
+    }
+    pub fn short_name(&self) -> SharedString {
+        let note_name = self.base_note_name();
+        let sharp_char = if self.is_black() { '#' } else { ' ' };
+        format!("{}{}", note_name, sharp_char).into()
     }
 
     #[cfg(feature = "desktop")]

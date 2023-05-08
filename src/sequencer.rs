@@ -11,8 +11,7 @@ use crate::utils::MidiNote;
 use crate::utils::WeakWindowWrapper;
 use crate::GlobalEngine;
 use crate::GlobalSettings;
-use crate::PatternInstrumentData;
-use crate::SongPatternData;
+use crate::PatternData;
 use crate::SongSettings;
 
 #[cfg(feature = "desktop")]
@@ -25,10 +24,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use slint::Global;
 use slint::Model;
+use slint::SharedString;
 use slint::VecModel;
 
 use alloc::borrow::ToOwned;
-use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec;
@@ -77,19 +76,17 @@ impl Pattern {
     }
 
     fn next_instrument(&self, current_instrument: u8, forwards: bool) -> Option<u8> {
-        let maybe_current_position = self
-            .instruments
-            .iter()
-            .position(|i| i.synth_index == Some(current_instrument));
-        match maybe_current_position {
-            Some(ii) if forwards => self
+        match self.find_nearest_instrument_pos(current_instrument, forwards) {
+            // current_instrument is already in the pattern, cycle once forwards
+            Some((ii, i)) if i == current_instrument && forwards => self
                 .instruments
                 .iter()
                 .cycle()
                 .skip(ii + 1)
                 .take(self.instruments.len() - 1)
                 .find_map(|i| i.synth_index),
-            Some(ii) => self
+            // current_instrument is already in the pattern, cycle once backwards
+            Some((ii, i)) if i == current_instrument => self
                 .instruments
                 .iter()
                 .rev()
@@ -97,13 +94,52 @@ impl Pattern {
                 .skip(self.instruments.len() - ii)
                 .take(self.instruments.len() - 1)
                 .find_map(|i| i.synth_index),
-            // The selected instrument isn't yet in the pattern, use the first available instrument.
-            None => self.instruments.iter().find_map(|i| i.synth_index),
+            // i is already the nearest in the requested direction
+            Some((_, i)) => Some(i),
+            // Nothing to return
+            None => None,
         }
     }
 
-    fn find_instrument_pos(&self, instrument: u8) -> Option<usize> {
-        self.instruments.iter().position(|i| i.synth_index == Some(instrument))
+    fn order(a: u8) -> u32 {
+        let mut ai = a as u32;
+        // Instrument are indiced by UI pages and are sequenced by row,
+        // but we want to sort by column first, so change the order by moving
+        // the 2 column bits from being least significant to being most significant.
+        ai |= (ai & 0x3) << 8;
+        ai
+    }
+
+    fn find_nearest_instrument_pos(&self, instrument: u8, forwards: bool) -> Option<(usize, u8)> {
+        let cmp = if forwards { |t, b| t < b } else { |t, b| t > b };
+        let mut best = None;
+
+        for (ii, i) in self.instruments.iter().enumerate() {
+            best = match (best, i.synth_index) {
+                // Found exactly what we were looking for, return immediately
+                (_, Some(this_instrument)) if this_instrument == instrument => return Some((ii, this_instrument)),
+
+                // Found an instrument ID closer to the seeked instrument, keep it
+                (Some((_, best_instrument)), Some(this_instrument))
+                    if cmp(
+                        Self::order(this_instrument).overflowing_sub(Self::order(instrument)).0,
+                        Self::order(best_instrument).overflowing_sub(Self::order(instrument)).0,
+                    ) =>
+                {
+                    Some((ii, this_instrument))
+                }
+
+                // There is no synth_index or it was not closer, keep the best
+                (Some(_), _) => best,
+
+                // No best yet, keep the new instrument
+                (None, Some(this_instrument)) => Some((ii, this_instrument)),
+
+                // Nothing to keep
+                (None, None) => None,
+            }
+        }
+        best
     }
 
     fn instruments(&self) -> &Vec<Instrument> {
@@ -167,28 +203,13 @@ impl Pattern {
         pattern_empty
     }
 
-    fn update_synth_index(&mut self, new_instrument_ids: &Vec<String>) {
-        let mut instrument_by_id: BTreeMap<String, Instrument> =
-            self.instruments.drain(..).map(|i| (i.id.clone(), i)).collect();
-        self.instruments = new_instrument_ids
-            .iter()
-            .enumerate()
-            .flat_map(|(synth_index, id)| {
-                let mut maybe_i = instrument_by_id.remove(id);
-                match maybe_i.as_mut() {
-                    Some(i) => i.synth_index = Some(synth_index as u8),
-                    None => (),
-                }
-                maybe_i
-            })
-            .collect();
-
-        // Append any remaining sequencer instruments not available in the synth instruments
-        // until the synth is maybe updated.
-        self.instruments.extend(instrument_by_id.into_values().map(|mut i| {
-            i.synth_index = None;
-            i
-        }))
+    fn update_synth_index(&mut self, new_instrument_ids: &Vec<SharedString>) {
+        for instrument in &mut self.instruments {
+            let index = new_instrument_ids
+                .iter()
+                .position(|s| instrument.id.as_str() == s.as_str());
+            instrument.synth_index = index.map(|p| p as u8);
+        }
     }
 }
 
@@ -249,7 +270,7 @@ pub struct Sequencer {
     just_recorded_over_next_step: bool,
     // FIXME: Use a bitset
     muted_instruments: BTreeSet<u8>,
-    synth_instrument_ids: Vec<String>,
+    synth_instrument_ids: Vec<SharedString>,
     main_window: WeakWindowWrapper,
 }
 
@@ -268,7 +289,7 @@ impl Sequencer {
             last_press_frame: None,
             just_recorded_over_next_step: false,
             muted_instruments: BTreeSet::new(),
-            synth_instrument_ids: vec![String::new(); NUM_INSTRUMENTS],
+            synth_instrument_ids: vec![SharedString::new(); NUM_INSTRUMENTS],
             main_window: main_window.clone(),
         }
     }
@@ -277,7 +298,22 @@ impl Sequencer {
         self.song.frames_per_step = settings.frames_per_step as u32;
     }
 
-    pub fn select_song_pattern(&mut self, song_pattern: Option<u32>) -> () {
+    pub fn activate_song_pattern(&mut self, song_pattern: u32) -> () {
+        self.select_pattern(self.song.song_patterns[song_pattern as usize] as u32);
+        self.select_song_pattern(Some(song_pattern));
+    }
+
+    pub fn activate_next_song_pattern(&mut self, forwards: bool) -> () {
+        if let Some(current) = self.current_song_pattern {
+            if forwards && current < self.song.song_patterns.len() - 1 {
+                self.activate_song_pattern(current as u32 + 1);
+            } else if !forwards && current > 0 {
+                self.activate_song_pattern(current as u32 - 1);
+            };
+        }
+    }
+
+    fn select_song_pattern(&mut self, song_pattern: Option<u32>) -> () {
         let old = self.current_song_pattern;
         self.current_song_pattern = song_pattern.map(|sp| sp as usize);
         let new = self.current_song_pattern;
@@ -297,6 +333,14 @@ impl Sequencer {
                 }
             })
             .unwrap();
+    }
+
+    pub fn select_next_pattern(&mut self, forwards: bool) -> () {
+        if forwards && self.selected_pattern < NUM_PATTERNS - 1 {
+            self.select_pattern(self.selected_pattern as u32 + 1);
+        } else if !forwards && self.selected_pattern > 0 {
+            self.select_pattern(self.selected_pattern as u32 - 1);
+        };
     }
 
     pub fn select_pattern(&mut self, pattern: u32) -> () {
@@ -347,17 +391,27 @@ impl Sequencer {
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_instruments();
-                let mut row_data = model.row_data(old_instrument).unwrap();
-                row_data.selected = false;
-                model.set_row_data(old_instrument, row_data);
+                if let Some(mut row_data) = model.row_data(old_instrument) {
+                    row_data.selected = false;
+                    model.set_row_data(old_instrument, row_data);
+                }
 
-                let mut row_data = model.row_data(instrument as usize).unwrap();
-                row_data.selected = true;
-                model.set_row_data(instrument as usize, row_data);
+                if let Some(mut row_data) = model.row_data(instrument as usize) {
+                    row_data.selected = true;
+                    model.set_row_data(instrument as usize, row_data);
+                }
 
                 GlobalEngine::get(&handle).set_current_instrument(instrument as i32);
             })
             .unwrap();
+    }
+
+    pub fn cycle_instrument(&mut self, col_delta: i32, row_delta: i32) -> () {
+        // Wrap
+        let col = (self.selected_instrument as i32 + 4 + col_delta) % 4;
+        // Don't wrap
+        let row = (self.selected_instrument as i32 / 4 + row_delta).max(0).min(15);
+        self.select_instrument((col + row * 4) as u8)
     }
 
     pub fn cycle_pattern_instrument(&mut self, forwards: bool) -> () {
@@ -403,14 +457,19 @@ impl Sequencer {
     fn update_steps(&mut self) -> () {
         let pattern = &self.song.patterns[self.selected_pattern];
         let maybe_steps = pattern.get_steps(self.selected_instrument).map(|s| s.clone());
+
+        // Don't clone the pattern instruments if the closure will be handled synchronously.
+        #[cfg(not(feature = "std"))]
+        let instruments = pattern.instruments();
+        #[cfg(feature = "std")]
         let instruments = pattern.instruments().clone();
-        // FIXME: Falling back to 0 makes the navigation difficult.
-        //        It would be nice to have the right insertion point, but without having instruments
-        //        ordered by synth_index in the patterns this will be difficult.
-        let instruments_to_skip = pattern
-            .find_instrument_pos(self.selected_instrument)
-            .map(|i| i + 1)
-            .unwrap_or(0);
+
+        let instruments_to_skip = match pattern.find_nearest_instrument_pos(self.selected_instrument, true) {
+            // Advance once more to not show the found instrument both in the patterns and pattern_instruments models
+            Some((ii, i)) if i == self.selected_instrument => ii + 1,
+            Some((ii, _)) => ii,
+            None => 0,
+        };
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
@@ -419,35 +478,31 @@ impl Sequencer {
                     let mut row_data = model.row_data(i).unwrap();
                     row_data.press = step.press;
                     row_data.release = step.release;
-                    // FIXME: Pre-create the note SharedStrings somewhere
-                    row_data.note_name = MidiNote(step.note as i32).name().into();
+                    row_data.note = step.note as i32;
                     model.set_row_data(i, row_data);
                 }
 
                 let model2 = GlobalEngine::get(&handle).get_sequencer_pattern_instruments();
-                let vec_model = model2
-                    .as_any()
-                    .downcast_ref::<VecModel<PatternInstrumentData>>()
-                    .unwrap();
+                let len = (instruments.len() - 1).min(5);
+                GlobalEngine::get(&handle).set_sequencer_pattern_instruments_len(len as i32);
 
-                let modeled: Vec<PatternInstrumentData> = instruments
+                instruments
                     .iter()
                     .cycle()
                     .skip(instruments_to_skip)
-                    .take(if instruments_to_skip == 0 {
-                        instruments.len()
-                    } else {
-                        instruments.len() - 1
-                    })
-                    .map(|mi| {
-                        let steps_empty: Vec<bool> = mi.steps.iter().map(|s| !(s.press || s.release)).collect();
-                        PatternInstrumentData {
-                            id: (&mi.id).into(),
-                            steps_empty: slint::ModelRc::new(VecModel::from(steps_empty)),
-                        }
-                    })
-                    .collect();
-                vec_model.set_vec(modeled);
+                    .take(len)
+                    .enumerate()
+                    .for_each(|(idx, mi)| {
+                        let mut instrument_data = model2.row_data(idx).unwrap();
+
+                        let notes_model = &instrument_data.notes;
+                        mi.steps.iter().enumerate().for_each(|(idx, s)| {
+                            notes_model.set_row_data(idx, if s.press { s.note as i32 } else { -1 });
+                        });
+
+                        instrument_data.id = (&mi.id).into();
+                        model2.set_row_data(idx, instrument_data);
+                    });
             })
             .unwrap();
     }
@@ -537,7 +592,7 @@ impl Sequencer {
                     step_row_data.release = release;
                 }
                 if let Some(note) = set_note {
-                    step_row_data.note_name = MidiNote(note as i32).name().into();
+                    step_row_data.note = note as i32;
                 }
                 steps.set_row_data(step_num, step_row_data);
             })
@@ -766,10 +821,11 @@ impl Sequencer {
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-                vec_model.push(SongPatternData {
+                let vec_model = model.as_any().downcast_ref::<VecModel<PatternData>>().unwrap();
+                vec_model.push(PatternData {
                     number: pattern as i32,
                     active: false,
+                    empty: false,
                 });
             })
             .unwrap();
@@ -789,7 +845,7 @@ impl Sequencer {
             self.main_window
                 .upgrade_in_event_loop(move |handle| {
                     let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                    let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                    let vec_model = model.as_any().downcast_ref::<VecModel<PatternData>>().unwrap();
                     vec_model.remove(vec_model.row_count() - 1);
                 })
                 .unwrap();
@@ -803,7 +859,7 @@ impl Sequencer {
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                let vec_model = model.as_any().downcast_ref::<VecModel<PatternData>>().unwrap();
                 vec_model.set_vec(Vec::new());
             })
             .unwrap();
@@ -824,14 +880,15 @@ impl Sequencer {
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                let vec_model = model.as_any().downcast_ref::<VecModel<PatternData>>().unwrap();
                 for (i, number) in song_patterns.iter().enumerate() {
-                    vec_model.push(SongPatternData {
+                    vec_model.push(PatternData {
                         number: *number as i32,
                         active: match current_song_pattern {
                             Some(sp) => i == sp,
                             None => false,
                         },
+                        empty: false,
                     });
                 }
 
@@ -906,13 +963,21 @@ impl Sequencer {
         Ok(())
     }
 
-    pub fn set_synth_instrument_ids(&mut self, instrument_ids: &Vec<String>) {
+    pub fn set_synth_instrument_ids(&mut self, instrument_ids: Vec<SharedString>) {
         for p in &mut self.song.patterns {
-            p.update_synth_index(instrument_ids);
+            p.update_synth_index(&instrument_ids);
         }
         self.update_steps();
 
-        self.synth_instrument_ids = instrument_ids.clone();
+        self.synth_instrument_ids = instrument_ids;
+        let ui_copy = self.synth_instrument_ids.clone();
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_script_instrument_ids();
+                let vec_model = model.as_any().downcast_ref::<VecModel<SharedString>>().unwrap();
+                vec_model.set_vec(ui_copy);
+            })
+            .unwrap();
     }
 
     fn snap_at_step_frame(&self) -> u32 {

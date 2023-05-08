@@ -6,7 +6,9 @@ extern crate alloc;
 use crate::log;
 use crate::sound_renderer::SoundRenderer;
 use crate::GlobalEngine;
+use crate::GlobalUI;
 use crate::MainWindow;
+use crate::MidiNote;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::rc::Weak;
@@ -14,10 +16,13 @@ use core::cell::Cell;
 use core::pin::Pin;
 use i_slint_core::model::ModelChangeListenerContainer;
 use i_slint_core::renderer::Renderer;
+use slint::platform::software_renderer::RepaintBufferType;
 use slint::platform::software_renderer::SoftwareRenderer;
 use slint::Brush::SolidColor;
 use slint::Global;
 use slint::Model;
+use slint::PlatformError;
+use slint::SharedString;
 use slint::Window;
 
 use core::cell::RefCell;
@@ -82,11 +87,16 @@ unsafe impl critical_section::Impl for GbaCriticalSection {
 
 pub struct MinimalGbaWindow {
     window: i_slint_core::api::Window,
-    renderer: SoftwareRenderer<0>,
+    renderer: SoftwareRenderer,
     needs_redraw: Cell<bool>,
+    sequencer_patterns_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
+    sequencer_song_patterns_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     sequencer_steps_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     sequencer_pattern_instruments_tracker:
         Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
+    instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
+    was_in_song_mode: RefCell<bool>,
+    was_in_instruments_grid: RefCell<bool>,
 }
 
 struct ModelDirtinessTracker {
@@ -141,17 +151,30 @@ impl MinimalGbaWindow {
 
         Rc::new_cyclic(|w: &Weak<Self>| Self {
             window: Window::new(w.clone()),
-            renderer: SoftwareRenderer::new(w.clone()),
+            renderer: SoftwareRenderer::new(RepaintBufferType::NewBuffer, w.clone()),
             needs_redraw: Default::default(),
+            sequencer_patterns_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
+            sequencer_song_patterns_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             sequencer_steps_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             sequencer_pattern_instruments_tracker: Box::pin(
                 ModelChangeListenerContainer::<ModelDirtinessTracker>::default(),
             ),
+            instruments_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
+            was_in_song_mode: RefCell::new(false),
+            was_in_instruments_grid: RefCell::new(false),
         })
     }
 
     fn attach_trackers(&self) {
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
+        GlobalEngine::get(&handle)
+            .get_sequencer_patterns()
+            .model_tracker()
+            .attach_peer(Pin::as_ref(&self.sequencer_patterns_tracker).model_peer());
+        GlobalEngine::get(&handle)
+            .get_sequencer_song_patterns()
+            .model_tracker()
+            .attach_peer(Pin::as_ref(&self.sequencer_song_patterns_tracker).model_peer());
         GlobalEngine::get(&handle)
             .get_sequencer_steps()
             .model_tracker()
@@ -160,29 +183,81 @@ impl MinimalGbaWindow {
             .get_sequencer_pattern_instruments()
             .model_tracker()
             .attach_peer(Pin::as_ref(&self.sequencer_pattern_instruments_tracker).model_peer());
+        GlobalEngine::get(&handle)
+            .get_instruments()
+            .model_tracker()
+            .attach_peer(Pin::as_ref(&self.instruments_tracker).model_peer());
+        // Start dirty
+        *self.was_in_song_mode.borrow_mut() = !GlobalUI::get(&handle).get_song_mode();
+        *self.was_in_instruments_grid.borrow_mut() = !GlobalUI::get(&handle).get_instruments_grid();
     }
 
-    pub fn draw_if_needed(&self, render_callback: impl FnOnce(&SoftwareRenderer<0>)) -> bool {
+    pub fn draw_if_needed(&self, render_callback: impl FnOnce(&SoftwareRenderer)) -> bool {
         // FIXME: Check if this could be casted from the component of self somehow
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
         let global_engine = GlobalEngine::get(&handle);
-        let current_instrument = global_engine.get_current_instrument() as usize;
+        let global_ui = GlobalUI::get(&handle);
+        let song_mode = global_ui.get_song_mode();
+        let song_mode_dirty = self.was_in_song_mode.replace(song_mode) != song_mode;
+        let instruments_grid = global_ui.get_instruments_grid();
+        let instruments_grid_dirty = self.was_in_instruments_grid.replace(instruments_grid) != instruments_grid;
+
         let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
 
+        let status_vid_row = tsb.get_row(18).unwrap();
+        status_vid_row
+            .index(0)
+            .write(TextEntry::new().with_tile(handle.get_patterns_have_focus() as u16 * 7));
+        status_vid_row
+            .index(6)
+            .write(TextEntry::new().with_tile(handle.get_steps_have_focus() as u16 * 7));
+
+        if song_mode_dirty {
+            let vid_row = tsb.get_row(0).unwrap();
+            let s = if song_mode { "Song" } else { "Patt" };
+            vid_row
+                .iter()
+                .zip(s.chars())
+                .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
+        }
+        let dirty_pattern_model = if !song_mode && (song_mode_dirty || self.sequencer_patterns_tracker.take_dirtiness())
+        {
+            Some(global_engine.get_sequencer_patterns())
+        } else if song_mode && (song_mode_dirty || self.sequencer_song_patterns_tracker.take_dirtiness()) {
+            Some(global_engine.get_sequencer_song_patterns())
+        } else {
+            None
+        };
+        if let Some(pattern_model) = dirty_pattern_model {
+            for i in 0..pattern_model.row_count().min(16) {
+                let vid_row = tsb.get_row(i + 1).unwrap();
+                let row_data = pattern_model.row_data(i).unwrap();
+                let number = row_data.number + 1;
+                let c1 = (number / 10) as u8 + '0' as u8;
+                vid_row.index(1).write(TextEntry::new().with_tile(c1 as u16));
+                let c2 = (number % 10) as u8 + '0' as u8;
+                vid_row.index(2).write(TextEntry::new().with_tile(c2 as u16));
+                vid_row
+                    .index(0)
+                    .write(TextEntry::new().with_tile(row_data.active as u16 * 7));
+            }
+        }
+
         if self.sequencer_steps_tracker.take_dirtiness() {
+            let current_instrument = global_engine.get_current_instrument() as usize;
             let vid_row = tsb.get_row(0).unwrap();
             let current_instrument_id = global_engine.get_instruments().row_data(current_instrument).unwrap().id;
             vid_row.index(6 + 1).write(TextEntry::new());
             vid_row.index(6 + 2).write(TextEntry::new());
-            for (j, c) in current_instrument_id.chars().enumerate() {
-                vid_row.index(6 + j).write(TextEntry::new().with_tile(c as u16));
+            for (ci, c) in current_instrument_id.chars().enumerate() {
+                vid_row.index(6 + ci).write(TextEntry::new().with_tile(c as u16));
             }
 
             let sequencer_steps = global_engine.get_sequencer_steps();
             for i in 0..sequencer_steps.row_count() {
                 let vid_row = tsb.get_row(i + 1).unwrap();
                 let row_data = sequencer_steps.row_data(i).unwrap();
-                for (j, c) in row_data.note_name.chars().enumerate() {
+                for (j, &c) in MidiNote(row_data.note).char_desc().iter().enumerate() {
                     let tile_index = if row_data.press { c as u16 } else { 0 };
                     vid_row.index(j + 6).write(TextEntry::new().with_tile(tile_index));
                 }
@@ -197,28 +272,51 @@ impl MinimalGbaWindow {
                     .write(TextEntry::new().with_tile(row_data.release as u16 * ']' as u16));
             }
         }
-        if self.sequencer_pattern_instruments_tracker.take_dirtiness() {
+
+        if instruments_grid_dirty {
+            for i in 0..16 {
+                tsb.get_row(i)
+                    .unwrap()
+                    .iter_range(11..)
+                    .for_each(|a| a.write(TextEntry::new()));
+            }
+            if instruments_grid {
+                tsb.get_row(0)
+                    .unwrap()
+                    .iter_range(11..)
+                    .zip("Instruments".chars())
+                    .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
+            }
+        }
+        if !instruments_grid && (instruments_grid_dirty || self.sequencer_pattern_instruments_tracker.take_dirtiness())
+        {
             let top_vid_row = tsb.get_row(0).unwrap();
+            let sequencer_pattern_instruments_len = global_engine.get_sequencer_pattern_instruments_len() as usize;
             let sequencer_pattern_instruments = global_engine.get_sequencer_pattern_instruments();
             for i in 0..6 {
-                if i < sequencer_pattern_instruments.row_count() {
+                if i < sequencer_pattern_instruments_len {
                     let row_data = sequencer_pattern_instruments.row_data(i).unwrap();
 
                     top_vid_row.index(i * 3 + 11 + 1).write(TextEntry::new());
                     top_vid_row.index(i * 3 + 11 + 2).write(TextEntry::new());
-                    for (j, c) in row_data.id.chars().enumerate() {
+                    for (ci, c) in row_data.id.chars().enumerate() {
                         top_vid_row
-                            .index(i * 3 + 11 + j)
+                            .index(i * 3 + 11 + ci)
                             .write(TextEntry::new().with_tile(c as u16));
                     }
 
-                    let steps_empty = row_data.steps_empty;
-                    for j in 0..steps_empty.row_count() {
-                        let empty = steps_empty.row_data(j).unwrap();
+                    let notes = row_data.notes;
+                    for j in 0..notes.row_count() {
+                        let note = notes.row_data(j).unwrap();
+                        let c = if note == -1 {
+                            0
+                        } else {
+                            MidiNote(note).base_note_name() as u16
+                        };
                         tsb.get_row(j + 1)
                             .unwrap()
                             .index(i * 3 + 11)
-                            .write(TextEntry::new().with_tile(!empty as u16 * 7));
+                            .write(TextEntry::new().with_tile(c));
                     }
                 } else {
                     top_vid_row.index(i * 3 + 11).write(TextEntry::new());
@@ -227,6 +325,27 @@ impl MinimalGbaWindow {
                     for j in 1..17 {
                         tsb.get_row(j).unwrap().index(i * 3 + 11).write(TextEntry::new());
                     }
+                }
+            }
+        }
+        if instruments_grid && (instruments_grid_dirty || self.instruments_tracker.take_dirtiness()) {
+            let instruments = global_engine.get_instruments();
+            for y in 0..4 {
+                let vid_row = tsb.get_row(y * 4 + 2).unwrap();
+                let sel_vid_row = tsb.get_row(y * 4 + 3).unwrap();
+                for x in 0..4 {
+                    let instrument = instruments.row_data(y * 4 + x).unwrap();
+                    vid_row
+                        .index(x * 4 + 11)
+                        .write(TextEntry::new().with_tile(instrument.active as u16 * 7));
+                    for (ci, c) in instrument.id.chars().enumerate() {
+                        vid_row
+                            .index(x * 4 + 11 + ci + 1)
+                            .write(TextEntry::new().with_tile(c as u16));
+                    }
+                    sel_vid_row
+                        .iter_range(x * 4 + 11..x * 4 + 11 + 4)
+                        .for_each(|a| a.write(TextEntry::new().with_tile(instrument.selected as u16 * '-' as u16)));
                 }
             }
         }
@@ -367,8 +486,8 @@ pub fn set_main_window(main_window: slint::Weak<MainWindow>) {
 }
 
 impl slint::platform::Platform for GbaPlatform {
-    fn create_window_adapter(&self) -> Rc<dyn slint::platform::WindowAdapter> {
-        self.window.clone()
+    fn create_window_adapter(&self) -> Result<Rc<dyn slint::platform::WindowAdapter>, PlatformError> {
+        Ok(self.window.clone())
     }
 
     fn duration_since_start(&self) -> core::time::Duration {
@@ -391,18 +510,18 @@ impl slint::platform::Platform for GbaPlatform {
         }
     }
 
-    fn run_event_loop(&self) -> () {
+    fn run_event_loop(&self) -> Result<(), PlatformError> {
         // FIXME: Those take iwram space by being put on the stack and could probably be used for something better.
-        let slint_key_a = ' ';
-        let slint_key_b = slint::platform::Key::Shift.into();
-        let slint_key_select = slint::platform::Key::Escape.into();
-        let slint_key_start = slint::platform::Key::Return.into();
-        let slint_key_right = slint::platform::Key::RightArrow.into();
-        let slint_key_left = slint::platform::Key::LeftArrow.into();
-        let slint_key_up = slint::platform::Key::UpArrow.into();
-        let slint_key_down = slint::platform::Key::DownArrow.into();
-        let slint_key_r = slint::platform::Key::PageDown.into();
-        let slint_key_l = slint::platform::Key::PageUp.into();
+        let slint_key_a: SharedString = slint::platform::Key::Control.into();
+        let slint_key_b: SharedString = slint::platform::Key::Shift.into();
+        let slint_key_select: SharedString = ' '.into();
+        let slint_key_start: SharedString = slint::platform::Key::Return.into();
+        let slint_key_right: SharedString = slint::platform::Key::RightArrow.into();
+        let slint_key_left: SharedString = slint::platform::Key::LeftArrow.into();
+        let slint_key_up: SharedString = slint::platform::Key::UpArrow.into();
+        let slint_key_down: SharedString = slint::platform::Key::DownArrow.into();
+        let slint_key_r: SharedString = slint::platform::Key::PageDown.into();
+        let slint_key_l: SharedString = slint::platform::Key::Tab.into();
 
         let window = self.window.clone();
         window.set_size(DISPLAY_SIZE);
@@ -421,6 +540,19 @@ impl slint::platform::Platform for GbaPlatform {
             let keys = KEYINPUT.read().to_u16();
 
             let cps = 16 * 1024 * 1024 / 1024;
+            slint::platform::update_timers_and_animations();
+
+            TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
+            TIMER0_RELOAD.write(0);
+            TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
+            window.draw_if_needed(|_renderer| {
+                // renderer.render(frame_buffer, DISPLAY_SIZE.width as usize);
+            });
+            let time = TIMER0_COUNT.read() as u32 * 1000 / cps;
+            if time > 0 {
+                log!("--- window.draw_if_needed(ms) {}", time);
+            }
+
             TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
             TIMER0_RELOAD.write(0);
             TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
@@ -437,18 +569,6 @@ impl slint::platform::Platform for GbaPlatform {
                 log!("--- sound_engine.advance_frame(ms) {}", time);
             }
 
-            slint::platform::update_timers_and_animations();
-
-            TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
-            TIMER0_RELOAD.write(0);
-            TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
-            window.draw_if_needed(|_renderer| {
-                // renderer.render(frame_buffer, DISPLAY_SIZE.width as usize);
-            });
-            let time = TIMER0_COUNT.read() as u32 * 1000 / cps;
-            if time > 0 {
-                log!("--- window.draw_if_needed(ms) {}", time);
-            }
             if prev_used != ALLOCATOR.used() {
                 log!("--- Memory used: {}kb", ALLOCATOR.used());
                 prev_used = ALLOCATOR.used();
@@ -457,26 +577,28 @@ impl slint::platform::Platform for GbaPlatform {
             let switched_keys = keys ^ prev_keys;
             if switched_keys != 0 {
                 log!("{:#b}, {:#b}, {:#b}", prev_keys, keys, switched_keys);
-                let process_key = |key_mask: u16, out_key: char| {
+                let process_key = |key_mask: u16, out_key: &SharedString| {
                     if switched_keys & key_mask != 0 {
                         if keys & key_mask != 0 {
-                            window.dispatch_event(WindowEvent::KeyReleased { text: out_key });
+                            log!("PRESS {}", out_key.chars().next().unwrap() as u8);
+                            window.dispatch_event(WindowEvent::KeyReleased { text: out_key.clone() });
                         } else {
-                            window.dispatch_event(WindowEvent::KeyPressed { text: out_key });
+                            log!("RELEASE {}", out_key.chars().next().unwrap() as u8);
+                            window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
                         }
                     }
                 };
 
-                process_key(KEY_A, slint_key_a);
-                process_key(KEY_B, slint_key_b);
-                process_key(KEY_SELECT, slint_key_select);
-                process_key(KEY_START, slint_key_start);
-                process_key(KEY_RIGHT, slint_key_right);
-                process_key(KEY_LEFT, slint_key_left);
-                process_key(KEY_UP, slint_key_up);
-                process_key(KEY_DOWN, slint_key_down);
-                process_key(KEY_R, slint_key_r);
-                process_key(KEY_L, slint_key_l);
+                process_key(KEY_A, &slint_key_a);
+                process_key(KEY_B, &slint_key_b);
+                process_key(KEY_SELECT, &slint_key_select);
+                process_key(KEY_START, &slint_key_start);
+                process_key(KEY_RIGHT, &slint_key_right);
+                process_key(KEY_LEFT, &slint_key_left);
+                process_key(KEY_UP, &slint_key_up);
+                process_key(KEY_DOWN, &slint_key_down);
+                process_key(KEY_R, &slint_key_r);
+                process_key(KEY_L, &slint_key_l);
                 prev_keys = keys;
             }
         }

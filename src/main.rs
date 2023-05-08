@@ -111,20 +111,22 @@ fn run_main() {
         (None, search_params.get("gist"))
     };
 
-    let sequencer_pattern_model = Rc::new(slint::VecModel::<_>::from(vec![
-        PatternData {
-            empty: true,
-            active: false,
-        };
-        NUM_PATTERNS
-    ]));
+    let sequencer_pattern_model = Rc::new(slint::VecModel::<_>::from(
+        (0..NUM_PATTERNS as i32)
+            .map(|i| PatternData {
+                number: i,
+                empty: true,
+                active: false,
+            })
+            .collect::<Vec<PatternData>>(),
+    ));
     let sequencer_step_model = Rc::new(slint::VecModel::<_>::from(vec![StepData::default(); NUM_STEPS]));
     let instruments_model = Rc::new(slint::VecModel::<_>::from(vec![
         InstrumentData::default();
         NUM_INSTRUMENTS
     ]));
 
-    let window = MainWindow::new();
+    let window = MainWindow::new().unwrap();
 
     #[cfg(feature = "desktop")]
     {
@@ -276,25 +278,28 @@ fn run_main() {
                             cloned_sound_renderer
                                 .borrow_mut()
                                 .invoke_on_sound_engine(|se| se.sequencer.set_erasing(true));
+                            return true;
                         }
                         _ => (),
                     }
                 }
             } else {
+                if let Some(index) = already_pressed.iter().position(|x| *x == code) {
+                    already_pressed.swap_remove(index);
+                }
                 match code {
                     // Key.Backspace
                     '\u{8}' => {
                         cloned_sound_renderer
                             .borrow_mut()
                             .invoke_on_sound_engine(|se| se.sequencer.set_erasing(false));
+                        return true;
                     }
                     _ => (),
                 };
-                if let Some(index) = already_pressed.iter().position(|x| *x == code) {
-                    already_pressed.swap_remove(index);
-                }
             }
         }
+        false
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -302,6 +307,14 @@ fn run_main() {
         cloned_sound_renderer
             .borrow_mut()
             .invoke_on_sound_engine(move |se| se.select_instrument(instrument as u8));
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_instrument(move |col_delta, row_delta| {
+        // FIXME: This might need to go through the SoundEngine as with select_instrument.
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.cycle_instrument(col_delta, row_delta));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -355,6 +368,13 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_select_next_pattern(move |forwards| {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.select_next_pattern(forwards));
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_pattern_clicked(move |pattern_num| {
         cloned_sound_renderer
             .borrow_mut()
@@ -397,6 +417,20 @@ fn run_main() {
         cloned_sound_renderer
             .borrow_mut()
             .invoke_on_sound_engine(move |se| se.sequencer.set_recording(toggled));
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_select_next_song_pattern(move |forwards| {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.activate_next_song_pattern(forwards));
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_song_pattern_clicked(move |song_pattern_idx| {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.activate_song_pattern(song_pattern_idx as u32));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -477,7 +511,9 @@ fn run_main() {
     window
         .global::<GlobalUtils>()
         .on_get_midi_note_name(|note| MidiNote(note).name().into());
-    window.global::<GlobalUtils>().on_mod(|x, y| x % y);
+    window
+        .global::<GlobalUtils>()
+        .on_get_midi_note_short_name(|note| MidiNote(note).short_name().into());
 
     // For WASM we need to wait for the user to trigger the creation of the sound
     // device through an input event. For other platforms, artificially force the
@@ -490,5 +526,5 @@ fn run_main() {
     #[cfg(feature = "gba")]
     gba_platform::set_main_window(window.as_weak());
 
-    window.run();
+    window.run().unwrap();
 }

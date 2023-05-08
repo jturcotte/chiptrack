@@ -1,37 +1,34 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-export struct SongPatternData := {
+export struct PatternData {
     number: int,
-    active: bool,
-}
-export struct PatternData := {
     empty: bool,
     active: bool,
 }
-export struct PatternInstrumentData := {
+export struct PatternInstrumentData {
     id: string,
-    steps_empty: [bool],
+    notes: [int],
 }
-export struct StepData := {
+export struct StepData {
     press: bool,
     release: bool,
     active: bool,
-    note_name: string,
+    note: int,
 }
-export struct InstrumentData := {
+export struct InstrumentData {
     id: string,
     selected: bool,
     active: bool,
     muted: bool,
 }
-export struct NoteData := {
+export struct NoteData {
     note_number: int,
     key_pos: int,
     is_black: bool,
     active: bool,
 }
-export struct ChannelTraceNote := {
+export struct ChannelTraceNote {
     channel: int,
     start_tick: int,
     num_ticks: int,
@@ -41,19 +38,19 @@ export struct ChannelTraceNote := {
     is_black: bool,
     volume: float,
 }
-export struct ChannelActiveNote := {
+export struct ChannelActiveNote {
     trace: ChannelTraceNote,
     note_name: string,
 }
-export struct Settings := {
+export struct Settings {
     sync_enabled: bool,
 }
-export struct SongSettings := {
+export struct SongSettings {
     frames_per_step: int,
 }
 
-export global GlobalEngine := {
-    property<[SongPatternData]> sequencer_song_patterns: [
+export global GlobalEngine {
+    in-out property<[PatternData]> sequencer_song_patterns: [
         {number: 0},
         {number: 1},
         {number: 0},
@@ -62,47 +59,60 @@ export global GlobalEngine := {
         {number: 1},
         {number: 2},
         {number: 3}];
-    property<[PatternData]> sequencer_patterns: [
-        {empty: true, active: true},
-        {empty: true}, {empty: true}, {empty: true},
-        {empty: true}, {empty: true}, {empty: true}, {empty: true},
-        {empty: true}, {empty: true}, {empty: true}, {empty: true},
-        {empty: true}, {empty: true}, {empty: true}, {empty: true},
+    in-out property<[PatternData]> sequencer_patterns: [
+        {number: 0, empty: true, active: true},
+        {number: 1, empty: true}, {number: 2, empty: true}, {number: 3, empty: true},
+        {number: 4, empty: true}, {number: 5, empty: true}, {number: 6, empty: true}, {number: 7, empty: true},
+        {number: 8, empty: true}, {number: 9, empty: true}, {number: 10, empty: true}, {number: 11, empty: true},
+        {number: 12, empty: true}, {number: 13, empty: true}, {number: 14, empty: true}, {number: 15, empty: true},
         ];
-    property<[PatternInstrumentData]> sequencer_pattern_instruments: [
-        {id: "S1", steps_empty: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false] },
-        {id: "T2", steps_empty: [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false] },
-        {id: "W1", steps_empty: [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true] },
-        {id: "N2", steps_empty: [true, false, false, false, true, false, false, false, true, false, false, false, true, false, false, false] },
-        {id: "N4", steps_empty: [true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false] },
+    in-out property<[string]> script_instrument_ids: ["S1", "S2", "T1", "T2", "W1", "W2", "N2", "N4"];
+    in-out property<int> sequencer_pattern_instruments_len: 6;
+    in-out property<[PatternInstrumentData]> sequencer_pattern_instruments: [
+        {id: "S2", 
+            notes: [65, -1, -1, -1, 65, -1, -1, -1, 65, -1, -1, -1, 65, -1, -1, -1]},
+        {id: "T2", 
+            notes: [65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1]},
+        {id: "W1", 
+            notes: [65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65]},
+        {id: "N2", 
+            notes: [65, -1, -1, -1, 65, -1, -1, -1, 65, -1, -1, -1, 65, -1, -1, -1]},
+        {id: "N4", 
+            notes: [65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1]},
+        {id: "N5", 
+            notes: [65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1]},
     ];
-    property<[StepData]> sequencer_steps: [
-        {press: true, note_name: "C-4"},
+    in-out property<[StepData]> sequencer_steps: [
+        {press: true, note: 65},
         {press: false}, {press: false}, {press: false},
-        {press: true, release: true, note_name: "C-4", active: true},
+        {press: true, release: true, note: 65, active: true},
         {press: false}, {press: false}, {press: false},
-        {press: true, note_name: "C-4"},
+        {press: true, note: 65},
         {press: false}, {press: false}, {press: false},
         {press: false, release: true},
         {press: false}, {press: false}, {press: false}];
-    property<[InstrumentData]> instruments: [
+    in-out property<[InstrumentData]> instruments: [
+        {id: "1", active: false}, {active: true}, {active: false}, {active: false},
         {active: false}, {active: false}, {active: false}, {active: false},
+        {active: false}, {active: false}, {active: false}, {active: false},
+        {active: false}, {active: false}, {active: false}, {active: false},
+        {id: "17", active: false}, {active: false}, {active: false}, {active: false},
         {active: false}, {active: false}, {active: false}, {active: false},
         {active: false}, {active: false}, {active: false}, {active: false},
         {active: false}, {active: false}, {active: false}, {active: false},
         ];
 
-    property<int> current_instrument: 0;
-    property<int> synth_tick: 0;
-    callback phase_visualization_tick(float) -> float;
+    in-out property<int> current_instrument: 0;
+    in-out property<int> synth_tick: 0;
+    pure callback phase_visualization_tick(float) -> float;
 
-    property<[ChannelTraceNote]> synth_trace_notes: [
+    in-out property<[ChannelTraceNote]> synth_trace_notes: [
         { channel: 0, start_tick: 123, num_ticks: 1, octave: 3, key_pos: 0, is_black: false, volume: 1.0, },
         { channel: 0, start_tick: 123, num_ticks: 1, octave: 3, key_pos: 3, is_black: true, volume: 1.0, },
         { channel: 0, start_tick: 122, num_ticks: 1, octave: 3, key_pos: 0, is_black: false, volume: 1.0, },
         { channel: 0, start_tick: 121, num_ticks: 1, octave: 3, key_pos: 0, is_black: false, volume: 1.0, },
     ];
-    property<[ChannelActiveNote]> synth_active_notes: [
+    in-out property<[ChannelActiveNote]> synth_active_notes: [
         { trace: { channel: 0, start_tick: 123, num_ticks: 1, octave: 3, key_pos: 0, is_black: false, volume: 1.0, }, note_name: "C", },
         { trace: { channel: 0, start_tick: 123, num_ticks: 1, octave: 3, key_pos: 3, is_black: true, volume: 1.0, }, note_name: "F#", },
     ];
@@ -111,14 +121,18 @@ export global GlobalEngine := {
     callback note_pressed(int);
     callback note_released(int);
     callback select_instrument(int);
+    callback cycle_instrument(int, int);
     callback cycle_pattern_instrument(bool);
     callback toggle_mute_instrument(int);
+    callback select_next_pattern(bool);
     callback pattern_clicked(int);
     callback toggle_step(int);
     callback toggle_step_release(int);
     callback manually_advance_step(bool);
     callback play_clicked(bool);
     callback record_clicked(bool);
+    callback select_next_song_pattern(bool);
+    callback song_pattern_clicked(int);
     callback append_song_pattern(int);
     callback remove_last_song_pattern();
     callback clear_song_patterns();
@@ -127,18 +141,18 @@ export global GlobalEngine := {
     callback mute_instruments();
 }
 
-export global GlobalSettings := {
-    property<Settings> settings: {
+export global GlobalSettings {
+    in-out property<Settings> settings: {
         sync_enabled: false,
     };
-    property<SongSettings> song_settings: {
+    in-out property<SongSettings> song_settings: {
         frames_per_step: 7,
     };
     callback settings_changed(Settings);
     callback song_settings_changed(SongSettings);
 }
 
-export global GlobalUtils := {
-    callback get_midi_note_name(int) -> string;
-    callback mod(float, float) -> float;
+export global GlobalUtils {
+    pure callback get_midi_note_name(int) -> string;
+    pure callback get_midi_note_short_name(int) -> string;
 }

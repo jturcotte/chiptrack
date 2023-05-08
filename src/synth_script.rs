@@ -11,13 +11,13 @@ use crate::synth_script::wasm::WasmModuleInst;
 use crate::synth_script::wasm::WasmRuntime;
 use crate::utils::NOTE_FREQUENCIES;
 
-use alloc::borrow::ToOwned;
+use slint::SharedString;
+
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::cell::Ref;
 use core::cell::RefCell;
 use core::ffi::CStr;
 #[cfg(feature = "desktop")]
@@ -74,7 +74,7 @@ impl InstrumentColArrayExt for [Vec<InstrumentState>; NUM_INSTRUMENT_COLS] {
 pub struct SynthScript {
     wasm_runtime: Rc<WasmRuntime>,
     wasm_exec_env: Option<WasmExecEnv>,
-    instrument_ids: Rc<RefCell<Vec<String>>>,
+    instrument_ids: Rc<RefCell<Vec<SharedString>>>,
     instrument_states: Rc<RefCell<[Vec<InstrumentState>; NUM_INSTRUMENT_COLS]>>,
 }
 
@@ -86,7 +86,8 @@ impl SynthScript {
         F: Fn(i32, i32) + 'static,
         G: Fn(&[u8]) + 'static,
     {
-        let instrument_ids: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(vec![Default::default(); NUM_INSTRUMENTS]));
+        let instrument_ids: Rc<RefCell<Vec<SharedString>>> =
+            Rc::new(RefCell::new(vec![Default::default(); NUM_INSTRUMENTS]));
         let instrument_states: Rc<RefCell<[Vec<InstrumentState>; NUM_INSTRUMENT_COLS]>> = Default::default();
         let instrument_ids_clone = instrument_ids.clone();
         let instrument_states_clone = instrument_states.clone();
@@ -104,6 +105,10 @@ impl SynthScript {
                 !id.is_empty(),
                 "set_instrument_at_column: id must not be empty, got {:?}",
                 id
+            );
+            assert!(
+                !instrument_ids_clone.borrow().is_empty(),
+                "set_instrument_at_column: can only be called during start/main"
             );
             assert!(
                 !instrument_ids_clone.borrow().iter().any(|i| i == id),
@@ -134,7 +139,7 @@ impl SynthScript {
                 (&mut state_col.last_mut().unwrap(), index)
             };
 
-            instrument_ids_clone.borrow_mut()[index] = id.to_owned();
+            instrument_ids_clone.borrow_mut()[index] = id.into();
 
             state.frames_after_release = frames_after_release;
             state.press_function = module.lookup_function(press);
@@ -162,40 +167,37 @@ impl SynthScript {
         }
     }
 
-    pub fn instrument_ids<'a>(&'a self) -> Ref<'a, Vec<String>> {
-        self.instrument_ids.borrow()
-    }
-
     fn reset_instruments(&mut self) {
         for state_col in &mut *self.instrument_states.borrow_mut() {
             state_col.clear();
         }
-        for id in &mut *self.instrument_ids.borrow_mut() {
-            *id = Default::default();
-        }
         self.wasm_exec_env = None;
     }
 
-    pub fn load_default(&mut self) {
-        self.load_bytes(SynthScript::DEFAULT_INSTRUMENTS.to_vec()).unwrap();
+    pub fn load_default(&mut self) -> Result<Vec<SharedString>, String> {
+        self.load_bytes(SynthScript::DEFAULT_INSTRUMENTS.to_vec())
     }
 
-    pub fn load_bytes(&mut self, encoded: Vec<u8>) -> Result<(), String> {
+    pub fn load_bytes(&mut self, encoded: Vec<u8>) -> Result<Vec<SharedString>, String> {
         self.reset_instruments();
+        // instrument_ids is only valid during loading.
+        *self.instrument_ids.borrow_mut() = vec![Default::default(); NUM_INSTRUMENTS];
         let module = Rc::new(WasmModule::new(encoded, self.wasm_runtime.clone())?);
         let module_inst = Rc::new(WasmModuleInst::new(module)?);
         self.wasm_exec_env = Some(WasmExecEnv::new(module_inst)?);
-        Ok(())
+        Ok(self.instrument_ids.take())
     }
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-    pub fn load_file(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_file(
+        &mut self,
+        instruments_path: &std::path::Path,
+    ) -> Result<Vec<SharedString>, Box<dyn std::error::Error>> {
         self.reset_instruments();
 
         if instruments_path.exists() {
             let buffer = std::fs::read(instruments_path)?;
-            self.load_bytes(buffer)?;
-            Ok(())
+            Ok(self.load_bytes(buffer)?)
         } else {
             return Err(format!("Project instruments file {:?} doesn't exist.", instruments_path).into());
         }

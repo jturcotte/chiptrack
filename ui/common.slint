@@ -1,0 +1,55 @@
+import {
+    GlobalEngine
+} from "globals.slint";
+
+// State shared by the desktop and gba UIs is put here in a
+// global to avoid having to duplicate them in the separate root components.
+export global GlobalUI {
+    in-out property<bool> song_mode: false;
+    in-out property<bool> instruments_grid: false;
+}
+
+export component PatternsFocusScope inherits FocusScope {
+    // FIXME: Check if the manual propagation is needed after upgrading to 1.0.2
+    callback root_key_pressed(KeyEvent) -> EventResult;
+    callback root_key_released(KeyEvent) -> EventResult;
+
+    key_pressed(event) => {
+        if (event.text == " ") { GlobalUI.song_mode = !GlobalUI.song_mode; }
+        else if (event.text == Key.UpArrow && GlobalUI.song_mode) { GlobalEngine.select_next_song_pattern(false); }
+        else if (event.text == Key.DownArrow && GlobalUI.song_mode) { GlobalEngine.select_next_song_pattern(true); }
+        else if (event.text == Key.UpArrow) { GlobalEngine.select_next_pattern(false); }
+        else if (event.text == Key.DownArrow) { GlobalEngine.select_next_pattern(true); }
+        else {
+            return root_key_pressed(event);
+        }
+        accept
+    }
+    key_released(e) => { root.root_key_released(e); }
+
+}
+
+export component StepsFocusScope inherits Rectangle {
+    callback root_key_pressed(KeyEvent) -> EventResult;
+    callback root_key_released(KeyEvent) -> EventResult;
+
+    out property<bool> has_focus: fs.has_focus;
+    forward_focus: fs;
+
+    fs := FocusScope {
+        key_pressed(event) => {
+            if (event.text == " ") { GlobalUI.instruments_grid = !GlobalUI.instruments_grid; }
+            else if (event.text == Key.UpArrow && GlobalUI.instruments_grid) { GlobalEngine.cycle_instrument(0, -1); }
+            else if (event.text == Key.DownArrow && GlobalUI.instruments_grid) { GlobalEngine.cycle_instrument(0, 1); }
+            else if (event.text == Key.LeftArrow && GlobalUI.instruments_grid) { GlobalEngine.cycle_instrument(-1, 0); }
+            else if (event.text == Key.RightArrow && GlobalUI.instruments_grid) { GlobalEngine.cycle_instrument(1, 0); }
+            else if (event.text == Key.UpArrow) { GlobalEngine.manually_advance_step(false); }
+            else if (event.text == Key.DownArrow) { GlobalEngine.manually_advance_step(true); }
+            else {
+                return root_key_pressed(event);
+            }
+            accept
+        }
+        key_released(e) => { root.root_key_released(e); }
+    }
+}

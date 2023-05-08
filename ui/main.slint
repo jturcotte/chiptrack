@@ -9,6 +9,10 @@ import {
 } from "std-widgets.slint";
 
 import {
+    GlobalUI
+} from "common.slint";
+
+import {
     NoteData,
     GlobalSettings,
     GlobalEngine,
@@ -20,18 +24,20 @@ import { PatternsPanel } from "patterns.slint";
 import { InstrumentsPanel } from "instruments.slint";
 import { SettingsDialog } from "settings_dialog.slint";
 import { Piano } from "piano.slint";
-import { SongPanel } from "song.slint";
 import { Visualization } from "visualization.slint";
 
 export {
     GlobalSettings,
     GlobalEngine,
+    GlobalUI,
     GlobalUtils
 }
 
-export MainWindow := Window {
-    property<int> first_note: 60;
-    property<[NoteData]> notes: [
+import "fonts/BigBlue_TerminalPlus.ttf";
+
+export component MainWindow inherits Window {
+    in-out property<int> first_note: 60;
+    in-out property<[NoteData]> notes: [
         {note_number: first_note, key_pos: 0, is_black: false, active: false},
         {note_number: first_note + 2, key_pos: 1, is_black: false, active: false},
         {note_number: first_note + 4, key_pos: 2, is_black: false, active: false},
@@ -46,188 +52,144 @@ export MainWindow := Window {
         {note_number: first_note + 8, key_pos: 4, is_black: true, active: false},
         {note_number: first_note + 10, key_pos: 5, is_black: true, active: false},
     ];
-    property<bool> playing: false;
-    property in_song_mode <=> song_mode_button.toggled;
+    in-out property<bool> playing: false;
 
     callback octave_increased(int);
-    callback global_key_event(string, bool);
+    callback global_key_event(string, bool) -> bool;
 
-    property<bool> waveform_is_zero: true;
-    property waveform_image <=> waveform.source;
-    property<length> waveform_width: waveform.width;
-    property<length> waveform_height: waveform.height;
-
-    // Window Height / 5 buttons * 1/8th (width/height ratio)
-    property<length> scroll_gutter_width: height / 5 / 8;
+    in-out property<bool> waveform_is_zero: true;
+    in-out property waveform_image <=> waveform.source;
+    out property<length> waveform_width: waveform.width;
+    out property<length> waveform_height: waveform.height;
 
     preferred_width: 800px;
     preferred_height: 480px;
     title: "Chiptrack";
+    default_font_family: "BigBlue TerminalPlus";
 
-    forward_focus: key_handler;
-    key_handler := FocusScope {
-        key-pressed(event) => {
-            if (event.modifiers.control) {
-                if (event.text == "s") { GlobalEngine.save_project(); }
-                else if (event.text == "g") { GlobalEngine.export_project_as_gba_sav(); }
-                else if (event.text == "1") { GlobalEngine.pattern_clicked(0); }
-                else if (event.text == "2") { GlobalEngine.pattern_clicked(1); }
-                else if (event.text == "3") { GlobalEngine.pattern_clicked(2); }
-                else if (event.text == "4") { GlobalEngine.pattern_clicked(3); }
-                else if (event.text == "5") { GlobalEngine.pattern_clicked(4); }
-                else if (event.text == "6") { GlobalEngine.pattern_clicked(5); }
-                else if (event.text == "7") { GlobalEngine.pattern_clicked(6); }
-                else if (event.text == "8") { GlobalEngine.pattern_clicked(7); }
-                else if (event.text == "9") { GlobalEngine.pattern_clicked(8); }
-                else if (event.text == "0") { GlobalEngine.pattern_clicked(9); }
-            } else {
-                if (event.text == "a") { GlobalEngine.note_key_pressed(first_note); }
-                else if (event.text == "s") { GlobalEngine.note_key_pressed(first_note + 2); }
-                else if (event.text == "d") { GlobalEngine.note_key_pressed(first_note + 4); }
-                else if (event.text == "f") { GlobalEngine.note_key_pressed(first_note + 5); }
-                else if (event.text == "g") { GlobalEngine.note_key_pressed(first_note + 7); }
-                else if (event.text == "h") { GlobalEngine.note_key_pressed(first_note + 9); }
-                else if (event.text == "j") { GlobalEngine.note_key_pressed(first_note + 11); }
-                else if (event.text == "k") { GlobalEngine.note_key_pressed(first_note + 12); }
-                else if (event.text == "w") { GlobalEngine.note_key_pressed(first_note + 1); }
-                else if (event.text == "e") { GlobalEngine.note_key_pressed(first_note + 3); }
-                else if (event.text == "t") { GlobalEngine.note_key_pressed(first_note + 6); }
-                else if (event.text == "y") { GlobalEngine.note_key_pressed(first_note + 8); }
-                else if (event.text == "u") { GlobalEngine.note_key_pressed(first_note + 10); }
-                else if (event.text == "1") { GlobalEngine.select_instrument(0); }
-                else if (event.text == "2") { GlobalEngine.select_instrument(1); }
-                else if (event.text == "3") { GlobalEngine.select_instrument(2); }
-                else if (event.text == "4") { GlobalEngine.select_instrument(3); }
-                else if (event.text == "5") { GlobalEngine.select_instrument(4); }
-                else if (event.text == "6") { GlobalEngine.select_instrument(5); }
-                else if (event.text == "7") { GlobalEngine.select_instrument(6); }
-                else if (event.text == "8") { GlobalEngine.select_instrument(7); }
-                else if (event.text == "9") { GlobalEngine.select_instrument(8); }
-                else if (event.text == "0") { GlobalEngine.select_instrument(9); }
-                else if (event.text == Key.LeftArrow) { GlobalEngine.manually_advance_step(false); }
-                else if (event.text == Key.RightArrow) { GlobalEngine.manually_advance_step(true); }
-                else if (event.text == Key.PageDown) { root.octave_increased(-1); }
-                else if (event.text == Key.PageUp) { root.octave_increased(1); }
-                else if (event.text == Key.Tab) { song_mode_button.toggled = !song_mode_button.toggled; }
-                else if (event.text == Key.Return) { GlobalEngine.play_clicked(!root.playing); }
-                else if (event.text == Key.Escape) { GlobalEngine.mute_instruments(); }
-            }
-            global_key_event(event.text, true);
-            accept
+    function root_key_pressed(event: KeyEvent) -> EventResult {
+        if (event.modifiers.control && event.text == "s") { GlobalEngine.save_project(); }
+        else if (event.modifiers.control && event.text == "g") { GlobalEngine.export_project_as_gba_sav(); }
+        else if (event.modifiers.control && event.text == "1") { GlobalEngine.pattern_clicked(0); }
+        else if (event.modifiers.control && event.text == "2") { GlobalEngine.pattern_clicked(1); }
+        else if (event.modifiers.control && event.text == "3") { GlobalEngine.pattern_clicked(2); }
+        else if (event.modifiers.control && event.text == "4") { GlobalEngine.pattern_clicked(3); }
+        else if (event.modifiers.control && event.text == "5") { GlobalEngine.pattern_clicked(4); }
+        else if (event.modifiers.control && event.text == "6") { GlobalEngine.pattern_clicked(5); }
+        else if (event.modifiers.control && event.text == "7") { GlobalEngine.pattern_clicked(6); }
+        else if (event.modifiers.control && event.text == "8") { GlobalEngine.pattern_clicked(7); }
+        else if (event.modifiers.control && event.text == "9") { GlobalEngine.pattern_clicked(8); }
+        else if (event.modifiers.control && event.text == "0") { GlobalEngine.pattern_clicked(9); }
+        else if (event.text == "a") { GlobalEngine.note_key_pressed(first_note); }
+        else if (event.text == "s") { GlobalEngine.note_key_pressed(first_note + 2); }
+        else if (event.text == "d") { GlobalEngine.note_key_pressed(first_note + 4); }
+        else if (event.text == "f") { GlobalEngine.note_key_pressed(first_note + 5); }
+        else if (event.text == "g") { GlobalEngine.note_key_pressed(first_note + 7); }
+        else if (event.text == "h") { GlobalEngine.note_key_pressed(first_note + 9); }
+        else if (event.text == "j") { GlobalEngine.note_key_pressed(first_note + 11); }
+        else if (event.text == "k") { GlobalEngine.note_key_pressed(first_note + 12); }
+        else if (event.text == "w") { GlobalEngine.note_key_pressed(first_note + 1); }
+        else if (event.text == "e") { GlobalEngine.note_key_pressed(first_note + 3); }
+        else if (event.text == "t") { GlobalEngine.note_key_pressed(first_note + 6); }
+        else if (event.text == "y") { GlobalEngine.note_key_pressed(first_note + 8); }
+        else if (event.text == "u") { GlobalEngine.note_key_pressed(first_note + 10); }
+        else if (event.text == "1") { GlobalEngine.select_instrument(0); }
+        else if (event.text == "2") { GlobalEngine.select_instrument(1); }
+        else if (event.text == "3") { GlobalEngine.select_instrument(2); }
+        else if (event.text == "4") { GlobalEngine.select_instrument(3); }
+        else if (event.text == "5") { GlobalEngine.select_instrument(4); }
+        else if (event.text == "6") { GlobalEngine.select_instrument(5); }
+        else if (event.text == "7") { GlobalEngine.select_instrument(6); }
+        else if (event.text == "8") { GlobalEngine.select_instrument(7); }
+        else if (event.text == "9") { GlobalEngine.select_instrument(8); }
+        else if (event.text == "0") { GlobalEngine.select_instrument(9); }
+        else if (event.text == Key.LeftArrow) { GlobalEngine.cycle_pattern_instrument(false); }
+        else if (event.text == Key.RightArrow) { GlobalEngine.cycle_pattern_instrument(true); }
+        else if (event.text == Key.PageDown) { root.octave_increased(-1); }
+        else if (event.text == Key.PageUp) { root.octave_increased(1); }
+        else if (event.text == Key.Return) { GlobalEngine.play_clicked(!root.playing); }
+        else if (event.text == Key.Escape) { GlobalEngine.mute_instruments(); }
+        else {
+            return global_key_event(event.text, true) ? accept : reject;
         }
-        key-released(event) => {
-            global_key_event(event.text, false);
-            accept
-        }
+        accept
+    }
+    function root_key_released(event: KeyEvent) -> EventResult {
+        global_key_event(event.text, false) ? accept : reject
+    }
 
-        HorizontalBox {
-            // This actually leaves space for the pager buttons, which float right of their layout.
-            spacing: scroll_gutter_width + 2px;
-
-            controls_scroll_area := Rectangle {
-                VerticalBox {
-                    property<length> not_song_mode_y: 0;
-                    property<length> song_mode_y: controls_scroll_area.height * -0.4 - spacing;
-                    y: in_song_mode ? song_mode_y : not_song_mode_y;
-                    animate y { duration: 125ms; }
-                    padding: 0;
-
-                    if (y == song_mode_y): Rectangle { height: 40%; }
-                    if (y != song_mode_y):
-                    PatternsPanel {
-                        scroll_gutter_width: root.scroll_gutter_width;
-                        height: (controls_scroll_area.height - parent.spacing) * 0.4;
-                        padding: 0;
-                    }
-
-                    HorizontalBox {
-                        height: (controls_scroll_area.height - parent.spacing) * 0.6;
-                        padding: 0;
-
-                        Rectangle {
-                            property<float> piano_opacity: !in_song_mode ? 1.0 : 0.0;
-                            animate piano_opacity { duration: 125ms; }
-                            if (piano_opacity != 0.0):
-                            Piano {
-                                opacity: parent.piano_opacity;
-                                notes: root.notes;
-                            }
-                            if (piano_opacity != 1.0):
-                            Visualization {
-                                opacity: 1.0 - parent.piano_opacity;
-                            }
-                        }
-                        VerticalBox {
-                            padding: 0;
-                            Rectangle {
-                                background: white;
-                                waveform := Image {
-                                    width: 100%;
-                                    height: 100%;
-                                    image-rendering: pixelated;
-                                }
-                                Rectangle {
-                                    border_color: black;
-                                    border_width: 1px;
-                                    border_radius: height/16;
-                                }
-                                // This wouldn't be necessary if instruments_grid defined its
-                                // height as a percentage, but I couldn't find a way to make one depend
-                                // on grid_size.
-                                vertical-stretch: 1 - instruments_grid.vertical_stretch;
-
-                            }
-                            instruments_grid := InstrumentsPanel {
-                                scroll_gutter_width: root.scroll_gutter_width;
-                            }
-                        }
-                    }
-
-                    if (y == not_song_mode_y): Rectangle { height: 40%; }
-                    if (y != not_song_mode_y):                
-                    SongPanel {
-                        scroll_gutter_width: root.scroll_gutter_width;
-                        height: (controls_scroll_area.height - parent.spacing) * 0.4;
-                        padding: 0;
-                    }
-                }
-            }
-            VerticalBox {
-                width: min_width;
+    forward_focus: patterns;
+    HorizontalBox {
+        VerticalBox {
+            horizontal-stretch: 1;
+            padding: 0;
+            patterns := PatternsPanel {
+                width: self.height * 1.4;
+                root_key_pressed(event) => { root.root_key_pressed(event) }
+                root_key_released(event) => { root.root_key_released(event) }
                 padding: 0;
+            }
+            Piano {
+                height: 30%;
+                notes: root.notes;
+            }
+        }
 
-                settings_button := ToolbarButton {
-                    text: "⚙";
-                    clicked => {
-                        root.show_settings = true;
-                    }
+        VerticalBox {
+            horizontal-stretch: 1;
+            padding: 0;
+            Visualization { }
+            Rectangle {
+                height: 30%;
+                background: white;
+                waveform := Image {
+                    width: 100%;
+                    height: 100%;
+                    image-rendering: pixelated;
                 }
-                song_mode_button := ToolbarButton {
-                    property<bool> toggled: false;
-                    text: toggled ? "▦" : "▤";
-                    clicked => {
-                        toggled = !toggled;
-                    }
+                Rectangle {
+                    border_color: black;
+                    border_width: 1px;
+                    border_radius: self.height/16;
                 }
-                // placeholder to align with the 60% split left pane.
-                ToolbarButton {
-                    enabled: false;
-                    text: " ";
+            }
+        }
+
+        VerticalBox {
+            width: self.min_width;
+            padding: 0;
+
+            settings_button := ToolbarButton {
+                text: "⚙";
+                clicked => {
+                    root.show_settings = true;
                 }
-                play_button := ToolbarButton {
-                    text: root.playing ? "■" : "▶";
-                    clicked => {
-                        GlobalEngine.play_clicked(!root.playing);
-                    }
+            }
+            song_mode_button := ToolbarButton {
+                text: GlobalUI.song_mode ? "▩" : "▨";
+                clicked => {
+                    GlobalUI.song_mode = !GlobalUI.song_mode;
                 }
-                record_button := ToolbarButton {
-                    property<bool> toggled: true;
-                    text: toggled ? "⬤" : "◯";
-                    text_color: toggled ? darkred : black;
-                    clicked => {
-                        toggled = !toggled;
-                        GlobalEngine.record_clicked(toggled);
-                    }
+            }
+            ToolbarButton {
+                text: GlobalUI.instruments_grid ? "▦" : "▤";
+                clicked => {
+                    GlobalUI.instruments_grid = !GlobalUI.instruments_grid;
+                }
+            }
+            play_button := ToolbarButton {
+                text: root.playing ? "■" : "▶";
+                clicked => {
+                    GlobalEngine.play_clicked(!root.playing);
+                }
+            }
+            record_button := ToolbarButton {
+                property<bool> toggled: true;
+                text: toggled ? "⬤" : "◯";
+                text_color: toggled ? darkred : black;
+                clicked => {
+                    toggled = !toggled;
+                    GlobalEngine.record_clicked(toggled);
                 }
             }
         }

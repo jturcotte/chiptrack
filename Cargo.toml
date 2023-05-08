@@ -24,13 +24,13 @@ desktop = ["std", "slint/backend-winit", "slint/renderer-winit-femtovg", "cpal",
 gba = ["dep:gba", "libm", "slint/unsafe-single-threaded", "i-slint-core/unsafe-single-threaded", "slint/libm", "embedded-alloc", "critical-section/restore-state-bool"]
 
 [build-dependencies.slint-build]
-version = "0.3.3"
+version = "1.0.2"
 [dependencies.slint]
-version = "0.3.3"
+version = "1.0.2"
 default-features = false
-features = ["compat-0-3-0"]
+features = ["compat-1-0"]
 [dependencies.i-slint-core]
-version = "=0.3.3"
+version = "=1.0.2"
 default-features = false
 optional = true
 

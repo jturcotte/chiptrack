@@ -5,7 +5,7 @@ import { Button, ComboBox, GridBox, SpinBox, VerticalBox, HorizontalBox } from "
 
 import { GlobalSettings } from "globals.slint";
 
-OverlayDialog := Rectangle {
+component OverlayDialog inherits Rectangle {
     callback accepted();
     background: #ffffffC0;
     width: 100%;
@@ -22,14 +22,14 @@ OverlayDialog := Rectangle {
         border_radius: 10px;
         width: 80%;
         height: 80%;
-        x: width / 0.8 * 0.1;
-        y: height / 0.8 * 0.1;
+        x: self.width / 0.8 * 0.1;
+        y: self.height / 0.8 * 0.1;
     }
     HorizontalLayout {
-        padding_left: width / 0.8 * 0.1;
-        padding_top: height / 0.8 * 0.1;
-        padding_right: padding_left;
-        padding_bottom: padding_top;
+        padding_left: self.width / 0.8 * 0.1;
+        padding_top: self.height / 0.8 * 0.1;
+        padding_right: self.padding_left;
+        padding_bottom: self.padding_top;
         VerticalBox {
             Rectangle {
                 @children
@@ -48,7 +48,7 @@ OverlayDialog := Rectangle {
     }
 }
 
-export SettingsDialog := OverlayDialog {
+export component SettingsDialog inherits OverlayDialog {
     callback closed();
     accepted => {
         GlobalSettings.settings.sync_enabled = sync_control.current_value != "Off";

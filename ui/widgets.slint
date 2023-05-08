@@ -1,20 +1,21 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-export ToolbarButton := Rectangle {
+export component ToolbarButton inherits Rectangle {
     callback clicked();
-    property text <=> t.text;
-    property text_color <=> t.color;
+    in property text <=> t.text;
+    in property text_color <=> t.color;
     property<bool> enabled: true;
     background: !ta.pressed && enabled ? white : #f4f4f4;
     border_width: 1px;
     border_color: enabled ? #a0a0a0 : transparent;
-    border_radius: width/16;
-    width: height * 2 / 3;
+    border_radius: self.width/16;
+    width: self.height * 2 / 3;
     t := Text {
+        x: 0px;
         width: 100%;
         height: 100%;
-        font_size: width / 2.5;
+        font_size: self.width / 2.5;
         horizontal_alignment: center;
         vertical_alignment: center;
     }
@@ -22,78 +23,5 @@ export ToolbarButton := Rectangle {
         width: 100%;
         height: 100%;
         clicked => { root.clicked(); }
-    }
-}
-
-PageIndicator := Rectangle {
-    property<bool> current;
-    property<bool> highlight;
-    background: highlight
-                    ? white
-                    : current ? grey : lightgrey;
-    width: 66.6%;
-    height: width;
-    border-radius: width;
-    if highlight:
-    Rectangle {
-        x: parent.width / 2 - width / 2;
-        y: parent.height / 2 - height / 2;
-        width: 133%;
-        height: width;
-        border-color: lightgrey;
-        border-width: 1px;
-        border-radius: width;
-    }
-}
-
-export PageBar := Rectangle {
-    property<int> num_pages: 4;
-    property<int> current_page: 0;
-
-    // Middle line
-    Path {
-        y: width * 0.25 + width * (current_page + 1);
-        height: parent.height - width * 0.5 - width * num_pages;
-        animate y { duration: 150ms; }
-        stroke: lightgrey;
-        stroke-width: 2px;
-
-        MoveTo { x: 0; y: 0; }
-        LineTo { x: 0; y: 1; }
-    }
-
-    // Pages
-    for i in num_pages:
-    PageIndicator {
-        x: parent.width / 2 - width / 2;
-        y: {
-            if (i <= current_page) {
-                height * 0.25 + height * i * 1.5
-            } else {
-                parent.height + height * 0.25 - height * (num_pages - i) * 1.5
-            }
-        }
-        animate y { duration: 150ms; }
-        current: i == current_page;
-    }
-
-    // Top half touch area
-    TouchArea {
-        height: 50%;
-        clicked => {
-            if (parent.current_page > 0) {
-                parent.current_page -= 1;
-            }
-        }
-    }
-    // Bottom half touch area
-    TouchArea {
-        height: 50%;
-        y: height;
-        clicked => {
-            if (parent.current_page < parent.num_pages - 1) {
-                parent.current_page += 1;
-            }
-        }
     }
 }

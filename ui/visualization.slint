@@ -7,74 +7,74 @@ import {
     GlobalEngine
 } from "globals.slint";
 
-OctaveIndicator := Rectangle {
+component OctaveIndicator inherits Rectangle {
     border_width: 1px;
     border_color: black;
     background: white;
     Rectangle {
         background: black;
-        y: 1 * parent.height / 7px * 1px - height / 2;
+        y: 1 * parent.height / 7px * 1px - self.height / 2;
         height: parent.height / 7 * 0.8;
         width: 60%;
     }
     Rectangle {
         background: black;
-        y: 2 * parent.height / 7px * 1px - height / 2;
+        y: 2 * parent.height / 7px * 1px - self.height / 2;
         height: parent.height / 7 * 0.8;
         width: 60%;
     }
     Rectangle {
         background: black;
-        y: 3 * parent.height / 7px * 1px - height / 2;
+        y: 3 * parent.height / 7px * 1px - self.height / 2;
         height: parent.height / 7 * 0.8;
         width: 60%;
     }
     Rectangle {
         background: black;
-        y: 5 * parent.height / 7px * 1px - height / 2;
+        y: 5 * parent.height / 7px * 1px - self.height / 2;
         height: parent.height / 7 * 0.8;
         width: 60%;
     }
     Rectangle {
         background: black;
-        y: 6 * parent.height / 7px * 1px - height / 2;
+        y: 6 * parent.height / 7px * 1px - self.height / 2;
         height: parent.height / 7 * 0.8;
         width: 60%;
     }
 }
 
-ScaleSeparators := Path {
-    viewbox-width: width / 1px;
-    viewbox-height: height / 1px;
+component ScaleSeparators inherits Path {
+    viewbox-width: self.width / 1px;
+    viewbox-height: self.height / 1px;
     stroke: #e8e8e8;
     stroke-width: 1px;
 
-    MoveTo { x: 10; y: viewbox-height * 1 / 7; }
-    LineTo { x: viewbox-width - 10; y: viewbox-height * 1 / 7; }
-    MoveTo { x: 10; y: viewbox-height * 2 / 7; }
-    LineTo { x: viewbox-width - 10; y: viewbox-height * 2 / 7; }
-    MoveTo { x: 10; y: viewbox-height * 3 / 7; }
-    LineTo { x: viewbox-width - 10; y: viewbox-height * 3 / 7; }
-    MoveTo { x: 10; y: viewbox-height * 4 / 7; }
-    LineTo { x: viewbox-width - 10; y: viewbox-height * 4 / 7; }
-    MoveTo { x: 10; y: viewbox-height * 5 / 7; }
-    LineTo { x: viewbox-width - 10; y: viewbox-height * 5 / 7; }
-    MoveTo { x: 10; y: viewbox-height * 6 / 7; }
-    LineTo { x: viewbox-width - 10; y: viewbox-height * 6 / 7; }
+    MoveTo { x: 10; y: parent.viewbox-height * 1 / 7; }
+    LineTo { x: parent.viewbox-width - 10; y: parent.viewbox-height * 1 / 7; }
+    MoveTo { x: 10; y: parent.viewbox-height * 2 / 7; }
+    LineTo { x: parent.viewbox-width - 10; y: parent.viewbox-height * 2 / 7; }
+    MoveTo { x: 10; y: parent.viewbox-height * 3 / 7; }
+    LineTo { x: parent.viewbox-width - 10; y: parent.viewbox-height * 3 / 7; }
+    MoveTo { x: 10; y: parent.viewbox-height * 4 / 7; }
+    LineTo { x: parent.viewbox-width - 10; y: parent.viewbox-height * 4 / 7; }
+    MoveTo { x: 10; y: parent.viewbox-height * 5 / 7; }
+    LineTo { x: parent.viewbox-width - 10; y: parent.viewbox-height * 5 / 7; }
+    MoveTo { x: 10; y: parent.viewbox-height * 6 / 7; }
+    LineTo { x: parent.viewbox-width - 10; y: parent.viewbox-height * 6 / 7; }
 }
 
-OctaveSeparator := Path {
-    viewbox-width: width / 1px;
-    viewbox-height: height / 1px;
+component OctaveSeparator inherits Path {
+    viewbox-width: self.width / 1px;
+    viewbox-height: self.height / 1px;
     stroke: #d8d8d8;
     stroke-width: 2px;
 
-    MoveTo { x: 10; y: viewbox-height + 1; }
-    LineTo { x: viewbox-width - 10; y: viewbox-height + 1; }
+    MoveTo { x: 10; y: parent.viewbox-height + 1; }
+    LineTo { x: parent.viewbox-width - 10; y: parent.viewbox-height + 1; }
 }
 
 
-Visualization := Rectangle {
+export component Visualization inherits Rectangle {
     property<[color]> chan_colors: [
         Colors.rgb(192, 0, 0),
         Colors.rgb(0, 192, 0),
@@ -82,7 +82,7 @@ Visualization := Rectangle {
         Colors.rgb(0, 64, 192)
         ];
     property<int> visible_octaves: 4;
-    property<length> note_height: height / (7 * visible_octaves + 2);
+    property<length> note_height: self.height / (7 * visible_octaves + 2);
     // One note spacer, and the real note
     property<length> noise_area_height: note_height * 2;
 
@@ -95,7 +95,7 @@ Visualization := Rectangle {
         OctaveIndicator {
             width: 5%;
             height: root.note_height * 7;
-            y: parent.height - root.noise_area_height - height * (i + 1);
+            y: parent.height - root.noise_area_height - self.height * (i + 1);
         }
 
         Rectangle {
@@ -119,17 +119,17 @@ Visualization := Rectangle {
 
             for note[idx] in GlobalEngine.synth_active_notes:
             Rectangle {
-                border-radius: width;
-                width: height;
+                border-radius: self.width;
+                width: self.height;
                 height: root.note_height * 3;
-                x: parent.width - width / 2;
+                x: parent.width - self.width / 2;
                 y: parent.height
                     - (note.trace.octave == 0 && note.trace.key_pos == 0
                         ? root.note_height
                         : root.noise_area_height
                             + ((note.trace.octave - 2) * 7 + note.trace.key_pos + note.trace.cent_adj + (note.trace.is_black ? 1.5 : 1)) * root.note_height
                         )
-                    + root.note_height / 2 - height / 2;
+                    + root.note_height / 2 - self.height / 2;
                 background: white;
                 border-color: chan_colors[note.trace.channel];
                 border-width: 2px;
@@ -137,7 +137,7 @@ Visualization := Rectangle {
                     width: 100%;
                     height: 100%;
                     text: note.note_name;
-                    font_size: min(width, height) / 2.5;
+                    font_size: min(self.width, self.height) / 2.5;
                     color: chan_colors[note.trace.channel];
                     horizontal_alignment: center;
                     vertical_alignment: center;
@@ -145,7 +145,7 @@ Visualization := Rectangle {
             }
         }
         trace_container := Rectangle {
-            property<length> tick_width: width / (6 * 16 * 2);
+            property<length> tick_width: self.width / (6 * 16 * 2);
             // The animated current_tick_number won't exactly match with the time when old traces
             // are going to be removed from the model from the sequencer and then reach the UI
             // thread. So clip the container.
@@ -164,7 +164,7 @@ Visualization := Rectangle {
                 Rectangle {
                     width: trace_container.tick_width * note.num_ticks;
                     height: root.note_height * 0.8;
-                    x: -note.start_tick * trace_container.tick_width - width;
+                    x: -note.start_tick * trace_container.tick_width - self.width;
                     y: parent.height
                         - (note.octave == 0 && note.key_pos == 0
                             ? root.note_height
