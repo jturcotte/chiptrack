@@ -464,11 +464,11 @@ impl Sequencer {
         #[cfg(feature = "std")]
         let instruments = pattern.instruments().clone();
 
-        let instruments_to_skip = match pattern.find_nearest_instrument_pos(self.selected_instrument, true) {
+        let (instruments_to_skip, instruments_len) = match pattern.find_nearest_instrument_pos(self.selected_instrument, true) {
             // Advance once more to not show the found instrument both in the patterns and pattern_instruments models
-            Some((ii, i)) if i == self.selected_instrument => ii + 1,
-            Some((ii, _)) => ii,
-            None => 0,
+            Some((ii, i)) if i == self.selected_instrument => (ii + 1, instruments.len() - 1),
+            Some((ii, _)) => (ii, instruments.len()),
+            None => (0, 0),
         };
 
         self.main_window
@@ -483,7 +483,7 @@ impl Sequencer {
                 }
 
                 let model2 = GlobalEngine::get(&handle).get_sequencer_pattern_instruments();
-                let len = (instruments.len() - 1).min(5);
+                let len = instruments_len.min(model2.row_count());
                 GlobalEngine::get(&handle).set_sequencer_pattern_instruments_len(len as i32);
 
                 instruments
