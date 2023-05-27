@@ -169,7 +169,8 @@ export component PatternsPanel inherits HorizontalLayout {
     }
 
     current_pattern := Rectangle { 
-       VerticalLayout {
+        width: patterns_list.height_of_cell * 4;
+        VerticalLayout {
             spacing: 1px;
             label := Rectangle {
                 Text {
@@ -210,14 +211,14 @@ export component PatternsPanel inherits HorizontalLayout {
     }
 
     HorizontalLayout {
-        width: self.height;
-
         if !GlobalUI.instruments_grid:
         pattern_instruments := HorizontalLayout {
             spacing: 8px;
-            for idx in GlobalEngine.sequencer_pattern_instruments_len:
+            for idx in GlobalEngine.sequencer_pattern_instruments.length:
             VerticalLayout {
-                property<PatternInstrumentData> instrument: GlobalEngine.sequencer_pattern_instruments[idx];
+                property<PatternInstrumentData> instrument: idx < GlobalEngine.sequencer_pattern_instruments_len
+                    ? GlobalEngine.sequencer_pattern_instruments[idx]
+                    : {id: "--", notes: [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]};
                 width: (self.height - self.spacing * 16) / 17 * 2;
                 spacing: 1px;
 

@@ -124,7 +124,6 @@ export component MainWindow inherits Window {
             horizontal-stretch: 1;
             padding: 0;
             patterns := PatternsPanel {
-                width: self.height * 1.4;
                 root_key_pressed(event) => { root.root_key_pressed(event) }
                 root_key_released(event) => { root.root_key_released(event) }
                 padding: 0;
