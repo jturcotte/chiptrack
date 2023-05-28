@@ -71,6 +71,9 @@ const KEY_DOWN: u16 = 0b00_10000000;
 const KEY_R: u16 = 0b01_00000000;
 const KEY_L: u16 = 0b10_00000000;
 
+const NORMAL_TEXT: u16 = 0;
+const FADED_TEXT: u16 = 1;
+
 // This is a type alias for the enabled `restore-state-*` feature.
 // For example, it is `bool` if you enable `restore-state-bool`.
 use critical_section::RawRestoreState;
@@ -148,6 +151,8 @@ impl MinimalGbaWindow {
                 // .with_video_mode(VideoMode::_0)
                 .with_show_bg0(true),
         );
+        bg_palbank(NORMAL_TEXT as usize).index(1).write(Color::BLACK);
+        bg_palbank(FADED_TEXT as usize).index(1).write(Color(0b0_11010_11010_11010));
 
         Rc::new_cyclic(|w: &Weak<Self>| Self {
             window: Window::new(w.clone()),
@@ -258,8 +263,12 @@ impl MinimalGbaWindow {
                 let vid_row = tsb.get_row(i + 1).unwrap();
                 let row_data = sequencer_steps.row_data(i).unwrap();
                 for (j, &c) in MidiNote(row_data.note).char_desc().iter().enumerate() {
-                    let tile_index = if row_data.press { c as u16 } else { 0 };
-                    vid_row.index(j + 6).write(TextEntry::new().with_tile(tile_index));
+                    let t = if row_data.press {
+                        TextEntry::new().with_tile(c as u16)
+                    } else {
+                        TextEntry::new().with_tile('-' as u16).with_palbank(FADED_TEXT)
+                    };
+                    vid_row.index(j + 6).write(t);
                 }
                 vid_row
                     .index(4)
@@ -293,6 +302,7 @@ impl MinimalGbaWindow {
             let top_vid_row = tsb.get_row(0).unwrap();
             let sequencer_pattern_instruments_len = global_engine.get_sequencer_pattern_instruments_len() as usize;
             let sequencer_pattern_instruments = global_engine.get_sequencer_pattern_instruments();
+            let placeholder = TextEntry::new().with_tile('-' as u16).with_palbank(FADED_TEXT);
             for i in 0..6 {
                 if i < sequencer_pattern_instruments_len {
                     let row_data = sequencer_pattern_instruments.row_data(i).unwrap();
@@ -308,22 +318,25 @@ impl MinimalGbaWindow {
                     let notes = row_data.notes;
                     for j in 0..notes.row_count() {
                         let note = notes.row_data(j).unwrap();
-                        let c = if note == -1 {
-                            0
-                        } else {
-                            MidiNote(note).base_note_name() as u16
+                        let vid_row = tsb.get_row(j + 1).unwrap();
+                        vid_row.index(i * 3 + 11).write(placeholder);
+                        vid_row.index(i * 3 + 11 + 1).write(placeholder);
+
+                        if note != -1 {
+                            let midi_note = MidiNote(note);
+                            vid_row.index(i * 3 + 11).write(TextEntry::new().with_tile(midi_note.base_note_name() as u16));
+                            if midi_note.is_black() {
+                                vid_row.index(i * 3 + 11 + 1).write(TextEntry::new().with_tile('#' as u16));
+                            }
                         };
-                        tsb.get_row(j + 1)
-                            .unwrap()
-                            .index(i * 3 + 11)
-                            .write(TextEntry::new().with_tile(c));
                     }
                 } else {
-                    top_vid_row.index(i * 3 + 11).write(TextEntry::new());
-                    top_vid_row.index(i * 3 + 11 + 1).write(TextEntry::new());
+                    top_vid_row.index(i * 3 + 11).write(placeholder);
+                    top_vid_row.index(i * 3 + 11 + 1).write(placeholder);
                     top_vid_row.index(i * 3 + 11 + 2).write(TextEntry::new());
                     for j in 1..17 {
-                        tsb.get_row(j).unwrap().index(i * 3 + 11).write(TextEntry::new());
+                        tsb.get_row(j).unwrap().index(i * 3 + 11).write(placeholder);
+                        tsb.get_row(j).unwrap().index(i * 3 + 11 + 1).write(placeholder);
                     }
                 }
             }
