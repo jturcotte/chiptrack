@@ -100,6 +100,10 @@ pub struct MinimalGbaWindow {
     instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     was_in_song_mode: RefCell<bool>,
     was_in_instruments_grid: RefCell<bool>,
+    sequencer_song_pattern_active_previous: RefCell<usize>,
+    sequencer_pattern_active_previous: RefCell<usize>,
+    sequencer_step_active_previous: RefCell<usize>,
+    current_instrument_previous: RefCell<usize>,
 }
 
 struct ModelDirtinessTracker {
@@ -167,6 +171,10 @@ impl MinimalGbaWindow {
             instruments_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             was_in_song_mode: RefCell::new(false),
             was_in_instruments_grid: RefCell::new(false),
+            sequencer_song_pattern_active_previous: RefCell::new(0),
+            sequencer_pattern_active_previous: RefCell::new(0),
+            sequencer_step_active_previous: RefCell::new(0),
+            current_instrument_previous: RefCell::new(0),
         })
     }
 
@@ -206,6 +214,14 @@ impl MinimalGbaWindow {
         let song_mode_dirty = self.was_in_song_mode.replace(song_mode) != song_mode;
         let instruments_grid = global_ui.get_instruments_grid();
         let instruments_grid_dirty = self.was_in_instruments_grid.replace(instruments_grid) != instruments_grid;
+        let sequencer_song_pattern_active = global_engine.get_sequencer_song_pattern_active() as usize;
+        let sequencer_song_pattern_active_dirty = self.sequencer_song_pattern_active_previous.replace(sequencer_song_pattern_active) != sequencer_song_pattern_active;
+        let sequencer_pattern_active = global_engine.get_sequencer_pattern_active() as usize;
+        let sequencer_pattern_active_dirty = self.sequencer_pattern_active_previous.replace(sequencer_pattern_active) != sequencer_pattern_active;
+        let sequencer_step_active = global_engine.get_sequencer_step_active() as usize;
+        let sequencer_step_active_dirty = self.sequencer_step_active_previous.replace(sequencer_step_active) != sequencer_step_active;
+        let current_instrument = global_engine.get_current_instrument() as usize;
+        let current_instrument_dirty = self.current_instrument_previous.replace(current_instrument) != current_instrument;
 
         let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
 
@@ -225,15 +241,15 @@ impl MinimalGbaWindow {
                 .zip(s.chars())
                 .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
         }
-        let dirty_pattern_model = if !song_mode && (song_mode_dirty || self.sequencer_patterns_tracker.take_dirtiness())
+        let dirty_pattern_model = if !song_mode && (song_mode_dirty || sequencer_pattern_active_dirty || self.sequencer_patterns_tracker.take_dirtiness())
         {
-            Some(global_engine.get_sequencer_patterns())
-        } else if song_mode && (song_mode_dirty || self.sequencer_song_patterns_tracker.take_dirtiness()) {
-            Some(global_engine.get_sequencer_song_patterns())
+            Some((global_engine.get_sequencer_patterns(), sequencer_pattern_active))
+        } else if song_mode && (song_mode_dirty || sequencer_song_pattern_active_dirty || self.sequencer_song_patterns_tracker.take_dirtiness()) {
+            Some((global_engine.get_sequencer_song_patterns(), sequencer_song_pattern_active))
         } else {
             None
         };
-        if let Some(pattern_model) = dirty_pattern_model {
+        if let Some((pattern_model, active_index)) = dirty_pattern_model {
             for i in 0..pattern_model.row_count().min(16) {
                 let vid_row = tsb.get_row(i + 1).unwrap();
                 let row_data = pattern_model.row_data(i).unwrap();
@@ -244,11 +260,11 @@ impl MinimalGbaWindow {
                 vid_row.index(2).write(TextEntry::new().with_tile(c2 as u16));
                 vid_row
                     .index(0)
-                    .write(TextEntry::new().with_tile(row_data.active as u16 * 7));
+                    .write(TextEntry::new().with_tile((i == active_index) as u16 * 7));
             }
         }
 
-        if self.sequencer_steps_tracker.take_dirtiness() {
+        if self.sequencer_steps_tracker.take_dirtiness() || sequencer_step_active_dirty {
             let current_instrument = global_engine.get_current_instrument() as usize;
             let vid_row = tsb.get_row(0).unwrap();
             let current_instrument_id = global_engine.get_instruments().row_data(current_instrument).unwrap().id;
@@ -272,7 +288,7 @@ impl MinimalGbaWindow {
                 }
                 vid_row
                     .index(4)
-                    .write(TextEntry::new().with_tile(row_data.active as u16 * 7));
+                    .write(TextEntry::new().with_tile((i == sequencer_step_active) as u16 * 7));
                 vid_row
                     .index(5)
                     .write(TextEntry::new().with_tile(row_data.press as u16 * '[' as u16));
@@ -341,13 +357,14 @@ impl MinimalGbaWindow {
                 }
             }
         }
-        if instruments_grid && (instruments_grid_dirty || self.instruments_tracker.take_dirtiness()) {
+        if instruments_grid && (instruments_grid_dirty || current_instrument_dirty || self.instruments_tracker.take_dirtiness()) {
             let instruments = global_engine.get_instruments();
             for y in 0..4 {
                 let vid_row = tsb.get_row(y * 4 + 2).unwrap();
                 let sel_vid_row = tsb.get_row(y * 4 + 3).unwrap();
                 for x in 0..4 {
-                    let instrument = instruments.row_data(y * 4 + x).unwrap();
+                    let instrument_idx = y * 4 + x;
+                    let instrument = instruments.row_data(instrument_idx).unwrap();
                     vid_row
                         .index(x * 4 + 11)
                         .write(TextEntry::new().with_tile(instrument.active as u16 * 7));
@@ -358,7 +375,7 @@ impl MinimalGbaWindow {
                     }
                     sel_vid_row
                         .iter_range(x * 4 + 11..x * 4 + 11 + 4)
-                        .for_each(|a| a.write(TextEntry::new().with_tile(instrument.selected as u16 * '-' as u16)));
+                        .for_each(|a| a.write(TextEntry::new().with_tile((instrument_idx == current_instrument) as u16 * '-' as u16)));
                 }
             }
         }

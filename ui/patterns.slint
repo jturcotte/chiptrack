@@ -122,6 +122,9 @@ component PatternsList {
         property<[PatternData]> model: GlobalUI.song_mode
             ? GlobalEngine.sequencer_song_patterns
             : GlobalEngine.sequencer_patterns;
+        property<int> active_idx: GlobalUI.song_mode
+            ? GlobalEngine.sequencer_song_pattern_active
+            : GlobalEngine.sequencer_pattern_active;
         y: root.height_of_cell + layout.spacing;
         interactive: false;
         height: parent.height - self.y;
@@ -129,11 +132,11 @@ component PatternsList {
 
         layout := VerticalLayout {
             spacing: 1px;
-            for pattern in parent.model:
+            for pattern[idx] in parent.model:
             SequencerPattern {
                 number: pattern.number;
                 property<PatternData> pattern: GlobalEngine.sequencer_patterns[self.number];
-                highlighted: pattern.active;
+                highlighted: idx == active_idx;
                 fill: !pattern.empty;
                 clicked => { GlobalEngine.pattern_clicked(self.number); }
             }
@@ -186,7 +189,7 @@ export component PatternsPanel inherits HorizontalLayout {
             for step[idx] in GlobalEngine.sequencer_steps:
             HorizontalLayout {
                 SequencerStep {
-                    highlighted: step.active;
+                    highlighted: idx == GlobalEngine.sequencer_step_active;
                     press: step.press;
                     release: step.release;
                     name: GlobalUtils.get_midi_note_name(step.note);

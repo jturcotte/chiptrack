@@ -49,7 +49,7 @@ export component InstrumentsPanel inherits Flickable {
     for instrument[idx] in GlobalEngine.instruments:
     InstrumentButton {
         id: instrument.id;
-        highlighted: instrument.selected;
+        highlighted: idx == GlobalEngine.current_instrument;
         active: instrument.active;
         muted: instrument.muted;
         pressed => { GlobalEngine.select_instrument(idx); }

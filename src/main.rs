@@ -116,7 +116,6 @@ fn run_main() {
             .map(|i| PatternData {
                 number: i,
                 empty: true,
-                active: false,
             })
             .collect::<Vec<PatternData>>(),
     ));

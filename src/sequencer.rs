@@ -314,23 +314,12 @@ impl Sequencer {
     }
 
     fn select_song_pattern(&mut self, song_pattern: Option<u32>) -> () {
-        let old = self.current_song_pattern;
         self.current_song_pattern = song_pattern.map(|sp| sp as usize);
-        let new = self.current_song_pattern;
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
-                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                if let Some(current) = old {
-                    let mut pattern_row_data = model.row_data(current).unwrap();
-                    pattern_row_data.active = false;
-                    model.set_row_data(current, pattern_row_data);
-                }
-                if let Some(current) = new {
-                    let mut pattern_row_data = model.row_data(current).unwrap();
-                    pattern_row_data.active = true;
-                    model.set_row_data(current, pattern_row_data);
-                }
+                let new = song_pattern.map(|sp| sp as i32).unwrap_or(-1);
+                GlobalEngine::get(&handle).set_sequencer_song_pattern_active(new);
             })
             .unwrap();
     }
@@ -344,63 +333,34 @@ impl Sequencer {
     }
 
     pub fn select_pattern(&mut self, pattern: u32) -> () {
-        let old = self.selected_pattern;
         // FIXME: Queue the playback?
         self.selected_pattern = pattern as usize;
-        let new = self.selected_pattern;
 
         self.update_steps();
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
-                let model = GlobalEngine::get(&handle).get_sequencer_patterns();
-                let mut pattern_row_data = model.row_data(old).unwrap();
-                pattern_row_data.active = false;
-                model.set_row_data(old, pattern_row_data);
-
-                let mut pattern_row_data = model.row_data(new).unwrap();
-                pattern_row_data.active = true;
-                model.set_row_data(new, pattern_row_data);
+                GlobalEngine::get(&handle).set_sequencer_pattern_active(pattern as i32);
             })
             .unwrap();
     }
 
     pub fn select_step(&mut self, step: u32) -> () {
-        let old_step = self.current_step;
         self.current_step = step as usize;
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
-                let model = GlobalEngine::get(&handle).get_sequencer_steps();
-                let mut row_data = model.row_data(old_step).unwrap();
-                row_data.active = false;
-                model.set_row_data(old_step, row_data);
-
-                let mut row_data = model.row_data(step as usize).unwrap();
-                row_data.active = true;
-                model.set_row_data(step as usize, row_data);
+                GlobalEngine::get(&handle).set_sequencer_step_active(step as i32);
             })
             .unwrap();
     }
     pub fn select_instrument(&mut self, instrument: u8) -> () {
-        let old_instrument = self.selected_instrument as usize;
         self.selected_instrument = instrument;
 
         self.update_steps();
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
-                let model = GlobalEngine::get(&handle).get_instruments();
-                if let Some(mut row_data) = model.row_data(old_instrument) {
-                    row_data.selected = false;
-                    model.set_row_data(old_instrument, row_data);
-                }
-
-                if let Some(mut row_data) = model.row_data(instrument as usize) {
-                    row_data.selected = true;
-                    model.set_row_data(instrument as usize, row_data);
-                }
-
                 GlobalEngine::get(&handle).set_current_instrument(instrument as i32);
             })
             .unwrap();
@@ -824,7 +784,6 @@ impl Sequencer {
                 let vec_model = model.as_any().downcast_ref::<VecModel<PatternData>>().unwrap();
                 vec_model.push(PatternData {
                     number: pattern as i32,
-                    active: false,
                     empty: false,
                 });
             })
@@ -874,20 +833,15 @@ impl Sequencer {
             Some(0)
         };
 
-        let current_song_pattern = self.current_song_pattern;
         let song_patterns = self.song.song_patterns.clone();
         let frames_per_step = self.song.frames_per_step;
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
                 let vec_model = model.as_any().downcast_ref::<VecModel<PatternData>>().unwrap();
-                for (i, number) in song_patterns.iter().enumerate() {
+                for number in song_patterns.iter() {
                     vec_model.push(PatternData {
                         number: *number as i32,
-                        active: match current_song_pattern {
-                            Some(sp) => i == sp,
-                            None => false,
-                        },
                         empty: false,
                     });
                 }
