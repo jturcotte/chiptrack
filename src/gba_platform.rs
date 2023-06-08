@@ -250,8 +250,9 @@ impl MinimalGbaWindow {
             None
         };
         if let Some((pattern_model, active_index)) = dirty_pattern_model {
-            for i in 0..pattern_model.row_count().min(16) {
-                let vid_row = tsb.get_row(i + 1).unwrap();
+            let scroll_pos = active_index.max(8).min(pattern_model.row_count() - 8) - 8;
+            for i in scroll_pos..(pattern_model.row_count().min(scroll_pos + 16)) {
+                let vid_row = tsb.get_row(i - scroll_pos + 1).unwrap();
                 let row_data = pattern_model.row_data(i).unwrap();
                 let number = row_data.number + 1;
                 let c1 = (number / 10) as u8 + '0' as u8;
@@ -268,11 +269,9 @@ impl MinimalGbaWindow {
             let current_instrument = global_engine.get_current_instrument() as usize;
             let vid_row = tsb.get_row(0).unwrap();
             let current_instrument_id = global_engine.get_instruments().row_data(current_instrument).unwrap().id;
-            vid_row.index(6 + 1).write(TextEntry::new());
-            vid_row.index(6 + 2).write(TextEntry::new());
-            for (ci, c) in current_instrument_id.chars().enumerate() {
-                vid_row.index(6 + ci).write(TextEntry::new().with_tile(c as u16));
-            }
+            vid_row.iter_range(6..6+3)
+                .zip(current_instrument_id.chars().chain(core::iter::repeat(' ')))
+                .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
 
             let sequencer_steps = global_engine.get_sequencer_steps();
             for i in 0..sequencer_steps.row_count() {
@@ -299,7 +298,7 @@ impl MinimalGbaWindow {
         }
 
         if instruments_grid_dirty {
-            for i in 0..16 {
+            for i in 0..17 {
                 tsb.get_row(i)
                     .unwrap()
                     .iter_range(11..)
@@ -359,23 +358,25 @@ impl MinimalGbaWindow {
         }
         if instruments_grid && (instruments_grid_dirty || current_instrument_dirty || self.instruments_tracker.take_dirtiness()) {
             let instruments = global_engine.get_instruments();
-            for y in 0..4 {
-                let vid_row = tsb.get_row(y * 4 + 2).unwrap();
-                let sel_vid_row = tsb.get_row(y * 4 + 3).unwrap();
+            let scroll_pos = (current_instrument / 4).max(2).min(instruments.row_count() / 4 - 2) - 2;
+            for y in scroll_pos..scroll_pos+4 {
+                let vid_row = tsb.get_row((y - scroll_pos) * 4 + 2).unwrap();
+                let sel_vid_row = tsb.get_row((y - scroll_pos) * 4 + 3).unwrap();
                 for x in 0..4 {
                     let instrument_idx = y * 4 + x;
                     let instrument = instruments.row_data(instrument_idx).unwrap();
                     vid_row
                         .index(x * 4 + 11)
                         .write(TextEntry::new().with_tile(instrument.active as u16 * 7));
-                    for (ci, c) in instrument.id.chars().enumerate() {
-                        vid_row
-                            .index(x * 4 + 11 + ci + 1)
-                            .write(TextEntry::new().with_tile(c as u16));
-                    }
+                    let col = x * 4 + 11 + 1;
+                    vid_row
+                        .iter_range(col..col+4)
+                        .zip(instrument.id.chars().chain(core::iter::repeat(' ')))
+                        .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
+                    let sel_char = TextEntry::new().with_tile((instrument_idx == current_instrument) as u16 * '-' as u16);
                     sel_vid_row
                         .iter_range(x * 4 + 11..x * 4 + 11 + 4)
-                        .for_each(|a| a.write(TextEntry::new().with_tile((instrument_idx == current_instrument) as u16 * '-' as u16)));
+                        .for_each(|a| a.write(sel_char));
                 }
             }
         }
