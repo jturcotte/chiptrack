@@ -70,6 +70,8 @@ const KEY_UP: u16 = 0b00_01000000;
 const KEY_DOWN: u16 = 0b00_10000000;
 const KEY_R: u16 = 0b01_00000000;
 const KEY_L: u16 = 0b10_00000000;
+const KEYS_ALL: u16 = 0b11_11111111;
+const KEYS_REPEATABLE: u16 = 0b00_11110000;
 
 const NORMAL_TEXT: u16 = 0;
 const FADED_TEXT: u16 = 1;
@@ -565,10 +567,12 @@ impl slint::platform::Platform for GbaPlatform {
         log!("--- Memory used before loop: {}kb", ALLOCATOR.used());
 
         let mut prev_keys = 0u16;
+        let mut repeating_key_mask = 0u16;
         let mut prev_used = 0;
+        let mut frames_until_repeat: Option<u16> = None;
         loop {
             VBlankIntrWait();
-            let keys = KEYINPUT.read().to_u16();
+            let released_keys = KEYINPUT.read().to_u16();
 
             let cps = 16 * 1024 * 1024 / 1024;
             slint::platform::update_timers_and_animations();
@@ -605,18 +609,28 @@ impl slint::platform::Platform for GbaPlatform {
                 prev_used = ALLOCATOR.used();
             }
 
-            let switched_keys = keys ^ prev_keys;
-            if switched_keys != 0 {
-                log!("{:#b}, {:#b}, {:#b}", prev_keys, keys, switched_keys);
-                let process_key = |key_mask: u16, out_key: &SharedString| {
+            let switched_keys = released_keys ^ prev_keys;
+            if switched_keys != 0 || frames_until_repeat == Some(0) {
+                log!("{:#b}, {:#b}, {:#b}", prev_keys, released_keys, switched_keys);
+                let mut process_key = |key_mask: u16, out_key: &SharedString| {
                     if switched_keys & key_mask != 0 {
-                        if keys & key_mask != 0 {
+                        if released_keys & key_mask == 0 {
                             log!("PRESS {}", out_key.chars().next().unwrap() as u8);
-                            window.dispatch_event(WindowEvent::KeyReleased { text: out_key.clone() });
+                            window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
+                            if key_mask & KEYS_REPEATABLE != 0 {
+                                repeating_key_mask = key_mask;
+                                frames_until_repeat = Some(8);
+                            }
                         } else {
                             log!("RELEASE {}", out_key.chars().next().unwrap() as u8);
-                            window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
+                            window.dispatch_event(WindowEvent::KeyReleased { text: out_key.clone() });
                         }
+                    }
+
+                    if frames_until_repeat == Some(0) && released_keys & key_mask == 0 && repeating_key_mask == key_mask {
+                        log!("REPEAT {}", out_key.chars().next().unwrap() as u8);
+                        window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
+                        frames_until_repeat = Some(2);
                     }
                 };
 
@@ -630,7 +644,14 @@ impl slint::platform::Platform for GbaPlatform {
                 process_key(KEY_DOWN, &slint_key_down);
                 process_key(KEY_R, &slint_key_r);
                 process_key(KEY_L, &slint_key_l);
-                prev_keys = keys;
+                prev_keys = released_keys;
+
+                if released_keys == KEYS_ALL {
+                    frames_until_repeat = None;
+                }
+            }
+            if let Some(frames) = frames_until_repeat.as_mut() {
+                *frames -= 1
             }
         }
     }
