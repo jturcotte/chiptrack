@@ -67,6 +67,7 @@ impl MidiNote {
     pub fn char_desc(&self) -> [char; 3] {
         let note_name = self.base_note_name();
         let sharp_char = if self.is_black() { '#' } else { '-' };
+        assert!(self.octave() >= 0);
         let octave_char = ('0' as u8 + self.octave() as u8) as char;
         [note_name, sharp_char, octave_char]
     }

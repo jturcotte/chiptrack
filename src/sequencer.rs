@@ -226,11 +226,13 @@ pub struct SequencerSong {
     instruments_file: String,
 }
 
+// Initialize all notes to C5
+const DEFAULT_NOTE: u8 = 60;
+
 impl Default for InstrumentStep {
     fn default() -> Self {
-        // Initialize all notes to C5
         InstrumentStep {
-            note: 60,
+            note: DEFAULT_NOTE,
             press: false,
             release: false,
         }
@@ -681,6 +683,11 @@ impl Sequencer {
         } else {
             (None, note_events)
         }
+    }
+
+    pub fn current_note(&self) -> u8 {
+        let maybe_steps = self.song.patterns[self.selected_pattern].get_steps(self.selected_instrument);
+        maybe_steps.map(|steps| steps[self.current_step].note).unwrap_or(DEFAULT_NOTE)
     }
 
     fn record_event(&mut self, event: NoteEvent, note: Option<u8>) {

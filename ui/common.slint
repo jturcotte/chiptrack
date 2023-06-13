@@ -16,8 +16,8 @@ export component PatternsFocusScope inherits FocusScope {
 
     key_pressed(event) => {
         if (event.text == " ") { GlobalUI.song_mode = !GlobalUI.song_mode; }
-        else if (event.text == Key.UpArrow && GlobalUI.song_mode) { GlobalEngine.select_next_song_pattern(false); }
-        else if (event.text == Key.DownArrow && GlobalUI.song_mode) { GlobalEngine.select_next_song_pattern(true); }
+        else if (GlobalUI.song_mode && event.text == Key.UpArrow) { GlobalEngine.select_next_song_pattern(false); }
+        else if (GlobalUI.song_mode && event.text == Key.DownArrow) { GlobalEngine.select_next_song_pattern(true); }
         else if (event.text == Key.UpArrow) { GlobalEngine.select_next_pattern(false); }
         else if (event.text == Key.DownArrow) { GlobalEngine.select_next_pattern(true); }
         else {
@@ -37,19 +37,30 @@ export component StepsFocusScope inherits Rectangle {
     forward_focus: fs;
 
     fs := FocusScope {
-        key_pressed(event) => {
-            if (event.text == " ") { GlobalUI.instruments_grid = !GlobalUI.instruments_grid; }
-            else if (event.text == Key.UpArrow && GlobalUI.instruments_grid) { GlobalEngine.cycle_instrument(0, -1); }
-            else if (event.text == Key.DownArrow && GlobalUI.instruments_grid) { GlobalEngine.cycle_instrument(0, 1); }
-            else if (event.text == Key.LeftArrow && GlobalUI.instruments_grid) { GlobalEngine.cycle_instrument(-1, 0); }
-            else if (event.text == Key.RightArrow && GlobalUI.instruments_grid) { GlobalEngine.cycle_instrument(1, 0); }
-            else if (event.text == Key.UpArrow) { GlobalEngine.manually_advance_step(false); }
-            else if (event.text == Key.DownArrow) { GlobalEngine.manually_advance_step(true); }
+        key_pressed(e) => {
+            if (e.text == " ") { GlobalUI.instruments_grid = !GlobalUI.instruments_grid; }
+            else if (GlobalUI.instruments_grid && e.text == Key.UpArrow) { GlobalEngine.cycle_instrument(0, -1); }
+            else if (GlobalUI.instruments_grid && e.text == Key.DownArrow) { GlobalEngine.cycle_instrument(0, 1); }
+            else if (GlobalUI.instruments_grid && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument(-1, 0); }
+            else if (GlobalUI.instruments_grid && e.text == Key.RightArrow) { GlobalEngine.cycle_instrument(1, 0); }
+            else if (!GlobalUI.instruments_grid && e.text == Key.Control) { GlobalEngine.cycle_note_start(); }
+            else if (!GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.UpArrow) { GlobalEngine.cycle_note(true, true); }
+            else if (!GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.DownArrow) { GlobalEngine.cycle_note(false, true); }
+            else if (!GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.LeftArrow) { GlobalEngine.cycle_note(false, false); }
+            else if (!GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.RightArrow) { GlobalEngine.cycle_note(true, false); }
+            else if (e.text == Key.UpArrow) { GlobalEngine.manually_advance_step(false); }
+            else if (e.text == Key.DownArrow) { GlobalEngine.manually_advance_step(true); }
             else {
-                return root_key_pressed(event);
+                return root_key_pressed(e);
             }
             accept
         }
-        key_released(e) => { root.root_key_released(e); }
+        key_released(e) => { 
+            if (!GlobalUI.instruments_grid && e.text == Key.Control) { GlobalEngine.cycle_note_end(); }
+            else {
+                return root_key_released(e);
+            }
+            accept
+        }
     }
 }

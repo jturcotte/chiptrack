@@ -325,6 +325,25 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_note_start(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.cycle_note_start());
+    });
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_note_end(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.cycle_note_end());
+    });
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_note(move |forwards, large_inc| {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.cycle_note(forwards, large_inc));
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_toggle_mute_instrument(move |instrument| {
         cloned_sound_renderer
             .borrow_mut()

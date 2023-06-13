@@ -208,6 +208,24 @@ impl SoundEngine {
             .unwrap();
     }
 
+    pub fn cycle_note_start(&mut self) -> () {
+        let note = self.sequencer.current_note();
+        self.press_note(note);
+    }
+    pub fn cycle_note_end(&mut self) -> () {
+        let note = self.sequencer.current_note();
+        self.release_note(note);
+    }
+    pub fn cycle_note(&mut self, forward: bool, large_inc: bool) -> () {
+        let note = self.sequencer.current_note();
+        let inc = if large_inc { 12 } else { 1 };
+        if forward && note + inc <= 127 {
+            self.press_note(note + inc);
+        } else if !forward && note - inc >= 24 { // The GBA only handles frenquencies from C1 upwards.
+            self.press_note(note - inc);
+        }
+    }
+
     pub fn press_note(&mut self, note: u8) -> () {
         self.script
             .press_instrument_note(self.frame_number, self.sequencer.selected_instrument, note);

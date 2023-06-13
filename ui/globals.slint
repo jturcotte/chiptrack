@@ -126,6 +126,9 @@ export global GlobalEngine {
     callback select_instrument(int);
     callback cycle_instrument(int, int);
     callback cycle_pattern_instrument(bool);
+    callback cycle_note_start();
+    callback cycle_note_end();
+    callback cycle_note(bool, bool);
     callback toggle_mute_instrument(int);
     callback select_next_pattern(bool);
     callback pattern_clicked(int);
