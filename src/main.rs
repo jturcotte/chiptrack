@@ -414,6 +414,13 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_toggle_current_step_release(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.toggle_current_step_release());
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_manually_advance_step(move |forwards| {
         cloned_sound_renderer
             .borrow_mut()

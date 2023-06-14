@@ -546,14 +546,14 @@ impl slint::platform::Platform for GbaPlatform {
     fn run_event_loop(&self) -> Result<(), PlatformError> {
         // FIXME: Those take iwram space by being put on the stack and could probably be used for something better.
         let slint_key_a: SharedString = slint::platform::Key::Control.into();
-        let slint_key_b: SharedString = slint::platform::Key::Shift.into();
+        let slint_key_b: SharedString = '\u{8}'.into();
         let slint_key_select: SharedString = ' '.into();
         let slint_key_start: SharedString = slint::platform::Key::Return.into();
         let slint_key_right: SharedString = slint::platform::Key::RightArrow.into();
         let slint_key_left: SharedString = slint::platform::Key::LeftArrow.into();
         let slint_key_up: SharedString = slint::platform::Key::UpArrow.into();
         let slint_key_down: SharedString = slint::platform::Key::DownArrow.into();
-        let slint_key_r: SharedString = slint::platform::Key::PageDown.into();
+        let slint_key_r: SharedString = slint::platform::Key::Shift.into();
         let slint_key_l: SharedString = slint::platform::Key::Tab.into();
 
         let window = self.window.clone();

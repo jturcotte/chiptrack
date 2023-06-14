@@ -488,6 +488,10 @@ impl Sequencer {
         }
     }
 
+    pub fn toggle_current_step_release(&mut self) -> () {
+        self.toggle_step_release(self.current_step as u32)
+    }
+
     pub fn toggle_step_release(&mut self, step_num: u32) -> () {
         let maybe_steps = self.song.patterns[self.selected_pattern].get_steps(self.selected_instrument);
         let toggled = !maybe_steps.map_or(false, |ss| ss[step_num as usize].release);
