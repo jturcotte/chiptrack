@@ -4,7 +4,6 @@
 use crate::log;
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_INSTRUMENT_COLS;
-use crate::synth_script::wasm::WasmExecEnv;
 use crate::synth_script::wasm::WasmFunction;
 use crate::synth_script::wasm::WasmModule;
 use crate::synth_script::wasm::WasmModuleInst;
@@ -26,6 +25,10 @@ use std::fs::File;
 use std::io::Write;
 
 pub mod wasm;
+#[cfg(not(feature = "desktop_web"))]
+pub mod wasm_host;
+#[cfg(feature = "desktop_web")]
+pub mod wasm_web;
 
 fn instrument_print(s: &CStr) {
     log!("print: {}", s.to_str().expect("Invalid UTF-8"));
@@ -73,18 +76,20 @@ impl InstrumentColArrayExt for [Vec<InstrumentState>; NUM_INSTRUMENT_COLS] {
 
 pub struct SynthScript {
     wasm_runtime: Rc<WasmRuntime>,
-    wasm_exec_env: Option<WasmExecEnv>,
+    wasm_module_inst: Option<WasmModuleInst>,
     instrument_ids: Rc<RefCell<Vec<SharedString>>>,
     instrument_states: Rc<RefCell<[Vec<InstrumentState>; NUM_INSTRUMENT_COLS]>>,
+    apply_instrument_ids_callback: Rc<dyn Fn(Vec<SharedString>)>,
 }
 
 impl SynthScript {
     const DEFAULT_INSTRUMENTS: &'static [u8] = include_bytes!("../res/default-instruments.wasm");
 
-    pub fn new<F, G>(synth_set_sound_reg: F, synth_set_wave_table: G) -> SynthScript
+    pub fn new<F, G, H>(synth_set_sound_reg: F, synth_set_wave_table: G, apply_instrument_ids: H) -> SynthScript
     where
         F: Fn(i32, i32) + 'static,
         G: Fn(&[u8]) + 'static,
+        H: Fn(Vec<SharedString>) + 'static,
     {
         let instrument_ids: Rc<RefCell<Vec<SharedString>>> =
             Rc::new(RefCell::new(vec![Default::default(); NUM_INSTRUMENTS]));
@@ -156,14 +161,16 @@ impl SynthScript {
             Box::new(wasm::HostFunctionII::new("gba_set_sound_reg", synth_set_sound_reg)),
             Box::new(wasm::HostFunctionA::new("gba_set_wave_table", synth_set_wave_table)),
         ];
+        // let test = (set_instrument_at_column2, set_instrument_at_column);
 
         let runtime = Rc::new(WasmRuntime::new(functions).unwrap());
 
         SynthScript {
             wasm_runtime: runtime,
-            wasm_exec_env: None,
+            wasm_module_inst: None,
             instrument_ids: instrument_ids,
             instrument_states: instrument_states,
+            apply_instrument_ids_callback: Rc::new(apply_instrument_ids),
         }
     }
 
@@ -171,28 +178,28 @@ impl SynthScript {
         for state_col in &mut *self.instrument_states.borrow_mut() {
             state_col.clear();
         }
-        self.wasm_exec_env = None;
+        self.wasm_module_inst = None;
     }
 
-    pub fn load_default(&mut self) -> Result<Vec<SharedString>, String> {
+    pub fn load_default(&mut self) -> Result<(), String> {
         self.load_bytes(SynthScript::DEFAULT_INSTRUMENTS.to_vec())
     }
 
-    pub fn load_bytes(&mut self, encoded: Vec<u8>) -> Result<Vec<SharedString>, String> {
+    pub fn load_bytes(&mut self, encoded: Vec<u8>) -> Result<(), String> {
         self.reset_instruments();
         // instrument_ids is only valid during loading.
         *self.instrument_ids.borrow_mut() = vec![Default::default(); NUM_INSTRUMENTS];
+        let callback = self.apply_instrument_ids_callback.clone();
+        let instrument_ids = self.instrument_ids.clone();
+
         let module = Rc::new(WasmModule::new(encoded, self.wasm_runtime.clone())?);
-        let module_inst = Rc::new(WasmModuleInst::new(module)?);
-        self.wasm_exec_env = Some(WasmExecEnv::new(module_inst)?);
-        Ok(self.instrument_ids.take())
+        self.wasm_module_inst = Some(WasmModuleInst::new(module, move || callback(instrument_ids.take()))?);
+
+        Ok(())
     }
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-    pub fn load_file(
-        &mut self,
-        instruments_path: &std::path::Path,
-    ) -> Result<Vec<SharedString>, Box<dyn std::error::Error>> {
+    pub fn load_file(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
         self.reset_instruments();
 
         if instruments_path.exists() {
@@ -220,10 +227,10 @@ impl SynthScript {
                     pressed_frame: frame_number,
                     extended_frames: None,
                 });
-                self.wasm_exec_env
+                self.wasm_module_inst
                     .as_ref()
                     .unwrap()
-                    .call_ii(*f, Self::note_to_freq(note), note as i32)
+                    .call_ii(f, Self::note_to_freq(note), note as i32)
                     .unwrap();
             }
         }
@@ -239,11 +246,11 @@ impl SynthScript {
             }) = &mut state.pressed_note
             {
                 if let Some(f) = &state.release_function {
-                    self.wasm_exec_env
+                    self.wasm_module_inst
                         .as_ref()
                         .unwrap()
                         .call_iii(
-                            *f,
+                            f,
                             Self::note_to_freq(*note),
                             *note as i32,
                             (frame_number - *pressed_frame) as i32,
@@ -278,11 +285,11 @@ impl SynthScript {
                     }),
                 ) = (&state.frame_function, &mut state.pressed_note)
                 {
-                    self.wasm_exec_env
+                    self.wasm_module_inst
                         .as_ref()
                         .unwrap()
                         .call_iii(
-                            *f,
+                            f,
                             Self::note_to_freq(*note),
                             *note as i32,
                             (frame_number - *pressed_frame) as i32,

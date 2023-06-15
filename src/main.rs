@@ -108,7 +108,7 @@ fn run_main() {
         let query_string = window.location().search().unwrap();
         let search_params = web_sys::UrlSearchParams::new_with_str(&query_string).unwrap();
 
-        (None, search_params.get("gist"))
+        (None::<PathBuf>, search_params.get("gist"))
     };
 
     let sequencer_pattern_model = Rc::new(slint::VecModel::<_>::from(
@@ -155,7 +155,7 @@ fn run_main() {
     #[cfg(target_arch = "wasm32")]
     if !web_sys::window().unwrap().location().search().unwrap().is_empty() {
         // Show the UI directly in song mode if the URL might contain a song.
-        window.set_in_song_mode(true);
+        GlobalUI::get(&window).set_song_mode(true);
     }
 
     let global_engine = GlobalEngine::get(&window);
@@ -203,13 +203,14 @@ fn run_main() {
             },
         );
     } else if let Some(file_path) = maybe_file_path {
+        #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
         sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.load_file(&file_path));
+            .invoke_on_sound_engine_no_force(move |se| se.load_file(&file_path));
     } else {
         sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(|se| se.load_default());
+            .invoke_on_sound_engine_no_force(|se| se.load_default());
     }
     #[cfg(feature = "gba")]
     sound_renderer
@@ -273,7 +274,7 @@ fn run_main() {
                         '\u{8}' => {
                             cloned_sound_renderer
                                 .borrow_mut()
-                                .invoke_on_sound_engine(|se| se.sequencer.set_erasing(true));
+                                .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().set_erasing(true));
                             return true;
                         }
                         _ => (),
@@ -288,7 +289,7 @@ fn run_main() {
                     '\u{8}' => {
                         cloned_sound_renderer
                             .borrow_mut()
-                            .invoke_on_sound_engine(|se| se.sequencer.set_erasing(false));
+                            .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().set_erasing(false));
                         return true;
                     }
                     _ => (),
@@ -310,7 +311,7 @@ fn run_main() {
         // FIXME: This might need to go through the SoundEngine as with select_instrument.
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.cycle_instrument(col_delta, row_delta));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().cycle_instrument(col_delta, row_delta));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -318,7 +319,7 @@ fn run_main() {
         // FIXME: This might need to go through the SoundEngine as with select_instrument.
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.cycle_pattern_instrument(forwards));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().cycle_pattern_instrument(forwards));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -344,7 +345,7 @@ fn run_main() {
     global_engine.on_toggle_mute_instrument(move |instrument| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.toggle_mute_instrument(instrument as u8));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().toggle_mute_instrument(instrument as u8));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -386,42 +387,42 @@ fn run_main() {
     global_engine.on_select_next_pattern(move |forwards| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.select_next_pattern(forwards));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().select_next_pattern(forwards));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_pattern_clicked(move |pattern_num| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.select_pattern(pattern_num as u32));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().select_pattern(pattern_num as u32));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_toggle_step(move |step_num| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.toggle_step(step_num as u32));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().toggle_step(step_num as u32));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_toggle_step_release(move |step_num| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.toggle_step_release(step_num as u32));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().toggle_step_release(step_num as u32));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_toggle_current_step_release(move || {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.toggle_current_step_release());
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().toggle_current_step_release());
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_manually_advance_step(move |forwards| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.manually_advance_step(forwards));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().manually_advance_step(forwards));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -438,42 +439,42 @@ fn run_main() {
     global_engine.on_record_clicked(move |toggled| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.set_recording(toggled));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().set_recording(toggled));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_select_next_song_pattern(move |forwards| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.activate_next_song_pattern(forwards));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().activate_next_song_pattern(forwards));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_song_pattern_clicked(move |song_pattern_idx| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.activate_song_pattern(song_pattern_idx as u32));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().activate_song_pattern(song_pattern_idx as u32));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_append_song_pattern(move |pattern_num| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.append_song_pattern(pattern_num as u32));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().append_song_pattern(pattern_num as u32));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_remove_last_song_pattern(move || {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(|se| se.sequencer.remove_last_song_pattern());
+            .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().remove_last_song_pattern());
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_clear_song_patterns(move || {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(|se| se.sequencer.clear_song_patterns());
+            .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().clear_song_patterns());
     });
 
     let cloned_sound_renderer = sound_renderer.clone();

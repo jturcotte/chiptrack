@@ -5,23 +5,27 @@ authors = ["Jocelyn Turcotte <turcotte.j@gmail.com>"]
 edition = "2021"
 
 ## wasm build stuff
-## Uncomment and build with: wasm-pack build --release --target web
+## Uncomment and build with: wasm-pack build --release --target web -- --no-default-features --features=desktop_web
 # [lib]
 # crate-type = ["cdylib"]
 # path = "src/main.rs"
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
 # wasm-bindgen = { version = "0.2" }
+# wasm-bindgen-futures = { version = "0.4" }
+# js-sys = { version = "0.3" }
 # web-sys = { version = "0.3", features=["console", "Location", "UrlSearchParams"] }
-# console_error_panic_hook = "0.1.5"
+# console_error_panic_hook = "0.1"
 # [patch.crates-io]
 # blip_buf = { path = "../blip_buf-rs"}
 
 
 [features]
-default = ["desktop"]
-std = ["slint/std", "wamr-sys/std"]
-desktop = ["std", "slint/backend-winit", "slint/renderer-winit-femtovg", "cpal", "rboy", "once_cell", "tiny-skia", "serde_json", "notify", "midir", "midly", "url", "ehttp", "pulldown-cmark", "regex", "native-dialog"]
-gba = ["dep:gba", "libm", "slint/unsafe-single-threaded", "i-slint-core/unsafe-single-threaded", "slint/libm", "embedded-alloc", "critical-section/restore-state-bool"]
+default = ["desktop_native"]
+std = ["slint/std"]
+desktop = ["std", "slint/backend-winit", "slint/renderer-winit-femtovg", "cpal", "rboy", "once_cell", "tiny-skia", "serde_json", "notify", "midir", "midly", "url", "ehttp", "pulldown-cmark", "regex"]
+desktop_native = ["desktop", "wamr-sys/std", "native-dialog"]
+desktop_web = ["desktop"]
+gba = ["dep:gba", "wamr-sys", "libm", "slint/unsafe-single-threaded", "i-slint-core/unsafe-single-threaded", "slint/libm", "embedded-alloc", "critical-section/restore-state-bool"]
 
 [build-dependencies.slint-build]
 version = "1.0.2"
@@ -46,6 +50,7 @@ optional = true
 git = "https://github.com/jturcotte/wamr-sys.git"
 rev = "aa1447d9a97971dd2fbccd215b7a473b3b4718a5"
 default-features = false
+optional = true
 
 [dependencies]
 cpal = { version = "0.13", features = ["wasm-bindgen"], optional = true }

@@ -415,6 +415,7 @@ pub struct Context {
 pub struct SoundRenderer<LazyF: FnOnce() -> Context> {
     sound_send: Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>,
     context: Rc<Lazy<Context, LazyF>>,
+    #[cfg(not(target_arch = "wasm32"))]
     _watcher: notify::RecommendedWatcher,
 }
 
@@ -424,6 +425,13 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
         F: FnOnce(&mut SoundEngine) + Send + 'static,
     {
         Lazy::force(&*self.context);
+        self.sound_send.send(Box::new(f)).unwrap();
+    }
+
+    pub fn invoke_on_sound_engine_no_force<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut SoundEngine) + Send + 'static,
+    {
         self.sound_send.send(Box::new(f)).unwrap();
     }
 
@@ -437,6 +445,7 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
 }
 
 fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) -> () {
+    #[cfg(not(target_arch = "wasm32"))]
     while let Ok(msg) = notify_recv.try_recv() {
         let reload = if let Some(instruments_path) = engine.instruments_path() {
             let instruments = instruments_path.file_name();
@@ -633,6 +642,7 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
     SoundRenderer {
         sound_send,
         context,
+        #[cfg(not(target_arch = "wasm32"))]
         _watcher: watcher,
     }
 }
