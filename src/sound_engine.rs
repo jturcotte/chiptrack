@@ -221,7 +221,8 @@ impl SoundEngine {
         let inc = if large_inc { 12 } else { 1 };
         if forward && note + inc <= 127 {
             self.press_note(note + inc);
-        } else if !forward && note - inc >= 24 { // The GBA only handles frenquencies from C1 upwards.
+        } else if !forward && note - inc >= 24 {
+            // The GBA only handles frenquencies from C1 upwards.
             self.press_note(note - inc);
         }
     }

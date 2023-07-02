@@ -158,7 +158,9 @@ impl MinimalGbaWindow {
                 .with_show_bg0(true),
         );
         bg_palbank(NORMAL_TEXT as usize).index(1).write(Color::BLACK);
-        bg_palbank(FADED_TEXT as usize).index(1).write(Color(0b0_11010_11010_11010));
+        bg_palbank(FADED_TEXT as usize)
+            .index(1)
+            .write(Color(0b0_11010_11010_11010));
 
         Rc::new_cyclic(|w: &Weak<Self>| Self {
             window: Window::new(w.clone()),
@@ -217,13 +219,19 @@ impl MinimalGbaWindow {
         let instruments_grid = global_ui.get_instruments_grid();
         let instruments_grid_dirty = self.was_in_instruments_grid.replace(instruments_grid) != instruments_grid;
         let sequencer_song_pattern_active = global_engine.get_sequencer_song_pattern_active() as usize;
-        let sequencer_song_pattern_active_dirty = self.sequencer_song_pattern_active_previous.replace(sequencer_song_pattern_active) != sequencer_song_pattern_active;
+        let sequencer_song_pattern_active_dirty = self
+            .sequencer_song_pattern_active_previous
+            .replace(sequencer_song_pattern_active)
+            != sequencer_song_pattern_active;
         let sequencer_pattern_active = global_engine.get_sequencer_pattern_active() as usize;
-        let sequencer_pattern_active_dirty = self.sequencer_pattern_active_previous.replace(sequencer_pattern_active) != sequencer_pattern_active;
+        let sequencer_pattern_active_dirty =
+            self.sequencer_pattern_active_previous.replace(sequencer_pattern_active) != sequencer_pattern_active;
         let sequencer_step_active = global_engine.get_sequencer_step_active() as usize;
-        let sequencer_step_active_dirty = self.sequencer_step_active_previous.replace(sequencer_step_active) != sequencer_step_active;
+        let sequencer_step_active_dirty =
+            self.sequencer_step_active_previous.replace(sequencer_step_active) != sequencer_step_active;
         let current_instrument = global_engine.get_current_instrument() as usize;
-        let current_instrument_dirty = self.current_instrument_previous.replace(current_instrument) != current_instrument;
+        let current_instrument_dirty =
+            self.current_instrument_previous.replace(current_instrument) != current_instrument;
 
         let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
 
@@ -243,11 +251,19 @@ impl MinimalGbaWindow {
                 .zip(s.chars())
                 .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
         }
-        let dirty_pattern_model = if !song_mode && (song_mode_dirty || sequencer_pattern_active_dirty || self.sequencer_patterns_tracker.take_dirtiness())
+        let dirty_pattern_model = if !song_mode
+            && (song_mode_dirty || sequencer_pattern_active_dirty || self.sequencer_patterns_tracker.take_dirtiness())
         {
             Some((global_engine.get_sequencer_patterns(), sequencer_pattern_active))
-        } else if song_mode && (song_mode_dirty || sequencer_song_pattern_active_dirty || self.sequencer_song_patterns_tracker.take_dirtiness()) {
-            Some((global_engine.get_sequencer_song_patterns(), sequencer_song_pattern_active))
+        } else if song_mode
+            && (song_mode_dirty
+                || sequencer_song_pattern_active_dirty
+                || self.sequencer_song_patterns_tracker.take_dirtiness())
+        {
+            Some((
+                global_engine.get_sequencer_song_patterns(),
+                sequencer_song_pattern_active,
+            ))
         } else {
             None
         };
@@ -271,7 +287,8 @@ impl MinimalGbaWindow {
             let current_instrument = global_engine.get_current_instrument() as usize;
             let vid_row = tsb.get_row(0).unwrap();
             let current_instrument_id = global_engine.get_instruments().row_data(current_instrument).unwrap().id;
-            vid_row.iter_range(6..6+3)
+            vid_row
+                .iter_range(6..6 + 3)
                 .zip(current_instrument_id.chars().chain(core::iter::repeat(' ')))
                 .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
 
@@ -341,9 +358,13 @@ impl MinimalGbaWindow {
 
                         if note != -1 {
                             let midi_note = MidiNote(note);
-                            vid_row.index(i * 3 + 11).write(TextEntry::new().with_tile(midi_note.base_note_name() as u16));
+                            vid_row
+                                .index(i * 3 + 11)
+                                .write(TextEntry::new().with_tile(midi_note.base_note_name() as u16));
                             if midi_note.is_black() {
-                                vid_row.index(i * 3 + 11 + 1).write(TextEntry::new().with_tile('#' as u16));
+                                vid_row
+                                    .index(i * 3 + 11 + 1)
+                                    .write(TextEntry::new().with_tile('#' as u16));
                             }
                         };
                     }
@@ -358,10 +379,12 @@ impl MinimalGbaWindow {
                 }
             }
         }
-        if instruments_grid && (instruments_grid_dirty || current_instrument_dirty || self.instruments_tracker.take_dirtiness()) {
+        if instruments_grid
+            && (instruments_grid_dirty || current_instrument_dirty || self.instruments_tracker.take_dirtiness())
+        {
             let instruments = global_engine.get_instruments();
             let scroll_pos = (current_instrument / 4).max(2).min(instruments.row_count() / 4 - 2) - 2;
-            for y in scroll_pos..scroll_pos+4 {
+            for y in scroll_pos..scroll_pos + 4 {
                 let vid_row = tsb.get_row((y - scroll_pos) * 4 + 2).unwrap();
                 let sel_vid_row = tsb.get_row((y - scroll_pos) * 4 + 3).unwrap();
                 for x in 0..4 {
@@ -372,10 +395,11 @@ impl MinimalGbaWindow {
                         .write(TextEntry::new().with_tile(instrument.active as u16 * 7));
                     let col = x * 4 + 11 + 1;
                     vid_row
-                        .iter_range(col..col+4)
+                        .iter_range(col..col + 4)
                         .zip(instrument.id.chars().chain(core::iter::repeat(' ')))
                         .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
-                    let sel_char = TextEntry::new().with_tile((instrument_idx == current_instrument) as u16 * '-' as u16);
+                    let sel_char =
+                        TextEntry::new().with_tile((instrument_idx == current_instrument) as u16 * '-' as u16);
                     sel_vid_row
                         .iter_range(x * 4 + 11..x * 4 + 11 + 4)
                         .for_each(|a| a.write(sel_char));
@@ -627,7 +651,8 @@ impl slint::platform::Platform for GbaPlatform {
                         }
                     }
 
-                    if frames_until_repeat == Some(0) && released_keys & key_mask == 0 && repeating_key_mask == key_mask {
+                    if frames_until_repeat == Some(0) && released_keys & key_mask == 0 && repeating_key_mask == key_mask
+                    {
                         log!("REPEAT {}", out_key.chars().next().unwrap() as u8);
                         window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
                         frames_until_repeat = Some(2);

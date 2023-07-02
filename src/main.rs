@@ -113,10 +113,7 @@ fn run_main() {
 
     let sequencer_pattern_model = Rc::new(slint::VecModel::<_>::from(
         (0..NUM_PATTERNS as i32)
-            .map(|i| PatternData {
-                number: i,
-                empty: true,
-            })
+            .map(|i| PatternData { number: i, empty: true })
             .collect::<Vec<PatternData>>(),
     ));
     let sequencer_step_model = Rc::new(slint::VecModel::<_>::from(vec![StepData::default(); NUM_STEPS]));

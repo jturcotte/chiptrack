@@ -426,12 +426,13 @@ impl Sequencer {
         #[cfg(feature = "std")]
         let instruments = pattern.instruments().clone();
 
-        let (instruments_to_skip, instruments_len) = match pattern.find_nearest_instrument_pos(self.selected_instrument, true) {
-            // Advance once more to not show the found instrument both in the patterns and pattern_instruments models
-            Some((ii, i)) if i == self.selected_instrument => (ii + 1, instruments.len() - 1),
-            Some((ii, _)) => (ii, instruments.len()),
-            None => (0, 0),
-        };
+        let (instruments_to_skip, instruments_len) =
+            match pattern.find_nearest_instrument_pos(self.selected_instrument, true) {
+                // Advance once more to not show the found instrument both in the patterns and pattern_instruments models
+                Some((ii, i)) if i == self.selected_instrument => (ii + 1, instruments.len() - 1),
+                Some((ii, _)) => (ii, instruments.len()),
+                None => (0, 0),
+            };
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
@@ -691,7 +692,9 @@ impl Sequencer {
 
     pub fn current_note(&self) -> u8 {
         let maybe_steps = self.song.patterns[self.selected_pattern].get_steps(self.selected_instrument);
-        maybe_steps.map(|steps| steps[self.current_step].note).unwrap_or(DEFAULT_NOTE)
+        maybe_steps
+            .map(|steps| steps[self.current_step].note)
+            .unwrap_or(DEFAULT_NOTE)
     }
 
     fn record_event(&mut self, event: NoteEvent, note: Option<u8>) {
