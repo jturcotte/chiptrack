@@ -198,13 +198,25 @@ impl SynthScript {
         Ok(())
     }
 
+    /// Loading binary from a gist doesn't work well with the binary downloaded as a UTF-8 string.
+    /// Uploading a binary also only seems to work using the git interface and not using the gist
+    /// web page and GH CLI.
+    /// So support converting WAT to binary WASM directly using the wat crate if the song file
+    /// references either format.
+    /// For a gist it's most likely that only WAT will work.
+    #[cfg(feature = "desktop")]
+    pub fn load_wasm_or_wat_bytes(&mut self, wasm_or_wat: Vec<u8>) -> Result<(), String> {
+        let cow = wat::parse_bytes(&wasm_or_wat).map_err(|e| e.to_string())?;
+        self.load_bytes(cow.to_vec())
+    }
+
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     pub fn load_file(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
         self.reset_instruments();
 
         if instruments_path.exists() {
             let buffer = std::fs::read(instruments_path)?;
-            Ok(self.load_bytes(buffer)?)
+            Ok(self.load_wasm_or_wat_bytes(buffer)?)
         } else {
             return Err(format!("Project instruments file {:?} doesn't exist.", instruments_path).into());
         }

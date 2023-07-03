@@ -345,11 +345,10 @@ impl SoundEngine {
             .ok_or("The file should have a content property")?
             .as_str()
             .ok_or("content should be a string")?
-            // FIXME: That doesn't work, I need to either fetch the raw_url or support reading WAT files.
             .as_bytes()
             .to_vec();
 
-        self.script.load_bytes(instruments)?;
+        self.script.load_wasm_or_wat_bytes(instruments)?;
 
         Ok(())
     }

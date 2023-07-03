@@ -181,7 +181,6 @@ fn run_main() {
                 result
                     .and_then(|res| {
                         if res.ok {
-                            println!("res {:?}", String::from_utf8(res.bytes.clone()));
                             let decoded: serde_json::Value =
                                 serde_json::from_slice(&res.bytes).expect("JSON was not well-formatted");
                             cloned_sound_send
