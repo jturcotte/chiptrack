@@ -496,10 +496,16 @@ fn run_main() {
         let phasing = match previous_phasing {
             None => {
                 let window = window_weak.clone().upgrade().unwrap();
-                let synth_tick = GlobalEngine::get(&window).get_synth_tick();
-                let phasing = synth_tick as f32 - animation_tick;
-                previous_phasing = Some(phasing);
-                phasing
+                let synth_trace_notes = GlobalEngine::get(&window).get_synth_trace_notes();
+                if synth_trace_notes.row_count() == 0 {
+                    // Wait until the first synth_trace_notes entry to lock the phasing.
+                    0f32
+                } else {
+                    let first_synth_tick = synth_trace_notes.row_data(0).unwrap().start_tick;
+                    let phasing = first_synth_tick as f32 - animation_tick;
+                    previous_phasing = Some(phasing);
+                    phasing
+                }
             }
             Some(phasing) => phasing,
         };

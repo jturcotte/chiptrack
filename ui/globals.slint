@@ -106,7 +106,6 @@ export global GlobalEngine {
         ];
 
     in-out property<int> current_instrument: 0;
-    in-out property<int> synth_tick: 0;
     pure callback phase_visualization_tick(float) -> float;
 
     in-out property<[ChannelTraceNote]> synth_trace_notes: [

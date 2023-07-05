@@ -372,7 +372,6 @@ impl Synth {
                         active_vec_model.push(active);
                     }
                 }
-                global.set_synth_tick(frame_number);
             })
             .unwrap();
     }
