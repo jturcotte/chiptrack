@@ -34,7 +34,6 @@ use crate::sound_engine::NUM_STEPS;
 use crate::sound_renderer::new_sound_renderer;
 use crate::utils::MidiNote;
 
-#[cfg(feature = "desktop")]
 use slint::Model;
 use slint::{Timer, TimerMode};
 #[cfg(feature = "desktop")]

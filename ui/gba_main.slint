@@ -28,11 +28,6 @@ export component MainWindow inherits Window {
     callback octave_increased(int);
     callback global_key_event(string, bool) -> bool;
 
-    width: 240px;
-    height: 160px;
-    title: "Chiptrack";
-    background: white;
-
     function root_key_pressed(event: KeyEvent) -> EventResult {
         if (event.text == Key.LeftArrow) { GlobalEngine.cycle_pattern_instrument(false); }
         else if (event.text == Key.RightArrow) { GlobalEngine.cycle_pattern_instrument(true); }

@@ -9,32 +9,25 @@ use crate::GlobalEngine;
 use crate::GlobalUI;
 use crate::MainWindow;
 use crate::MidiNote;
+
 use alloc::boxed::Box;
 use alloc::rc::Rc;
-use alloc::rc::Weak;
-use core::cell::Cell;
-use core::pin::Pin;
-use i_slint_core::model::ModelChangeListenerContainer;
-use i_slint_core::renderer::Renderer;
-use slint::platform::software_renderer::RepaintBufferType;
-use slint::platform::software_renderer::SoftwareRenderer;
-use slint::Brush::SolidColor;
-use slint::Global;
-use slint::Model;
-use slint::PlatformError;
-use slint::SharedString;
-use slint::Window;
-
 use core::cell::RefCell;
-use embedded_alloc::Heap;
-
-use slint::platform::WindowEvent;
-
 use core::fmt::Write;
+use core::pin::Pin;
+
+use embedded_alloc::Heap;
 use gba::{
     mgba::{MgbaBufferedLogger, MgbaMessageLevel},
     prelude::*,
 };
+use i_slint_core::model::ModelChangeListenerContainer;
+use slint::platform::software_renderer::MinimalSoftwareWindow;
+use slint::platform::WindowEvent;
+use slint::Global;
+use slint::Model;
+use slint::PlatformError;
+use slint::SharedString;
 
 #[cfg(feature = "panic-probe")]
 use panic_probe as _;
@@ -53,12 +46,9 @@ fn panic_handler(info: &core::panic::PanicInfo) -> ! {
 }
 
 const HEAP_SIZE: usize = 256 * 1024;
-// static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
 
 #[global_allocator]
 static ALLOCATOR: Heap = Heap::empty();
-
-const DISPLAY_SIZE: slint::PhysicalSize = slint::PhysicalSize::new(240, 160);
 
 const KEY_A: u16 = 0b00_00000001;
 const KEY_B: u16 = 0b00_00000010;
@@ -90,10 +80,7 @@ unsafe impl critical_section::Impl for GbaCriticalSection {
     unsafe fn release(_token: RawRestoreState) {}
 }
 
-pub struct MinimalGbaWindow {
-    window: i_slint_core::api::Window,
-    renderer: SoftwareRenderer,
-    needs_redraw: Cell<bool>,
+pub struct MainScreen {
     sequencer_patterns_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     sequencer_song_patterns_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     sequencer_steps_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
@@ -143,15 +130,15 @@ impl i_slint_core::model::ModelChangeListener for ModelDirtinessTracker {
     }
 }
 
-impl MinimalGbaWindow {
-    /// Instantiate a new MinimalWindowAdaptor
-    pub fn new() -> Rc<Self> {
+impl MainScreen {
+    pub fn new() -> Self {
         {
             // get our tile data into memory.
             Cga8x8Thick.bitunpack_4bpp(CHARBLOCK0_4BPP.as_region(), 0);
         }
 
         BG0CNT.write(BackgroundControl::new().with_screenblock(31));
+        BACKDROP_COLOR.write(Color::WHITE);
         DISPCNT.write(
             DisplayControl::new()
                 // .with_video_mode(VideoMode::_0)
@@ -162,10 +149,7 @@ impl MinimalGbaWindow {
             .index(1)
             .write(Color(0b0_11010_11010_11010));
 
-        Rc::new_cyclic(|w: &Weak<Self>| Self {
-            window: Window::new(w.clone()),
-            renderer: SoftwareRenderer::new(RepaintBufferType::NewBuffer, w.clone()),
-            needs_redraw: Default::default(),
+        Self {
             sequencer_patterns_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             sequencer_song_patterns_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             sequencer_steps_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
@@ -179,7 +163,7 @@ impl MinimalGbaWindow {
             sequencer_pattern_active_previous: RefCell::new(0),
             sequencer_step_active_previous: RefCell::new(0),
             current_instrument_previous: RefCell::new(0),
-        })
+        }
     }
 
     fn attach_trackers(&self) {
@@ -209,8 +193,7 @@ impl MinimalGbaWindow {
         *self.was_in_instruments_grid.borrow_mut() = !GlobalUI::get(&handle).get_instruments_grid();
     }
 
-    pub fn draw_if_needed(&self, render_callback: impl FnOnce(&SoftwareRenderer)) -> bool {
-        // FIXME: Check if this could be casted from the component of self somehow
+    pub fn draw(&self) {
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
         let global_engine = GlobalEngine::get(&handle);
         let global_ui = GlobalUI::get(&handle);
@@ -406,50 +389,12 @@ impl MinimalGbaWindow {
                 }
             }
         }
-        if self.needs_redraw.replace(false) {
-            render_callback(&self.renderer);
-            true
-        } else {
-            false
-        }
-    }
-}
-
-impl i_slint_core::window::WindowAdapterSealed for MinimalGbaWindow {
-    fn request_redraw(&self) {
-        self.needs_redraw.set(true);
-    }
-    fn renderer(&self) -> &dyn Renderer {
-        &self.renderer
-    }
-
-    fn apply_window_properties(&self, window_item: Pin<&i_slint_core::items::WindowItem>) {
-        i_slint_core::debug_log!("window_item.background: {:?}", window_item.background());
-        if let SolidColor(color) = window_item.background() {
-            let bgr555 = ((color.red() as u16) >> 3)
-                | (((color.green() as u16) & 0xf8) << 2)
-                | (((color.blue() as u16) & 0xf8) << 7);
-
-            BACKDROP_COLOR.write(Color(bgr555));
-        }
-    }
-}
-
-impl i_slint_core::window::WindowAdapter for MinimalGbaWindow {
-    fn window(&self) -> &i_slint_core::api::Window {
-        &self.window
-    }
-}
-
-impl core::ops::Deref for MinimalGbaWindow {
-    type Target = Window;
-    fn deref(&self) -> &Self::Target {
-        &self.window
     }
 }
 
 struct GbaPlatform {
-    window: Rc<MinimalGbaWindow>,
+    main_screen: MainScreen,
+    window: Rc<MinimalSoftwareWindow>,
 }
 
 static mut LAST_TIMER3_READ: u16 = 0;
@@ -457,60 +402,6 @@ static mut BASE_MILLIS_SINCE_START: u32 = 0;
 // FIXME: Use GbaCell just to avoid unsafe?
 static mut SOUND_RENDERER: Option<Rc<RefCell<SoundRenderer>>> = None;
 static mut WINDOW: Option<slint::Weak<MainWindow>> = None;
-
-// /// A 16bit pixel that has 5 blue bits, 5 green bits and  5 red bits
-// #[repr(transparent)]
-// #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
-// pub struct Bgr555Pixel(pub u16);
-
-// impl Bgr555Pixel {
-//     const B_MASK: u16 = 0b01111100_00000000;
-//     const G_MASK: u16 = 0b00000011_11100000;
-//     const R_MASK: u16 = 0b00000000_00011111;
-// }
-
-// impl TargetPixel for Bgr555Pixel {
-//     #[link_section = ".iwram"]
-//     fn blend(&mut self, color: PremultipliedRgbaColor) {
-//         let a = (u8::MAX - color.alpha) as u32;
-//         // convert to 5 bits
-//         let a = (a + 4) >> 3;
-
-//         // 0000000g_gggg0000_0bbbbb00_000rrrrr
-//         let expanded = (self.0 & (Self::R_MASK | Self::B_MASK)) as u32
-//             | (((self.0 & Self::G_MASK) as u32) << 15);
-
-//         // 00gggggg_gg00bbbb_bbbb00rr_rrrrrr00
-//         let c =
-//             ((color.blue as u32) << 12) | ((color.green as u32) << 22) | ((color.red as u32) << 2);
-//         // 00ggggg0_0000bbbb_b00000rr_rrr00000
-//         let c = c & 0b00111110_00001111_10000011_11100000;
-
-//         let res = expanded * a + c;
-
-//         self.0 = ((res >> 20) as u16 & Self::G_MASK)
-//             | ((res >> 5) as u16 & (Self::R_MASK | Self::B_MASK));
-//     }
-
-//     fn from_rgb(r: u8, g: u8, b: u8) -> Self {
-//         Self(((b as u16 & 0b11111000) << 7) | ((g as u16 & 0b11111000) << 2) | (r as u16 >> 3))
-//     }
-// }
-// struct FrameBuffer<'a>{ frame_buffer: &'a mut [Bgr555Pixel] }
-// impl<'a> slint::platform::software_renderer::LineBufferProvider for FrameBuffer<'a> {
-//  type TargetPixel = Bgr555Pixel;
-//  fn process_line(
-//      &mut self,
-//      line: usize,
-//      range: core::ops::Range<usize>,
-//      render_fn: impl FnOnce(&mut [Self::TargetPixel]),
-//  ) { unsafe {
-//      let line_begin = line * 240;
-//      render_fn(&mut self.frame_buffer[line_begin..][range]);
-//      // The line has been rendered and there could be code here to
-//      // send the pixel to the display
-//  } }
-// }
 
 pub fn init() {
     unsafe { ALLOCATOR.init(0x02000000, HEAP_SIZE) }
@@ -528,9 +419,9 @@ pub fn init() {
     BG0CNT.write(BackgroundControl::new().with_screenblock(31));
     DISPCNT.write(DisplayControl::new().with_video_mode(VideoMode::_3).with_show_bg2(true));
 
-    let window = MinimalGbaWindow::new();
-    slint::platform::set_platform(Box::new(GbaPlatform { window: window.clone() }))
-        .expect("backend already initialized");
+    let main_screen = MainScreen::new();
+    let window = MinimalSoftwareWindow::new(Default::default());
+    slint::platform::set_platform(Box::new(GbaPlatform { main_screen, window })).expect("backend already initialized");
 }
 
 pub fn set_sound_renderer(sound_renderer: Rc<RefCell<SoundRenderer>>) {
@@ -580,14 +471,10 @@ impl slint::platform::Platform for GbaPlatform {
         let slint_key_r: SharedString = slint::platform::Key::Shift.into();
         let slint_key_l: SharedString = slint::platform::Key::Tab.into();
 
+        let main_screen = &self.main_screen;
         let window = self.window.clone();
-        window.set_size(DISPLAY_SIZE);
-        window.attach_trackers();
+        main_screen.attach_trackers();
 
-        // let frame_buffer = unsafe {
-        //     core::slice::from_raw_parts_mut(0x0600_0000 as *mut Bgr555Pixel,
-        //     (DISPLAY_SIZE.width * DISPLAY_SIZE.height) as usize)
-        // };
         log!("--- Memory used before loop: {}kb", ALLOCATOR.used());
 
         let mut prev_keys = 0u16;
@@ -604,12 +491,10 @@ impl slint::platform::Platform for GbaPlatform {
             TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
             TIMER0_RELOAD.write(0);
             TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
-            window.draw_if_needed(|_renderer| {
-                // renderer.render(frame_buffer, DISPLAY_SIZE.width as usize);
-            });
+            main_screen.draw();
             let time = TIMER0_COUNT.read() as u32 * 1000 / cps;
             if time > 0 {
-                log!("--- window.draw_if_needed(ms) {}", time);
+                log!("--- main_screen.draw(ms) {}", time);
             }
 
             TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
