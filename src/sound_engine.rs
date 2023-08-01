@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 use crate::log;
-use crate::sequencer::NoteEvent;
 use crate::sequencer::Sequencer;
+use crate::sequencer::StepEvent;
 #[cfg(feature = "desktop")]
 use crate::sound_renderer::emulated::invoke_on_sound_engine;
 use crate::sound_renderer::Synth;
@@ -105,12 +105,12 @@ impl SoundEngine {
         self.sequencer.borrow_mut().apply_song_settings(settings);
     }
 
-    fn singularize_note_release(&mut self, source: NoteSource, event: NoteEvent) -> Option<u8> {
-        let note_to_release = if event == NoteEvent::Press {
+    fn singularize_note_release(&mut self, source: NoteSource, is_press: bool) -> Option<u8> {
+        let note_to_release = if is_press {
             self.pressed_note.replace(source)
         } else {
             match (self.pressed_note, source) {
-                // Only pressed live notes if the released note matches (another one wasn't pressed since)
+                // Only release pressed live notes if the released note matches (another one wasn't pressed since)
                 (Some(NoteSource::Key(pressed_note)), NoteSource::Key(released_note))
                     if pressed_note == released_note =>
                 {
@@ -134,28 +134,45 @@ impl SoundEngine {
         })
     }
 
-    fn send_note_events_to_synth(&mut self, note_events: Vec<(u8, NoteEvent, u8)>) {
-        for (instrument, typ, note) in note_events {
+    fn send_note_events_to_synth(&mut self, note_events: Vec<(u8, StepEvent)>) {
+        for (instrument, event) in note_events {
             let is_selected_instrument = instrument == self.sequencer.borrow().selected_instrument;
 
-            let note_to_release = if is_selected_instrument {
-                self.singularize_note_release(NoteSource::Sequencer(note), NoteEvent::Press)
-            } else {
-                None
+            let (note_to_press, note_to_release) = match event {
+                StepEvent::Press(note, p0, p1) => {
+                    self.script
+                        .press_instrument_note(self.frame_number, instrument, note, p0, p1);
+                    let p = Some(note);
+                    let r = if is_selected_instrument {
+                        self.singularize_note_release(NoteSource::Sequencer(note), true)
+                    } else {
+                        None
+                    };
+                    (p, r)
+                }
+                StepEvent::Release => {
+                    let note_to_release = if is_selected_instrument {
+                        self.singularize_note_release(NoteSource::Sequencer(0), false)
+                    } else {
+                        None
+                    };
+                    if !is_selected_instrument || note_to_release.is_some() {
+                        // Only send the sequenced release to the synth if the last of the pressed notes is
+                        // being released, or if this isn't the selected instruments (in which case only one
+                        // note will be pressed at a time).
+                        self.script.release_instrument(self.frame_number, instrument);
+                    }
+                    (None, note_to_release)
+                }
+                StepEvent::SetParam(param_num, val) => {
+                    self.script.set_instrument_param(instrument, param_num, val);
+                    (None, None)
+                }
             };
 
-            if typ == NoteEvent::Press {
-                self.script.press_instrument_note(self.frame_number, instrument, note);
-            } else if !is_selected_instrument || note_to_release.is_some() {
-                // Only send the sequenced release to the synth if the last of the pressed notes is
-                // being released, or if this isn't the selected instruments (in which case only one
-                // note will be pressed at a time).
-                self.script.release_instrument(self.frame_number, instrument);
-            };
-
+            let pressed = matches!(event, StepEvent::Press(_, _, _));
             self.main_window
                 .upgrade_in_event_loop(move |handle| {
-                    let pressed = typ == NoteEvent::Press;
                     #[cfg(feature = "desktop")]
                     if is_selected_instrument {
                         let notes_model = handle.get_notes();
@@ -167,8 +184,8 @@ impl SoundEngine {
                                 notes_model.set_row_data(row, row_data.clone());
                             }
 
-                            if row_data.note_number as u8 == note {
-                                row_data.active = pressed;
+                            if note_to_press.map_or(false, |n| n == row_data.note_number as u8) {
+                                row_data.active = true;
                                 notes_model.set_row_data(row, row_data);
                             }
                         }
@@ -233,6 +250,40 @@ impl SoundEngine {
             .unwrap();
     }
 
+    pub fn cycle_instrument_param_start(&mut self) -> () {
+        let seq = self.sequencer.borrow();
+        let note = seq.current_note();
+        let (p0, p1) = seq.current_instrument_params();
+        self.script
+            .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
+    }
+    pub fn cycle_instrument_param_end(&mut self) -> () {
+        self.script
+            .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
+    }
+    pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) -> () {
+        let new_val = self.sequencer.borrow_mut().cycle_instrument_param(param_num, forward);
+        self.script
+            .set_instrument_param(self.sequencer.borrow().selected_instrument, param_num, new_val)
+    }
+
+    pub fn cycle_step_param_start(&mut self) -> () {
+        let seq = self.sequencer.borrow();
+        let (note, p0, p1) = seq.current_note_and_params();
+        self.script
+            .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
+    }
+    pub fn cycle_step_param_end(&mut self) -> () {
+        // FIXME: Ref-count the press or something to handle +Shift,+Ctrl,-Shift,-Ctrl
+        self.script
+            .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
+    }
+    pub fn cycle_step_param(&mut self, param_num: u8, forward: bool) -> () {
+        let new_val = self.sequencer.borrow_mut().cycle_step_param(param_num, forward);
+        self.script
+            .set_instrument_param(self.sequencer.borrow().selected_instrument, param_num, new_val)
+    }
+
     pub fn cycle_note_start(&mut self) -> () {
         let note = self.sequencer.borrow().current_note();
         self.press_note(note);
@@ -253,12 +304,17 @@ impl SoundEngine {
     }
 
     pub fn press_note(&mut self, note: u8) -> () {
-        self.script
-            .press_instrument_note(self.frame_number, self.sequencer.borrow().selected_instrument, note);
-        self.sequencer.borrow_mut().record_press(note);
+        let (p0, p1) = self.sequencer.borrow_mut().record_press(note);
+        self.script.press_instrument_note(
+            self.frame_number,
+            self.sequencer.borrow().selected_instrument,
+            note,
+            p0,
+            p1,
+        );
 
         // Check which not
-        if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), NoteEvent::Press) {
+        if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), true) {
             self.release_note_visually(note_to_release)
         }
 
@@ -280,7 +336,7 @@ impl SoundEngine {
     pub fn release_note(&mut self, note: u8) -> () {
         // Instruments are monophonic, ignore any note release, either sequenced or live,
         // for the current instrument if it wasn't the last pressed one.
-        if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), NoteEvent::Release) {
+        if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), false) {
             self.script
                 .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
             self.sequencer.borrow_mut().record_release(note);
@@ -382,7 +438,7 @@ impl SoundEngine {
                         .unwrap()
                         .to_str()
                         .expect("Bad path?")
-                        .replace(".ct.md", "-instruments.rhai"),
+                        .replace(".ct.md", "-instruments.wasm"),
                 ));
                 invoke_on_sound_engine(move |engine| {
                     move || -> Result<(), Box<dyn Error>> {
@@ -424,17 +480,28 @@ impl SoundEngine {
         || -> Result<(), Box<dyn Error>> {
             let p = Path::new("chiptrack.sav");
             let instruments = std::fs::read(self.instruments_path().unwrap())?;
+            let instruments_wasm = wat::parse_bytes(&instruments).map_err(|e| e.to_string())?;
             let song = self.sequencer.borrow().serialize_to_postcard()?;
             println!(
                 "Saving project song to file {:?}, instruments: {} bytes, song: {} bytes.",
                 p,
-                instruments.len(),
+                instruments_wasm.len(),
                 song.len()
             );
             let mut full = Vec::new();
-            full.extend_from_slice(&(instruments.len() as u32).to_le_bytes());
+
+            // TODO: Support flash ROM in load_gba_sram to get access to 64kb or 128kb saves
+            if 8 + instruments_wasm.len() + song.len() >= 32 * 1024 {
+                return Err(format!(
+                    "SRAM savegames currently only support max 32kb but the song is {} bytes.",
+                    8 + instruments_wasm.len() + song.len()
+                )
+                .into());
+            }
+
+            full.extend_from_slice(&(instruments_wasm.len() as u32).to_le_bytes());
             full.extend_from_slice(&(song.len() as u32).to_le_bytes());
-            full.extend(instruments);
+            full.extend(instruments_wasm.iter());
             full.extend(song);
             std::fs::write(p, full)?;
             Ok(())

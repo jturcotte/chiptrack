@@ -46,6 +46,7 @@ struct InstrumentState {
     press_function: Option<WasmFunction>,
     release_function: Option<WasmFunction>,
     frame_function: Option<WasmFunction>,
+    set_param_function: Option<WasmFunction>,
     frames_after_release: i32,
     pressed_note: Option<PressedNote>,
 }
@@ -56,6 +57,7 @@ impl Default for InstrumentState {
             press_function: None,
             release_function: None,
             frame_function: None,
+            set_param_function: None,
             frames_after_release: 0,
             pressed_note: None,
         }
@@ -103,7 +105,8 @@ impl SynthScript {
                                              frames_after_release: i32,
                                              press: &CStr,
                                              release: &CStr,
-                                             frame: &CStr|
+                                             frame: &CStr,
+                                             set_param: &CStr|
               -> () {
             let id = cid.to_str().unwrap();
             assert!(
@@ -150,11 +153,12 @@ impl SynthScript {
             state.press_function = module.lookup_function(press);
             state.release_function = module.lookup_function(release);
             state.frame_function = module.lookup_function(frame);
+            state.set_param_function = module.lookup_function(set_param);
         };
 
         let functions: Vec<Box<dyn wasm::HostFunction>> = vec![
             Box::new(wasm::HostFunctionS::new("print", instrument_print)),
-            Box::new(wasm::HostFunctionSIISSS::new(
+            Box::new(wasm::HostFunctionSIISSSS::new(
                 "set_instrument_at_column",
                 set_instrument_at_column,
             )),
@@ -230,7 +234,14 @@ impl SynthScript {
         Ok(())
     }
 
-    pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u8, note: u8) -> () {
+    pub fn press_instrument_note(
+        &mut self,
+        frame_number: usize,
+        instrument: u8,
+        note: u8,
+        param0: i8,
+        param1: i8,
+    ) -> () {
         let mut states = self.instrument_states.borrow_mut();
         if let Some(state) = states.get_instrument(instrument) {
             if let Some(f) = &state.press_function {
@@ -242,7 +253,7 @@ impl SynthScript {
                 self.wasm_module_inst
                     .as_ref()
                     .unwrap()
-                    .call_ii(f, Self::note_to_freq(note), note as i32)
+                    .call_iiii(f, Self::note_to_freq(note), note as i32, param0 as i32, param1 as i32)
                     .unwrap();
             }
         }
@@ -280,6 +291,19 @@ impl SynthScript {
                 } else {
                     state.pressed_note = None;
                 }
+            }
+        }
+    }
+
+    pub fn set_instrument_param(&mut self, instrument: u8, param_num: u8, val: i8) -> () {
+        let mut states = self.instrument_states.borrow_mut();
+        if let Some(state) = states.get_instrument(instrument) {
+            if let Some(f) = &state.set_param_function {
+                self.wasm_module_inst
+                    .as_ref()
+                    .unwrap()
+                    .call_ii(f, param_num as i32, val as i32)
+                    .unwrap();
             }
         }
     }

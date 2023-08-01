@@ -3,7 +3,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "gba", no_main)]
-// The following no-std features are usually needed.
 #![cfg_attr(
     feature = "gba",
     feature(error_in_core, alloc_error_handler, start, core_intrinsics, lang_items, link_cfg)
@@ -13,7 +12,6 @@ extern crate alloc;
 
 #[cfg(feature = "gba")]
 mod gba_platform;
-// #[macro_use]
 mod log;
 #[cfg(feature = "desktop")]
 mod midi;
@@ -63,7 +61,6 @@ pub fn main() {
 #[cfg(any(feature = "gba"))]
 #[no_mangle]
 extern "C" fn main() -> ! {
-    // mcu_board_support::init();
     gba_platform::init();
     run_main();
 
@@ -219,7 +216,7 @@ fn run_main() {
     // us when that initialization is done and that we can start querying the list of midi
     // devices. It's also annoying for users that don't care about MIDI to get a permission
     // request, so I'll need this to be enabled explicitly for the Web version.
-    // The aldio latency is still so bad with the web version though,
+    // The audio latency is still so bad with the web version though,
     // so I'm not sure if that's really worth it.
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     let _midi = {
@@ -337,6 +334,44 @@ fn run_main() {
         cloned_sound_renderer
             .borrow_mut()
             .invoke_on_sound_engine(move |se| se.cycle_note(forwards, large_inc));
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_instrument_param_start(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.cycle_instrument_param_start());
+    });
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_instrument_param_end(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.cycle_instrument_param_end());
+    });
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_instrument_param(move |param_num, forwards| {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.cycle_instrument_param(param_num as u8, forwards));
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_step_param_start(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.cycle_step_param_start());
+    });
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_step_param_end(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.cycle_step_param_end());
+    });
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_step_param(move |param_num, forwards| {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.cycle_step_param(param_num as u8, forwards));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();

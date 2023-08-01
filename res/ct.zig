@@ -4,8 +4,13 @@ const fmt = std.fmt;
 extern fn print([*:0]const u8) void;
 extern fn gba_set_sound_reg(addr: u32, value: u32) void;
 extern fn gba_set_wave_table(table: [*]const u8, table_len: u32) void;
-extern fn set_instrument_at_column(id: [*:0]const u8, col: i32, frames_after_release: i32, press_symbol: [*:0]const u8, release_symbol: [*:0]const u8, frame_symbol: [*:0]const u8) void;
+// FIXME: If set_instrument_parameters is separate, maybe some of this stuff should also be split out,
+// and use something else than the id as the key (e.g. returned synth index)
+extern fn set_instrument_at_column(id: [*:0]const u8, col: i32, frames_after_release: i32, press_symbol: [*:0]const u8, release_symbol: [*:0]const u8, frame_symbol: [*:0]const u8, set_param_symbol: [*:0]const u8) void;
 
+// extern fn set_instrument_parameters(id: [*:0]const u8, param_num: u8, min: i8, max: i8, default: i8) void;
+
+// 
 pub fn debug(comptime f: []const u8, args: anytype) void {
     var b: [256]u8 = undefined;
     const r = fmt.bufPrint(&b, f, args) catch unreachable;
@@ -14,9 +19,14 @@ pub fn debug(comptime f: []const u8, args: anytype) void {
 }
 
 const Instrument = struct {
+    /// Signature: press(freq: u32, note: u32, param0: i8, param1: i8)
     press: [*:0]const u8 = "",
+    /// Signature: release(freq: u32, note: u32, frame: u32)
     release: [*:0]const u8 = "",
+    /// Signature: frame(freq: u32, note: u32, frame: u32)
     frame: [*:0]const u8 = "",
+    /// Signature: set_param(param_num: i8, value: i8)
+    set_param: [*:0]const u8 = "",
     frames_after_release: i32 = 0,
 };
 pub fn setInstrument(id: [*:0]const u8, col: i32, instrument: Instrument) void {
@@ -25,7 +35,8 @@ pub fn setInstrument(id: [*:0]const u8, col: i32, instrument: Instrument) void {
         instrument.frames_after_release,
         instrument.press,
         instrument.release,
-        instrument.frame);
+        instrument.frame,
+        instrument.set_param);
 }
 
 pub const gba = struct {

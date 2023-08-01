@@ -6,23 +6,34 @@ import { InstrumentData, GlobalEngine } from "globals.slint";
 component InstrumentButton inherits Rectangle {
     callback pressed();
     callback right_pressed();
-    in property<string> id;
     in property<bool> highlighted;
-    in property<bool> active;
-    in property<bool> muted;
+    in property<InstrumentData> i;
     width: self.height;
-    background: active ? #e0e0e0 : white;
+    background: i.active ? #e0e0e0 : white;
     border_color: highlighted ? black : #a0a0a0;
     border_width: 1px;
     border_radius: self.width/16;
-    Text {
-        text: muted ? "🔇" : id;
-        width: 100%;
-        height: 100%;
-        font_size: self.height / 4;
-        horizontal_alignment: center;
-        vertical_alignment: center;
-        color: muted ? #a0a0a0 : black;
+    VerticalLayout {
+        Text {
+            text: i.muted ? "🔇" : i.id;
+            width: 100%;
+            height: 66%;
+            font_size: parent.height / 3;
+            horizontal_alignment: center;
+            vertical_alignment: bottom;
+            color: i.muted ? #a0a0a0 : black;
+        }
+        // FIXME: It's a bit crappy to have to set it separately, maybe it could just be the last step settings set or something.
+        //        Or I could have B+arrows only set the instruments parameters, stamp them on any press (though should any A+ on other steps copy params too?),
+        //        and require A+B+arrows to tweak the steps.
+        Text {
+            text: i.param0 + " / " + i.param1;
+            width: 100%;
+            font_size: parent.height / 5;
+            horizontal_alignment: center;
+            vertical_alignment: center;
+            color: #a0a0a0;
+        }
     }
     TouchArea {
         width: 100%;
@@ -48,10 +59,8 @@ export component InstrumentsPanel inherits Flickable {
 
     for instrument[idx] in GlobalEngine.instruments:
     InstrumentButton {
-        id: instrument.id;
+        i: instrument;
         highlighted: idx == GlobalEngine.current_instrument;
-        active: instrument.active;
-        muted: instrument.muted;
         pressed => { GlobalEngine.select_instrument(idx); }
         right_pressed => { GlobalEngine.toggle_mute_instrument(idx); }
         x: mod(idx, 4) * (self.width + parent.spacing);

@@ -51,20 +51,20 @@ impl<F: FnMut(&CStr)> HostFunction for HostFunctionS<F> {
     }
 }
 
-pub struct HostFunctionSIISSS<F> {
+pub struct HostFunctionSIISSSS<F> {
     closure: F,
     name: CString,
 }
-impl<F> HostFunctionSIISSS<F> {
-    pub fn new(name: &str, closure: F) -> HostFunctionSIISSS<F> {
-        HostFunctionSIISSS {
+impl<F> HostFunctionSIISSSS<F> {
+    pub fn new(name: &str, closure: F) -> HostFunctionSIISSSS<F> {
+        HostFunctionSIISSSS {
             closure: closure,
             name: CString::new(name).unwrap(),
         }
     }
 }
-const SIISSS_SIG: &str = "($ii$$$)\0";
-unsafe extern "C" fn trampoline_siisss_<F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr)>(
+const SIISSSS_SIG: &str = "($ii$$$$)\0";
+unsafe extern "C" fn trampoline_siisss_<F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr, &CStr)>(
     exec_env: wasm_exec_env_t,
     v1: *const i8,
     v2: i32,
@@ -72,6 +72,7 @@ unsafe extern "C" fn trampoline_siisss_<F: FnMut(&WasmModuleInst, &CStr, i32, i3
     v4: *const i8,
     v5: *const i8,
     v6: *const i8,
+    v7: *const i8,
 ) {
     let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
     // Create a temporary instance wrapping the handle
@@ -87,16 +88,17 @@ unsafe extern "C" fn trampoline_siisss_<F: FnMut(&WasmModuleInst, &CStr, i32, i3
         CStr::from_ptr(v4),
         CStr::from_ptr(v5),
         CStr::from_ptr(v6),
+        CStr::from_ptr(v7),
     );
     // Prevent the module_inst from being deinstantiated during m's drop
     m.module_inst = None;
 }
-impl<F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr)> HostFunction for HostFunctionSIISSS<F> {
+impl<F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr, &CStr)> HostFunction for HostFunctionSIISSSS<F> {
     fn to_native_symbol(&mut self) -> NativeSymbol {
         NativeSymbol {
             symbol: self.name.as_ptr(),
             func_ptr: trampoline_siisss_::<F> as *mut c_void,
-            signature: SIISSS_SIG.as_ptr() as *const i8,
+            signature: SIISSSS_SIG.as_ptr() as *const i8,
             attachment: &mut self.closure as *mut _ as *mut c_void,
         }
     }
@@ -340,6 +342,11 @@ impl WasmModuleInst {
 
     pub fn call_iii(&self, function: &WasmFunction, a1: i32, a2: i32, a3: i32) -> Result<(), String> {
         let argv: [u32; 3] = [a1 as u32, a2 as u32, a3 as u32];
+        self.call_argv(function, argv)
+    }
+
+    pub fn call_iiii(&self, function: &WasmFunction, a1: i32, a2: i32, a3: i32, a4: i32) -> Result<(), String> {
+        let argv: [u32; 4] = [a1 as u32, a2 as u32, a3 as u32, a4 as u32];
         self.call_argv(function, argv)
     }
 

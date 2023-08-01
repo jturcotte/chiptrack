@@ -69,20 +69,30 @@ component SequencerStep inherits Rectangle {
     callback pressed();
     callback right_pressed();
     in property<bool> highlighted;
-    in property<bool> press;
-    in property<bool> release;
+    in property<StepData> step;
     in property<string> name;
     border_width: 1px;
     border_color: highlighted ? black : transparent;
     border_radius: self.height / 8;
-    l := Text {
-        text:
-            (press ? "[" : " ") + (press ? name : "---") + (release ? "]" : " ");
-        y: (parent.height - self.height) / 2;
-        width: 100%;
+    Text {
+        x: 0px;
+        text: (step.param0_set ? step.param0_val : "") + " / " + (step.param1_set ? step.param1_val : "");
+        width: 50%;
         height: 100%;
-        font_size: min(self.width, self.height) * 0.75;
-        color: press || release ? black : #a0a0a0;
+        font_size: self.height * 0.75;
+        horizontal_alignment: center;
+        vertical_alignment: center;
+        color: step.press ? black : #a0a0a0;
+    }
+    Text {
+        text:
+            (step.press ? "[" : "-") + (step.press ? name : "---") + (step.release ? "]" : "-");
+        x: parent.width / 2;
+        y: (parent.height - self.height) / 2;
+        width: 50%;
+        height: 100%;
+        font_size: self.height * 0.75;
+        color: step.press || step.release ? black : #a0a0a0;
         horizontal_alignment: center;
         vertical_alignment: center;
     }
@@ -172,7 +182,7 @@ export component PatternsPanel inherits HorizontalLayout {
     }
 
     current_pattern := Rectangle { 
-        width: patterns_list.height_of_cell * 4;
+        width: patterns_list.height_of_cell * 6;
         VerticalLayout {
             spacing: 1px;
             label := Rectangle {
@@ -190,8 +200,7 @@ export component PatternsPanel inherits HorizontalLayout {
             HorizontalLayout {
                 SequencerStep {
                     highlighted: idx == GlobalEngine.sequencer_step_active;
-                    press: step.press;
-                    release: step.release;
+                    step: step;
                     name: GlobalUtils.get_midi_note_name(step.note);
                     pressed => { GlobalEngine.toggle_step(idx); }
                     right_pressed => { GlobalEngine.toggle_step_release(idx); }

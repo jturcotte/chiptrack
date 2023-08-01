@@ -13,11 +13,17 @@ export struct StepData {
     press: bool,
     release: bool,
     note: int,
+    param0_set: bool,
+    param0_val: int,
+    param1_set: bool,
+    param1_val: int,
 }
 export struct InstrumentData {
     id: string,
     active: bool,
     muted: bool,
+    param0: int,
+    param1: int,
 }
 export struct NoteData {
     note_number: int,
@@ -86,7 +92,7 @@ export global GlobalEngine {
     in-out property<[StepData]> sequencer_steps: [
         {press: true, note: 65},
         {press: false}, {press: false}, {press: false},
-        {press: true, release: true, note: 65, active: true},
+        {press: true, release: true, note: 65},
         {press: false}, {press: false}, {press: false},
         {press: true, note: 65},
         {press: false}, {press: false}, {press: false},
@@ -128,6 +134,12 @@ export global GlobalEngine {
     callback cycle_note_start();
     callback cycle_note_end();
     callback cycle_note(bool, bool);
+    callback cycle_instrument_param_start();
+    callback cycle_instrument_param_end();
+    callback cycle_instrument_param(int, bool);
+    callback cycle_step_param_start();
+    callback cycle_step_param_end();
+    callback cycle_step_param(int, bool);
     callback toggle_mute_instrument(int);
     callback select_next_pattern(bool);
     callback pattern_clicked(int);

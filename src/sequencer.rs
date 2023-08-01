@@ -13,6 +13,9 @@ use crate::GlobalEngine;
 use crate::GlobalSettings;
 use crate::PatternData;
 use crate::SongSettings;
+use core::fmt;
+use serde::de::{self, Deserializer, SeqAccess, Visitor};
+use serde::ser::{SerializeStruct, Serializer};
 
 #[cfg(feature = "desktop")]
 use markdown::{parse_markdown_song, save_markdown_song};
@@ -37,19 +40,145 @@ use std::error::Error;
 #[cfg(feature = "desktop")]
 use std::path::Path;
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-pub enum NoteEvent {
+enum KeyEvent {
     Press,
     Release,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-struct InstrumentStep {
-    note: u8,
-    press: bool,
-    release: bool,
+pub enum StepEvent {
+    Press(u8, i8, i8), // note, p0, p1
+    Release,
+    SetParam(u8, i8), // param_num, val
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct InstrumentStep {
+    note: u8,
+    // TODO: Move into note != 0
+    press: bool,
+    release: bool,
+    param0: i8,
+    param1: i8,
+}
+
+impl InstrumentStep {
+    const FIELDS: &'static [&'static str] = &["note", "flags", "param0", "param1"];
+}
+/// Use a custom serializer instead of derived to represent None parameters as single bits instead of separate 0 bytes
+/// so that we need 2 bytes per step instead of 4.
+impl Serialize for InstrumentStep {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let p0 = self.param0();
+        let p1 = self.param1();
+        let num_params = p0.is_some() as usize + p1.is_some() as usize;
+        let note = (self.press as u8) << 7 | self.note;
+        let flags = (self.release as u8) << 7 | (p1.is_some() as u8) << 1 | p0.is_some() as u8;
+
+        let mut rgb = serializer.serialize_struct("InstrumentStep", 2 + num_params)?;
+        rgb.serialize_field(InstrumentStep::FIELDS[0], &note)?;
+        rgb.serialize_field(InstrumentStep::FIELDS[1], &flags)?;
+        if let Some(val) = p0 {
+            rgb.serialize_field(InstrumentStep::FIELDS[2], &val)?;
+        }
+        if let Some(val) = p1 {
+            rgb.serialize_field(InstrumentStep::FIELDS[3], &val)?;
+        }
+        rgb.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for InstrumentStep {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct InstrumentStepVisitor;
+
+        impl<'de> Visitor<'de> for InstrumentStepVisitor {
+            type Value = InstrumentStep;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct InstrumentStep")
+            }
+
+            // Used for deserializing postcard.
+            fn visit_seq<V>(self, mut seq: V) -> Result<InstrumentStep, V::Error>
+            where
+                V: SeqAccess<'de>,
+            {
+                let note: u8 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let flags: u8 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let mut i = InstrumentStep {
+                    note: note & 0x7f,
+                    press: note & 0x80 != 0,
+                    release: flags & 0x80 != 0,
+                    param0: -128,
+                    param1: -128,
+                };
+                if flags & 0b01 != 0 {
+                    let val: i8 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(2, &self))?;
+                    i.set_param0(Some(val));
+                }
+                if flags & 0b10 != 0 {
+                    let val: i8 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(2, &self))?;
+                    i.set_param1(Some(val));
+                }
+                Ok(i)
+            }
+        }
+        deserializer.deserialize_struct("InstrumentStep", InstrumentStep::FIELDS, InstrumentStepVisitor)
+    }
+}
+
+#[test]
+fn postcard_serialize() -> Result<(), Box<dyn Error>> {
+    let i = InstrumentStep {
+        note: 36,
+        press: true,
+        release: true,
+        param0: -128,
+        param1: 8,
+    };
+
+    let ser = postcard::to_allocvec(&i)?;
+    let r: InstrumentStep = postcard::from_bytes(&ser)?;
+    assert!(r == i);
+    Ok(())
+}
+
+impl InstrumentStep {
+    fn param0(&self) -> Option<i8> {
+        if self.param0 == -128 {
+            None
+        } else {
+            Some(self.param0)
+        }
+    }
+    fn param1(&self) -> Option<i8> {
+        if self.param1 == -128 {
+            None
+        } else {
+            Some(self.param1)
+        }
+    }
+    fn set_param0(&mut self, val: Option<i8>) {
+        match val {
+            // Unset is encoded as -128 (0x80) to use the same byte, rust won't find that niche by itself.
+            None => self.param0 = -128,
+            Some(v) => self.param0 = v,
+        }
+    }
+    fn set_param1(&mut self, val: Option<i8>) {
+        match val {
+            None => self.param1 = -128,
+            Some(v) => self.param1 = v,
+        }
+    }
+}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct Instrument {
     id: String,
@@ -151,6 +280,8 @@ impl Pattern {
         instrument_id: &str,
         synth_index: Option<u8>,
     ) -> &'a mut [InstrumentStep; NUM_STEPS] {
+        // Use the string ID to match the instrument so that reloading instruments and moving
+        // instruments to different synth_indices will still match them.
         let ii = match self.instruments.iter().position(|i| i.id == instrument_id) {
             Some(ii) => ii,
             None => {
@@ -173,11 +304,13 @@ impl Pattern {
         set_press: Option<bool>,
         set_release: Option<bool>,
         set_note: Option<u8>,
+        set_params: Option<(Option<i8>, Option<i8>)>,
     ) -> bool {
-        let mut step = &mut self.get_steps_mut(instrument_id, Some(instrument))[step_num];
+        let step = &mut self.get_steps_mut(instrument_id, Some(instrument))[step_num];
         if set_press.map_or(true, |v| v == step.press)
             && set_release.map_or(true, |v| v == step.release)
             && set_note.map_or(true, |v| v == step.note)
+            && set_params.map_or(true, |v| v == (step.param0(), step.param1()))
         {
             return false;
         }
@@ -191,11 +324,16 @@ impl Pattern {
         if let Some(note) = set_note {
             step.note = note;
         }
+        if let Some((param0, param1)) = set_params {
+            step.set_param0(param0);
+            step.set_param1(param1);
+        }
 
         let pattern_empty = if set_press.unwrap_or(false) || set_release.unwrap_or(false) {
             false
         } else {
-            // FIXME: Remove empty instruments instead and get the caller to use is_empty()
+            // FIXME: Remove empty instruments instead and get the caller to use is_empty(),
+            // but what should happen about entered notes and params?
             self.instruments
                 .iter()
                 .all(|i| i.steps.iter().all(|step| !step.press && !step.release))
@@ -228,6 +366,7 @@ pub struct SequencerSong {
 
 // Initialize all notes to C5
 const DEFAULT_NOTE: u8 = 60;
+const DEFAULT_PARAM_VAL: i8 = 0;
 
 impl Default for InstrumentStep {
     fn default() -> Self {
@@ -235,6 +374,8 @@ impl Default for InstrumentStep {
             note: DEFAULT_NOTE,
             press: false,
             release: false,
+            param0: -128,
+            param1: -128,
         }
     }
 }
@@ -273,6 +414,7 @@ pub struct Sequencer {
     // FIXME: Use a bitset
     muted_instruments: BTreeSet<u8>,
     synth_instrument_ids: Vec<SharedString>,
+    instrument_parameters: Vec<(i8, i8)>,
     main_window: WeakWindowWrapper,
 }
 
@@ -292,6 +434,7 @@ impl Sequencer {
             just_recorded_over_next_step: false,
             muted_instruments: BTreeSet::new(),
             synth_instrument_ids: vec![SharedString::new(); NUM_INSTRUMENTS],
+            instrument_parameters: vec![(0, 0); NUM_INSTRUMENTS],
             main_window: main_window.clone(),
         }
     }
@@ -442,6 +585,21 @@ impl Sequencer {
                     row_data.press = step.press;
                     row_data.release = step.release;
                     row_data.note = step.note as i32;
+                    match step.param0() {
+                        Some(v) => {
+                            row_data.param0_set = true;
+                            row_data.param0_val = v as i32;
+                        }
+                        None => row_data.param0_set = false,
+                    }
+                    match step.param1() {
+                        Some(v) => {
+                            row_data.param1_set = true;
+                            row_data.param1_val = v as i32;
+                        }
+                        None => row_data.param1_set = false,
+                    }
+
                     model.set_row_data(i, row_data);
                 }
 
@@ -473,11 +631,12 @@ impl Sequencer {
     pub fn toggle_step(&mut self, step_num: u32) -> () {
         let maybe_steps = self.song.patterns[self.selected_pattern].get_steps(self.selected_instrument);
         let toggled = !maybe_steps.map_or(false, |ss| ss[step_num as usize].press);
-        self.set_step_events(
+        self.set_pattern_step_events(
             step_num as usize,
             self.selected_pattern,
             Some(toggled),
             Some(toggled),
+            None,
             None,
         );
 
@@ -496,7 +655,14 @@ impl Sequencer {
     pub fn toggle_step_release(&mut self, step_num: u32) -> () {
         let maybe_steps = self.song.patterns[self.selected_pattern].get_steps(self.selected_instrument);
         let toggled = !maybe_steps.map_or(false, |ss| ss[step_num as usize].release);
-        self.set_step_events(step_num as usize, self.selected_pattern, None, Some(toggled), None);
+        self.set_pattern_step_events(
+            step_num as usize,
+            self.selected_pattern,
+            None,
+            Some(toggled),
+            None,
+            None,
+        );
 
         // We don't yet have a separate concept of step cursor independent of the
         // current sequencer step. But for now use the same thing to allow selecting
@@ -524,13 +690,14 @@ impl Sequencer {
         }
     }
 
-    fn set_step_events(
+    fn set_pattern_step_events(
         &mut self,
         step_num: usize,
         pattern: usize,
         set_press: Option<bool>,
         set_release: Option<bool>,
         set_note: Option<u8>,
+        set_params: Option<(Option<i8>, Option<i8>)>,
     ) -> () {
         let instrument_id = &self.synth_instrument_ids[self.selected_instrument as usize];
         let pattern_empty = self.song.patterns[pattern].set_step_events(
@@ -540,6 +707,7 @@ impl Sequencer {
             set_press,
             set_release,
             set_note,
+            set_params,
         );
 
         let selected_pattern = self.selected_pattern;
@@ -561,11 +729,27 @@ impl Sequencer {
                 if let Some(note) = set_note {
                     step_row_data.note = note as i32;
                 }
+                if let Some((param0, param1)) = set_params {
+                    match param0 {
+                        Some(v) => {
+                            step_row_data.param0_set = true;
+                            step_row_data.param0_val = v as i32;
+                        }
+                        None => step_row_data.param0_set = false,
+                    }
+                    match param1 {
+                        Some(v) => {
+                            step_row_data.param1_set = true;
+                            step_row_data.param1_val = v as i32;
+                        }
+                        None => step_row_data.param1_set = false,
+                    }
+                }
                 steps.set_row_data(step_num, step_row_data);
             })
             .unwrap();
     }
-    pub fn set_playing(&mut self, val: bool) -> Vec<(u8, NoteEvent, u8)> {
+    pub fn set_playing(&mut self, val: bool) -> Vec<(u8, StepEvent)> {
         self.playing = val;
         // Reset the current_frame so that it's aligned with full
         // steps and that record_press would record any key while
@@ -576,8 +760,8 @@ impl Sequencer {
             // The first advance_frame after playing will move from frame 0 to frame 1 and skip presses
             // of frame 0. Since we don't care about releases of the non-existant previous frame, do the
             // presses now, right after starting the playback.
-            let mut note_events: Vec<(u8, NoteEvent, u8)> = Vec::new();
-            self.handle_current_step_presses(&mut note_events);
+            let mut note_events: Vec<(u8, StepEvent)> = Vec::new();
+            self.handle_current_step_presses_and_params(&mut note_events);
             note_events
         } else {
             Vec::new()
@@ -589,10 +773,17 @@ impl Sequencer {
     pub fn set_erasing(&mut self, val: bool) -> () {
         self.erasing = val;
         // Already remove the current step.
-        self.set_step_events(self.current_step, self.selected_pattern, Some(false), Some(false), None);
+        self.set_pattern_step_events(
+            self.current_step,
+            self.selected_pattern,
+            Some(false),
+            Some(false),
+            None,
+            Some((None, None)),
+        );
     }
 
-    fn handle_current_step_presses(&mut self, note_events: &mut Vec<(u8, NoteEvent, u8)>) {
+    fn handle_current_step_presses_and_params(&mut self, note_events: &mut Vec<(u8, StepEvent)>) {
         for instrument in &self.song.patterns[self.selected_pattern].instruments {
             let i = match instrument.synth_index {
                 Some(i) => i,
@@ -608,27 +799,38 @@ impl Sequencer {
                 self.just_recorded_over_next_step = false;
                 continue;
             }
-            if let Some(InstrumentStep {
-                note,
-                press,
-                release: _,
-            }) = self.song.patterns[self.selected_pattern]
+
+            if let Some(step) = self.song.patterns[self.selected_pattern]
                 .get_steps(i)
                 .map(|ss| ss[self.current_step])
             {
-                if press {
+                if step.press {
+                    // Use the default if the sequencer didn't have any param set for that press.
+                    let p0 = step.param0().unwrap_or(DEFAULT_PARAM_VAL);
+                    let p1 = step.param1().unwrap_or(DEFAULT_PARAM_VAL);
                     log!(
-                        "➕ PRS {} note {}",
+                        "➕ PRS {} note {} params {} / {}",
                         self.synth_instrument_ids[i as usize],
-                        MidiNote(note as i32).name()
+                        MidiNote(step.note as i32).name(),
+                        p0,
+                        p1
                     );
-                    note_events.push((i, NoteEvent::Press, note));
+                    note_events.push((i, StepEvent::Press(step.note, p0, p1)));
+                } else {
+                    if let Some(val) = step.param0() {
+                        log!("✖️ PAR {} param {} = {}", self.synth_instrument_ids[i as usize], 0, val);
+                        note_events.push((i, StepEvent::SetParam(0, val)));
+                    }
+                    if let Some(val) = step.param1() {
+                        log!("✖️ PAR {} param {} = {}", self.synth_instrument_ids[i as usize], 1, val);
+                        note_events.push((i, StepEvent::SetParam(1, val)));
+                    }
                 }
             }
         }
     }
 
-    fn handle_current_step_releases(&mut self, note_events: &mut Vec<(u8, NoteEvent, u8)>) {
+    fn handle_current_step_releases(&mut self, note_events: &mut Vec<(u8, StepEvent)>) {
         for instrument in &self.song.patterns[self.selected_pattern].instruments {
             let i = match instrument.synth_index {
                 Some(i) => i,
@@ -648,6 +850,8 @@ impl Sequencer {
                 note,
                 press: _,
                 release,
+                param0: _,
+                param1: _,
             }) = self.song.patterns[self.selected_pattern]
                 .get_steps(i)
                 .map(|ss| ss[self.current_step])
@@ -658,14 +862,14 @@ impl Sequencer {
                         self.synth_instrument_ids[i as usize],
                         MidiNote(note as i32).name()
                     );
-                    note_events.push((i, NoteEvent::Release, note));
+                    note_events.push((i, StepEvent::Release));
                 }
             }
         }
     }
 
-    pub fn advance_frame(&mut self) -> (Option<u32>, Vec<(u8, NoteEvent, u8)>) {
-        let mut note_events: Vec<(u8, NoteEvent, u8)> = Vec::new();
+    pub fn advance_frame(&mut self) -> (Option<u32>, Vec<(u8, StepEvent)>) {
+        let mut note_events: Vec<(u8, StepEvent)> = Vec::new();
 
         if !self.playing {
             return (None, note_events);
@@ -680,10 +884,17 @@ impl Sequencer {
 
             self.advance_step(true);
             if self.erasing {
-                self.set_step_events(self.current_step, self.selected_pattern, Some(false), Some(false), None);
+                self.set_pattern_step_events(
+                    self.current_step,
+                    self.selected_pattern,
+                    Some(false),
+                    Some(false),
+                    None,
+                    Some((None, None)),
+                );
             }
 
-            self.handle_current_step_presses(&mut note_events);
+            self.handle_current_step_presses_and_params(&mut note_events);
             (Some(self.current_step as u32), note_events)
         } else {
             (None, note_events)
@@ -697,31 +908,45 @@ impl Sequencer {
             .unwrap_or(DEFAULT_NOTE)
     }
 
-    fn record_event(&mut self, event: NoteEvent, note: Option<u8>) {
+    pub fn current_note_and_params(&self) -> (u8, i8, i8) {
+        let maybe_steps = self.song.patterns[self.selected_pattern].get_steps(self.selected_instrument);
+        maybe_steps
+            .map(|steps| {
+                let s = steps[self.current_step];
+                (
+                    s.note,
+                    s.param0().unwrap_or(DEFAULT_PARAM_VAL),
+                    s.param1().unwrap_or(DEFAULT_PARAM_VAL),
+                )
+            })
+            .unwrap_or((DEFAULT_NOTE, DEFAULT_PARAM_VAL, DEFAULT_PARAM_VAL))
+    }
+
+    fn record_key_event(&mut self, event: KeyEvent, note: Option<u8>, params: Option<(Option<i8>, Option<i8>)>) {
         if !self.recording {
             return;
         }
 
         let (press, release, (step, pattern, _)) = match event {
-            NoteEvent::Press if !self.playing => {
+            KeyEvent::Press if !self.playing => {
                 let pressed = self.song.patterns[self.selected_pattern]
                     .get_steps(self.selected_instrument)
                     .map_or(false, |ss| ss[self.current_step as usize].press);
                 if !pressed {
-                    // If the step isn't already pressed, set both the press and the release it.
+                    // If the step isn't already pressed, record it both as pressed and released.
                     (Some(true), Some(true), (self.current_step, self.selected_pattern, None))
                 } else {
                     // Else, only set the note.
                     (None, None, (self.current_step, self.selected_pattern, None))
                 }
             }
-            NoteEvent::Release if !self.playing =>
+            KeyEvent::Release if !self.playing =>
             // Ignore the release when recording and not playing,
             // it should be the same step as the press anyway.
             {
                 return
             }
-            NoteEvent::Press => {
+            KeyEvent::Press => {
                 (
                     Some(true),
                     None,
@@ -735,7 +960,7 @@ impl Sequencer {
                     },
                 )
             }
-            NoteEvent::Release => {
+            KeyEvent::Release => {
                 // Align the release with the same frame position within the step as the press had.
                 // We're going to sequence full steps anyway.
                 // This is to prevent the release to be offset only by one frame but still end up
@@ -775,18 +1000,98 @@ impl Sequencer {
                 )
             }
         };
-        self.set_step_events(step, pattern, press, release, note);
+        self.set_pattern_step_events(step, pattern, press, release, note, params);
     }
 
-    pub fn record_press(&mut self, note: u8) {
-        self.record_event(NoteEvent::Press, Some(note));
+    pub fn record_press(&mut self, note: u8) -> (i8, i8) {
+        let (p0, p1) = self.current_instrument_params();
+        self.record_key_event(
+            KeyEvent::Press,
+            Some(note),
+            Some((Some(p0).filter(|v| *v != 0), Some(p1).filter(|v| *v != 0))),
+        );
         self.last_press_frame = Some(self.current_frame);
+        (p0, p1)
     }
 
     pub fn record_release(&mut self, _note: u8) {
         // The note release won't be passed to the synth on playback,
         // so don't overwrite the note in the step just in case it contained something useful.
-        self.record_event(NoteEvent::Release, None);
+        self.record_key_event(KeyEvent::Release, None, None);
+    }
+
+    pub fn current_instrument_params(&self) -> (i8, i8) {
+        let instrument = self.selected_instrument as usize;
+        self.instrument_parameters[instrument]
+    }
+
+    pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) -> i8 {
+        let instrument = self.selected_instrument as usize;
+        let instrument_parameters = &mut self.instrument_parameters[instrument];
+        let val = if param_num == 0 {
+            &mut instrument_parameters.0
+        } else {
+            &mut instrument_parameters.1
+        };
+
+        if forward && *val < 127 {
+            *val += 1;
+        } else if !forward && *val > -127 {
+            *val -= 1;
+        }
+
+        let val2 = *val as i32;
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let instruments_model = GlobalEngine::get(&handle).get_instruments();
+                let mut row_data = instruments_model.row_data(instrument).unwrap();
+                if param_num == 0 {
+                    row_data.param0 = val2;
+                } else {
+                    row_data.param1 = val2;
+                }
+                instruments_model.set_row_data(instrument as usize, row_data);
+            })
+            .unwrap();
+
+        *val
+    }
+
+    pub fn cycle_step_param(&mut self, param_num: u8, forward: bool) -> i8 {
+        let mut step_parameters = self.song.patterns[self.selected_pattern]
+            .get_steps(self.selected_instrument)
+            .map_or((None, None), |ss| {
+                let s = ss[self.current_step as usize];
+                (s.param0(), s.param1())
+            });
+
+        let val = if param_num == 0 {
+            if step_parameters.0.is_none() {
+                step_parameters.0 = Some(0);
+            }
+            &mut step_parameters.0
+        } else {
+            if step_parameters.1.is_none() {
+                step_parameters.1 = Some(0);
+            }
+            &mut step_parameters.1
+        };
+        if forward && val.unwrap() < 127 {
+            *val.as_mut().unwrap() += 1;
+        } else if !forward && val.unwrap() > -127 {
+            *val.as_mut().unwrap() -= 1;
+        }
+
+        let val2 = val.unwrap();
+        self.set_pattern_step_events(
+            self.current_step,
+            self.selected_pattern,
+            None,
+            None,
+            None,
+            Some(step_parameters),
+        );
+        val2
     }
 
     pub fn append_song_pattern(&mut self, pattern: u32) {
@@ -926,6 +1231,7 @@ impl Sequencer {
 
     #[cfg(feature = "gba")]
     pub fn load_postcard_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
+        log!("SSSS {}", bytes.len());
         let song: SequencerSong = from_bytes(bytes).unwrap();
         self.set_song(song);
         Ok(())

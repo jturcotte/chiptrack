@@ -1,6 +1,6 @@
 const std = @import("std");
 const math = std.math;
-const ct = @import("ct.zig");
+const ct = @import("ct");
 const gba = ct.gba;
 
 const Fraction = struct {
@@ -105,8 +105,21 @@ const square1_1 = struct {
 
 const square1_2 = struct {
 
-    export fn square1_2p(freq: u32, _: u32) void {
-        base_env_duty_1_4.write(gba.square1);
+    var p: u16 = 8;
+    var duty: u2 = 0;
+    fn set_duty(val: i8) void {
+        duty = @intCast(u2, val);
+        base_env_duty_1_4
+        .withDuty(duty)
+            .write(gba.square1);
+    }
+    fn set_p(val: i8) void {
+        p = @max(1, @intCast(u16, val));
+    }
+
+    export fn square1_2p(freq: u32, _: u8, duty_val: i8, p_val: i8) void {
+        set_p(p_val);
+        set_duty(duty_val);
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
             .withTrigger(1)
@@ -116,16 +129,23 @@ const square1_2 = struct {
     export fn square1_2r(_: u32, _: u32, frame: u32) void {
         square1_released_at = frame;
     }
+
     export fn square1_2f(freq: u32, _: u32, frame: u32) void {
         const delay = 36;
         if (frame > delay)
             gba.CtrlFreq.init()
-                .withSquareFreq(vibrato(delay, 8, freq, frame))
+                .withSquareFreq(vibrato(delay, p, freq, frame))
                 .write(gba.square1);
         if (square1_released_at) |decay_frame| {
             if (frame - decay_frame < explicit_env_dec_1_4_frames.len)
-                explicit_env_dec_1_4_frames[frame - decay_frame].write(gba.square1);
+                explicit_env_dec_1_4_frames[frame - decay_frame].withDuty(duty).write(gba.square1);
         }
+    }
+    export fn square1_2a(param_num: u32, val: i8) void {
+        if (param_num == 0)
+            set_duty(val)
+        else
+            set_p(val);
     }
 
     fn register() void {
@@ -133,6 +153,7 @@ const square1_2 = struct {
             .press = "square1_2p",
             .release = "square1_2r",
             .frame = "square1_2f",
+            .set_param = "square1_2a",
             .frames_after_release = 8,
             });
     }

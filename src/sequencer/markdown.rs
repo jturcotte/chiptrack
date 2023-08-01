@@ -1,6 +1,7 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+use crate::sequencer::InstrumentStep;
 use crate::sequencer::SequencerSong;
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_PATTERNS;
@@ -83,32 +84,6 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                                 Some(c) => Some(c + 1),
                                 None => Some(0),
                             };
-                            if self.tag_stack.contains(&TableHead) {
-                                if matches!(self.section, Section::Pattern(_)) {
-                                    let text = &self.source[tag_range].trim();
-                                    self.table_instrument_ids.push((*text).to_owned());
-                                }
-                            } else if self.tag_stack.contains(&TableRow) {
-                                // I should read table cells through the Text event to be more resilient to stuff like
-                                // inline HTML in the cells and still be able to extract the note.
-                                // But the tokenizer seems to return underscore in separate Text events, and the underscore
-                                // help avoiding empty table rows to be smaller on GitHub, so read the full text within
-                                // the cell in the Start tag event instead for now.
-                                if let Section::Pattern(pattern_idx) = self.section {
-                                    let text = &self.source[tag_range].trim();
-                                    let instrument_id = &self.table_instrument_ids[self.table_column.unwrap()];
-                                    let mut step = &mut self.out.patterns[pattern_idx]
-                                        .get_steps_mut(instrument_id, None)[self.table_row.unwrap()];
-                                    if text.len() >= 3 && &text[0..3] != "___" {
-                                        let MidiNote(note) = MidiNote::from_name(&text)?;
-                                        step.press = true;
-                                        step.note = note as u8;
-                                    }
-                                    if text.ends_with('.') {
-                                        step.release = true;
-                                    }
-                                }
-                            }
                         }
                         _ => (),
                     }
@@ -168,6 +143,27 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                             .ok_or_else(|| format!("Invalid song pattern name: [{}]", &*text))?;
                         let parsed: usize = caps.get(1).unwrap().as_str().parse()?;
                         self.out.song_patterns.push(parsed - 1);
+                    } else if matches!(self.section, Section::Pattern(_)) && self.tag_stack.contains(&TableHead) {
+                        let text = &self.source[tag_range].trim();
+                        self.table_instrument_ids.push((*text).to_owned());
+                    } else if matches!(self.section, Section::Pattern(_)) && self.tag_stack.contains(&TableRow) {
+                        if let Section::Pattern(pattern_idx) = self.section {
+                            let (text, ends_with_period) = text
+                                .strip_suffix(".")
+                                .map(|prefix| (prefix.trim(), true))
+                                .unwrap_or((text.trim(), false));
+                            let instrument_id = &self.table_instrument_ids[self.table_column.unwrap()];
+                            let step = &mut self.out.patterns[pattern_idx].get_steps_mut(instrument_id, None)
+                                [self.table_row.unwrap()];
+                            if !text.is_empty() && text != "-" {
+                                let MidiNote(note) = MidiNote::from_name(&text)?;
+                                step.press = true;
+                                step.note = note as u8;
+                            }
+                            if ends_with_period {
+                                step.release = true;
+                            }
+                        }
                     } else if self.section == Section::Settings && self.tag_stack.contains(&Item) {
                         let caps = setting_re.captures(&*text).ok_or_else(|| {
                             format!("Invalid setting format: [{}]. Should be [SettingName: Value].", &*text)
@@ -183,6 +179,24 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                                 )))?
                             }
                             other => elog!("Unknown song setting [{}], ignoring.", other),
+                        }
+                    }
+                }
+                Code(text) => {
+                    // Step param values are wrapped in backticks, so they'll appear as Code here and we just need to split by /
+                    if self.tag_stack.contains(&TableRow) {
+                        if let Section::Pattern(pattern_idx) = self.section {
+                            let instrument_id = &self.table_instrument_ids[self.table_column.unwrap()];
+                            let step = &mut self.out.patterns[pattern_idx].get_steps_mut(instrument_id, None)
+                                [self.table_row.unwrap()];
+                            for (i, s) in text.split('/').enumerate() {
+                                let val = if s.is_empty() { None } else { Some(s.parse::<i8>()?) };
+                                match i {
+                                    0 => step.set_param0(val),
+                                    1 => step.set_param1(val),
+                                    _ => Err(format!("Too many param: {}", text))?,
+                                }
+                            }
                         }
                     }
                 }
@@ -248,30 +262,47 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
         if !non_empty.is_empty() {
             write!(f, "## Pattern {}\n\n", pi + 1)?;
 
-            for ii in non_empty.iter() {
+            fn params_string(s: &InstrumentStep) -> String {
+                match (s.param0(), s.param1()) {
+                    (Some(p0), Some(p1)) => format!(" `{}/{}`", p0, p1),
+                    (Some(p), None) => format!(" `{}`", p),
+                    (None, Some(p)) => format!(" `/{}`", p),
+                    (None, None) => String::new(),
+                }
+            }
+            let param_max_widths: Vec<_> = non_empty
+                .iter()
+                .map(|ii| {
+                    let i = &p.instruments[*ii];
+                    i.steps.iter().map(|s| params_string(s).len()).max().unwrap()
+                })
+                .collect();
+
+            for (ii, param_width) in non_empty.iter().zip(param_max_widths.iter()) {
                 let id = &p.instruments[*ii].id;
-                write!(f, "|{:^4}", id)?;
+                write!(f, "|{: ^1$}", id, 4 + param_width)?;
             }
             write!(f, "|\n")?;
-            for _ in 0..non_empty.len() {
-                write!(f, "|----")?;
+            for (_, param_width) in non_empty.iter().zip(param_max_widths.iter()) {
+                write!(f, "|----{:-^1$}", "", param_width)?;
             }
             write!(f, "|\n")?;
 
             for si in 0..NUM_STEPS {
-                for ii in non_empty.iter() {
+                for (ii, param_width) in non_empty.iter().zip(param_max_widths.iter()) {
                     let i = &p.instruments[*ii];
                     let s = i.steps[si];
                     if s.press {
                         write!(f, "|{}", MidiNote(s.note as i32).name())?;
                     } else {
-                        write!(f, "|___")?;
+                        write!(f, "| - ")?;
                     }
                     if s.release {
                         write!(f, ".")?;
                     } else {
                         write!(f, " ")?;
                     }
+                    write!(f, "{:width$}", params_string(&s), width = param_width)?;
                 }
                 write!(f, "|\n")?;
             }
@@ -297,11 +328,11 @@ fn settings() {
 
 ## Settings
 
-- InstrumentsFile: some_instruments.rhai
+- InstrumentsFile: some_instruments.wasm
 ",
     )
     .unwrap();
-    assert_eq!(song.instruments_file, "some_instruments.rhai");
+    assert_eq!(song.instruments_file, "some_instruments.wasm");
 
     assert!(parse_markdown_song("## Pattern 1").is_err());
 }
@@ -351,7 +382,7 @@ fn pattern_steps() {
 
 |0  |
 |---|
-|___|
+|-  |
 
 ## Settings
 
@@ -366,24 +397,24 @@ fn pattern_steps() {
 
 |0  |
 |---|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
-|___|
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
+|-  |
 
 ## Settings
 
@@ -401,13 +432,13 @@ fn note_parse() {
 
 |0  |
 |---|
-|___|
-|___.|
+| - |
+| - .|
 |.|
-|   |
+|-|
 |C-5|
 |C#5.|
-|   |
+|-  |
 |   |
 |   |
 |   |
@@ -443,4 +474,72 @@ fn note_parse() {
     assert_eq!(song.patterns[0].instruments[0].steps[5].press, true);
     assert_eq!(song.patterns[0].instruments[0].steps[5].release, true);
     assert_eq!(song.patterns[0].instruments[0].steps[5].note, 73);
+}
+
+#[test]
+fn param_parse() {
+    let song = parse_markdown_song(
+        "
+## Pattern 1
+
+|0  |
+|---|
+|-  |
+|   |
+|   |
+|   |
+|C-5 `1/5`|
+|- `0/5`|
+| `1/4`|
+|- `0`|
+|-.`/3` |
+|`1/`|
+|   |
+|   |
+|   |
+|   |
+|   |
+|   |
+
+## Settings
+
+- InstrumentsFile: blah
+",
+    )
+    .unwrap();
+    assert_eq!(song.patterns[0].instruments[0].steps[3].press, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[3].release, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[3].param0(), None);
+    assert_eq!(song.patterns[0].instruments[0].steps[3].param1(), None);
+
+    assert_eq!(song.patterns[0].instruments[0].steps[4].press, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[4].release, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[4].note, 72);
+    assert_eq!(song.patterns[0].instruments[0].steps[4].param0(), Some(1));
+    assert_eq!(song.patterns[0].instruments[0].steps[4].param1(), Some(5));
+
+    assert_eq!(song.patterns[0].instruments[0].steps[5].press, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[5].release, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[5].param0(), Some(0));
+    assert_eq!(song.patterns[0].instruments[0].steps[5].param1(), Some(5));
+
+    assert_eq!(song.patterns[0].instruments[0].steps[6].press, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[6].release, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[6].param0(), Some(1));
+    assert_eq!(song.patterns[0].instruments[0].steps[6].param1(), Some(4));
+
+    assert_eq!(song.patterns[0].instruments[0].steps[7].press, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[7].release, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[7].param0(), Some(0));
+    assert_eq!(song.patterns[0].instruments[0].steps[7].param1(), None);
+
+    assert_eq!(song.patterns[0].instruments[0].steps[8].press, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[8].release, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[8].param0(), None);
+    assert_eq!(song.patterns[0].instruments[0].steps[8].param1(), Some(3));
+
+    assert_eq!(song.patterns[0].instruments[0].steps[9].press, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[9].release, false);
+    assert_eq!(song.patterns[0].instruments[0].steps[9].param0(), Some(1));
+    assert_eq!(song.patterns[0].instruments[0].steps[9].param1(), None);
 }

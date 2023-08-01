@@ -39,6 +39,11 @@ export component StepsFocusScope inherits Rectangle {
     fs := FocusScope {
         key_pressed(e) => {
             if (e.text == " ") { GlobalUI.instruments_grid = !GlobalUI.instruments_grid; }
+            else if (GlobalUI.instruments_grid && e.text == Key.Shift) { GlobalEngine.cycle_instrument_param_start(); }
+            else if (GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.UpArrow) { GlobalEngine.cycle_instrument_param(1, true); }
+            else if (GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.DownArrow) { GlobalEngine.cycle_instrument_param(1, false); }
+            else if (GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument_param(0, false); }
+            else if (GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.RightArrow) { GlobalEngine.cycle_instrument_param(0, true); }
             else if (GlobalUI.instruments_grid && e.text == Key.UpArrow) { GlobalEngine.cycle_instrument(0, -1); }
             else if (GlobalUI.instruments_grid && e.text == Key.DownArrow) { GlobalEngine.cycle_instrument(0, 1); }
             else if (GlobalUI.instruments_grid && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument(-1, 0); }
@@ -49,6 +54,11 @@ export component StepsFocusScope inherits Rectangle {
             else if (!GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.DownArrow) { GlobalEngine.cycle_note(false, true); }
             else if (!GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.LeftArrow) { GlobalEngine.cycle_note(false, false); }
             else if (!GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.RightArrow) { GlobalEngine.cycle_note(true, false); }
+            else if (!GlobalUI.instruments_grid && e.text == Key.Shift) { GlobalEngine.cycle_step_param_start(); }
+            else if (!GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.UpArrow) { GlobalEngine.cycle_step_param(1, true); }
+            else if (!GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.DownArrow) { GlobalEngine.cycle_step_param(1, false); }
+            else if (!GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.LeftArrow) { GlobalEngine.cycle_step_param(0, false); }
+            else if (!GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.RightArrow) { GlobalEngine.cycle_step_param(0, true); }
             else if (e.text == Key.UpArrow) { GlobalEngine.manually_advance_step(false); }
             else if (e.text == Key.DownArrow) { GlobalEngine.manually_advance_step(true); }
             else {
@@ -57,7 +67,9 @@ export component StepsFocusScope inherits Rectangle {
             accept
         }
         key_released(e) => { 
+            if (GlobalUI.instruments_grid && e.text == Key.Shift) { GlobalEngine.cycle_instrument_param_end(); }
             if (!GlobalUI.instruments_grid && e.text == Key.Control) { GlobalEngine.cycle_note_end(); }
+            if (!GlobalUI.instruments_grid && e.text == Key.Shift) { GlobalEngine.cycle_step_param_end(); }
             else {
                 return root_key_released(e);
             }
