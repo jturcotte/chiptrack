@@ -11,7 +11,7 @@ use core::cell::Cell;
 use core::cell::RefCell;
 use core::ffi::CStr;
 use core::mem;
-use js_sys::{Function, Object, Reflect, WebAssembly};
+use js_sys::{Array, Function, Object, Reflect, WebAssembly};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 
@@ -67,17 +67,17 @@ impl HostFunction for HostFunctionS {
     }
 }
 
-pub struct HostFunctionSIISSS {
-    closure: Option<Closure<dyn FnMut(*const i8, i32, i32, *const i8, *const i8, *const i8)>>,
+pub struct HostFunctionSIISSSS {
+    closure: Option<Closure<dyn FnMut(*const i8, i32, i32, *const i8, *const i8, *const i8, *const i8)>>,
     name: String,
 }
-impl HostFunctionSIISSS {
-    pub fn new<F>(name: &str, mut closure: F) -> HostFunctionSIISSS
+impl HostFunctionSIISSSS {
+    pub fn new<F>(name: &str, mut closure: F) -> HostFunctionSIISSSS
     where
-        F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr) + 'static,
+        F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr, &CStr) + 'static,
     {
         let native_closure = Closure::new(
-            move |v1: *const i8, v2: i32, v3: i32, v4: *const i8, v5: *const i8, v6: *const i8| unsafe {
+            move |v1: *const i8, v2: i32, v3: i32, v4: *const i8, v5: *const i8, v6: *const i8, v7: *const i8| unsafe {
                 log!("set_instrument_at_column {:?}", v1);
 
                 CURRENT_INSTANCE.with(|current_instance| {
@@ -111,18 +111,19 @@ impl HostFunctionSIISSS {
                         CStr::from_ptr(vec.as_ptr().offset(v4 as isize)),
                         CStr::from_ptr(vec.as_ptr().offset(v5 as isize)),
                         CStr::from_ptr(vec.as_ptr().offset(v6 as isize)),
+                        CStr::from_ptr(vec.as_ptr().offset(v7 as isize)),
                     );
                 });
             },
         );
 
-        HostFunctionSIISSS {
+        HostFunctionSIISSSS {
             closure: Some(native_closure),
             name: name.to_owned(),
         }
     }
 }
-impl HostFunction for HostFunctionSIISSS {
+impl HostFunction for HostFunctionSIISSSS {
     fn move_into_import(&mut self, env: &Object) -> () {
         Reflect::set(
             &env,
@@ -315,6 +316,16 @@ impl WasmModuleInst {
         function
             .function
             .call3(&JsValue::undefined(), &a1.into(), &a2.into(), &a3.into())?;
+        Ok(())
+    }
+
+    pub fn call_iiii(&self, function: &WasmFunction, a1: i32, a2: i32, a3: i32, a4: i32) -> Result<(), JsValue> {
+        let array = Array::new();
+        array.push(&a1.into());
+        array.push(&a2.into());
+        array.push(&a3.into());
+        array.push(&a4.into());
+        function.function.apply(&JsValue::undefined(), &array)?;
         Ok(())
     }
 }
