@@ -15,7 +15,7 @@ pub fn debug(comptime f: []const u8, args: anytype) void {
     var b: [256]u8 = undefined;
     const r = fmt.bufPrint(&b, f, args) catch unreachable;
     b[r.len] = 0;
-    print(@ptrCast([*:0]u8, &b));
+    print(@ptrCast(&b));
 }
 
 const Instrument = struct {
@@ -121,7 +121,7 @@ pub const gba = struct {
                 Channel.square1 => nr10,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @bitCast(u16, self));
+            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
         }
     };
 
@@ -174,7 +174,7 @@ pub const gba = struct {
                 Channel.noise => nr41_42,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @bitCast(u16, self));
+            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
         }
     };
 
@@ -209,10 +209,10 @@ pub const gba = struct {
             return copy;
         }
         pub fn squareFreqToFreq(freq: u32) u11 {
-            return @truncate(u11, 2048 - ((131072 * 1024) / freq));
+            return @truncate(2048 - ((131072 * 1024) / freq));
         }
         pub fn waveFreqToFreq(freq: u32) u11 {
-            return @truncate(u11, 2048 - ((65536 * 1024) / freq));
+            return @truncate(2048 - ((65536 * 1024) / freq));
         }
         pub fn withSquareFreq(self: CtrlFreq, freq: u32) CtrlFreq {
             return self.withFreq(squareFreqToFreq(freq));
@@ -228,7 +228,7 @@ pub const gba = struct {
                 Channel.wave => nr33_34,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @bitCast(u16, self));
+            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
         }
     };
 
@@ -236,7 +236,7 @@ pub const gba = struct {
     pub fn wav(comptime t: u128) WavTable {
         // A u128 literal will be stored in memory as little-endian but we
         // need them in the same order in memory to be passed as a u8 slice.
-        return WavTable{ .v = @bitCast([16]u8, @byteSwap(t)) };
+        return WavTable{ .v = @bitCast(@byteSwap(t)) };
     }
 
     var current_bank: u1 = 0;
@@ -268,7 +268,7 @@ pub const gba = struct {
                 Channel.wave => nr30,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @bitCast(u16, self));
+            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
         }
         pub fn setTable(table: *const WavTable) void {
             // Write to the unselected bank
@@ -309,7 +309,7 @@ pub const gba = struct {
                 Channel.wave => nr31_32,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @bitCast(u16, self));
+            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
         }
     };
 
@@ -363,7 +363,7 @@ pub const gba = struct {
                 Channel.noise => nr43_44,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @bitCast(u16, self));
+            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
         }
     };
 };

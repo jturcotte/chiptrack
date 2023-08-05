@@ -43,9 +43,9 @@ fn arpeggio(freq: u32, frame: u32, semitones: []const u8) u32 {
 fn vibrato(delay: u32, p: u16, freq: u32, frame: u32) u32 {
     // Use almost half a semitone (0.475) amplitude for the delta triangle wave.
     // This fixed ratio is smaller than one so use the inverse ratio to avoid floating points.
-    const inv_ratio = comptime @floatToInt(u32, math.round(1 / (math.pow(f32, 1.0594630943592953, 0.475) - 1)));
+    const inv_ratio = comptime @as(u32, @intFromFloat(math.round(1 / (math.pow(f32, 1.0594630943592953, 0.475) - 1))));
     const a = freq / inv_ratio;
-    const delta = 1 + 4 * a / p * math.absCast(@mod((@mod(@intCast(i32, frame - delay) - p / 4, p) + p), p) - p / 2) - a;
+    const delta = 1 + 4 * a / p * math.absCast(@mod((@mod(@as(i32, @intCast(frame - delay)) - p / 4, p) + p), p) - p / 2) - a;
     return freq + delta;
 }
 
@@ -108,13 +108,13 @@ const square1_2 = struct {
     var p: u16 = 8;
     var duty: u2 = 0;
     fn set_duty(val: i8) void {
-        duty = @intCast(u2, val);
+        duty = @intCast(val);
         base_env_duty_1_4
         .withDuty(duty)
             .write(gba.square1);
     }
     fn set_p(val: i8) void {
-        p = @max(1, @intCast(u16, val));
+        p = @max(1, @as(u16, @intCast(val)));
     }
 
     export fn square1_2p(freq: u32, _: u8, duty_val: i8, p_val: i8) void {
@@ -247,9 +247,9 @@ const noise_1 = struct {
         // keys produce different sounds.
         const gb_freq = gba.CtrlFreq.squareFreqToFreq(freq);
         gba.NoiseCtrlFreq.init()
-            .withClockShift(@truncate(u4, gb_freq >> 4))
+            .withClockShift(@truncate(gb_freq >> 4))
             .withCounterWidth(gba.wid_15)
-            .withClockDivisor(@truncate(u3, gb_freq))
+            .withClockDivisor(@truncate(gb_freq))
             .withTrigger(1)
             .write(gba.noise);
     }
