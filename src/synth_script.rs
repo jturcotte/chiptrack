@@ -4,7 +4,7 @@
 use crate::log;
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_INSTRUMENT_COLS;
-use crate::synth_script::wasm::WasmFunction;
+use crate::synth_script::wasm::WasmIndirectFunction;
 use crate::synth_script::wasm::WasmModule;
 use crate::synth_script::wasm::WasmModuleInst;
 use crate::synth_script::wasm::WasmRuntime;
@@ -43,10 +43,10 @@ struct PressedNote {
 
 #[derive(Clone)]
 struct InstrumentState {
-    press_function: Option<WasmFunction>,
-    release_function: Option<WasmFunction>,
-    frame_function: Option<WasmFunction>,
-    set_param_function: Option<WasmFunction>,
+    press_function: Option<WasmIndirectFunction>,
+    release_function: Option<WasmIndirectFunction>,
+    frame_function: Option<WasmIndirectFunction>,
+    set_param_function: Option<WasmIndirectFunction>,
     frames_after_release: i32,
     pressed_note: Option<PressedNote>,
 }
@@ -99,14 +99,13 @@ impl SynthScript {
         let instrument_ids_clone = instrument_ids.clone();
         let instrument_states_clone = instrument_states.clone();
 
-        let set_instrument_at_column = move |module: &WasmModuleInst,
-                                             cid: &CStr,
+        let set_instrument_at_column = move |cid: &CStr,
                                              col: i32,
                                              frames_after_release: i32,
-                                             press: &CStr,
-                                             release: &CStr,
-                                             frame: &CStr,
-                                             set_param: &CStr|
+                                             press: Option<WasmIndirectFunction>,
+                                             release: Option<WasmIndirectFunction>,
+                                             frame: Option<WasmIndirectFunction>,
+                                             set_param: Option<WasmIndirectFunction>|
               -> () {
             let id = cid.to_str().unwrap();
             assert!(
@@ -150,15 +149,15 @@ impl SynthScript {
             instrument_ids_clone.borrow_mut()[index] = id.into();
 
             state.frames_after_release = frames_after_release;
-            state.press_function = module.lookup_function(press);
-            state.release_function = module.lookup_function(release);
-            state.frame_function = module.lookup_function(frame);
-            state.set_param_function = module.lookup_function(set_param);
+            state.press_function = press;
+            state.release_function = release;
+            state.frame_function = frame;
+            state.set_param_function = set_param;
         };
 
         let functions: Vec<Box<dyn wasm::HostFunction>> = vec![
             Box::new(wasm::HostFunctionS::new("print", instrument_print)),
-            Box::new(wasm::HostFunctionSIISSSS::new(
+            Box::new(wasm::HostFunctionSIINNNN::new(
                 "set_instrument_at_column",
                 set_instrument_at_column,
             )),
@@ -253,7 +252,7 @@ impl SynthScript {
                 self.wasm_module_inst
                     .as_ref()
                     .unwrap()
-                    .call_iiii(f, Self::note_to_freq(note), note as i32, param0 as i32, param1 as i32)
+                    .call_indirect_iiii(f, Self::note_to_freq(note), note as i32, param0 as i32, param1 as i32)
                     .unwrap();
             }
         }
@@ -272,7 +271,7 @@ impl SynthScript {
                     self.wasm_module_inst
                         .as_ref()
                         .unwrap()
-                        .call_iii(
+                        .call_indirect_iii(
                             f,
                             Self::note_to_freq(*note),
                             *note as i32,
@@ -302,7 +301,7 @@ impl SynthScript {
                 self.wasm_module_inst
                     .as_ref()
                     .unwrap()
-                    .call_ii(f, param_num as i32, val as i32)
+                    .call_indirect_ii(f, param_num as i32, val as i32)
                     .unwrap();
             }
         }
@@ -324,7 +323,7 @@ impl SynthScript {
                     self.wasm_module_inst
                         .as_ref()
                         .unwrap()
-                        .call_iii(
+                        .call_indirect_iii(
                             f,
                             Self::note_to_freq(*note),
                             *note as i32,

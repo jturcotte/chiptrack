@@ -7,7 +7,7 @@ CT_ZIG=ct.zig
 all: $(patsubst %.zig, %.wasm, $(wildcard *-instruments.zig)) $(CT_ZIG)
 
 %.wasm: %.zig Makefile $(CT_ZIG)
-	zig build-exe -target wasm32-freestanding -dynamic -rdynamic -O ReleaseFast -fstrip --max-memory=65536 --stack 8192 --mod ct:ct:$(CT_ZIG) --deps ct $<
+	zig build-exe -target wasm32-freestanding -dynamic -rdynamic --export-table -O ReleaseFast -fstrip --max-memory=65536 --stack 8192 --mod ct:ct:$(CT_ZIG) --deps ct $<
 
 	# Needed for instruments that will be published to GitHub Gists.
 	wasm2wat $@ | tee $(basename $@).wat

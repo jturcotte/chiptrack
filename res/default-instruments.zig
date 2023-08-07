@@ -75,7 +75,7 @@ const square1_1 = struct {
         base_env_duty.withEnvStart(0x0),
     };
 
-    export fn square1_1p(freq: u32, _: u32) void {
+    fn square1_1p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         base_env_duty.write(gba.square1);
         gba.CtrlFreq.init()
                 .withTrigger(1)
@@ -83,10 +83,10 @@ const square1_1 = struct {
             .write(gba.square1);
         square1_released_at = null;
     }
-    export fn square1_1r(_: u32, _: u32, frame: u32) void {
+    fn square1_1r(_: u32, _: u8, frame: u32) callconv(.C) void {
         square1_released_at = frame;
     }
-    export fn square1_1f(_: u32, _: u32, frame: u32) void {
+    fn square1_1f(_: u32, _: u8, frame: u32) callconv(.C) void {
         if (square1_released_at) |decay_frame| {
             if (frame - decay_frame < explicit_env_dec_frames.len)
                 explicit_env_dec_frames[frame - decay_frame].write(gba.square1);
@@ -95,9 +95,9 @@ const square1_1 = struct {
 
     fn register() void {
         ct.setInstrument("□", 0, .{
-            .press = "square1_1p",
-            .release = "square1_1r",
-            .frame = "square1_1f",
+            .press = square1_1p,
+            .release = square1_1r,
+            .frame = square1_1f,
             .frames_after_release = 8,
             });
     }
@@ -117,7 +117,7 @@ const square1_2 = struct {
         p = @max(1, @as(u16, @intCast(val)));
     }
 
-    export fn square1_2p(freq: u32, _: u8, duty_val: i8, p_val: i8) void {
+    fn square1_2p(freq: u32, _: u8, duty_val: i8, p_val: i8) callconv(.C) void {
         set_p(p_val);
         set_duty(duty_val);
         gba.CtrlFreq.init()
@@ -126,11 +126,11 @@ const square1_2 = struct {
             .write(gba.square1);
         square1_released_at = null;
     }
-    export fn square1_2r(_: u32, _: u32, frame: u32) void {
+    fn square1_2r(_: u32, _: u8, frame: u32) callconv(.C) void {
         square1_released_at = frame;
     }
 
-    export fn square1_2f(freq: u32, _: u32, frame: u32) void {
+    fn square1_2f(freq: u32, _: u8, frame: u32) callconv(.C) void {
         const delay = 36;
         if (frame > delay)
             gba.CtrlFreq.init()
@@ -141,7 +141,7 @@ const square1_2 = struct {
                 explicit_env_dec_1_4_frames[frame - decay_frame].withDuty(duty).write(gba.square1);
         }
     }
-    export fn square1_2a(param_num: u32, val: i8) void {
+    fn square1_2a(param_num: u8, val: i8) callconv(.C) void {
         if (param_num == 0)
             set_duty(val)
         else
@@ -150,10 +150,10 @@ const square1_2 = struct {
 
     fn register() void {
         ct.setInstrument("◰", 0, .{
-            .press = "square1_2p",
-            .release = "square1_2r",
-            .frame = "square1_2f",
-            .set_param = "square1_2a",
+            .press = square1_2p,
+            .release = square1_2r,
+            .frame = square1_2f,
+            .set_param = square1_2a,
             .frames_after_release = 8,
             });
     }
@@ -161,7 +161,7 @@ const square1_2 = struct {
 
 
 const square1_3 = struct {
-    export fn square1_3p(freq: u32, _: u32) void {
+    fn square1_3p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         // 2:bipp e:a:d:1 f:0:d:2 g
         gba.EnvDutyLen.init()
             .withDuty(gba.dut_1_8)
@@ -174,7 +174,7 @@ const square1_3 = struct {
             .withTrigger(1)
             .write(gba.square1);
     }
-    export fn square1_3f(freq: u32, _: u32, frame: u32) void {
+    fn square1_3f(freq: u32, _: u8, frame: u32) callconv(.C) void {
         if (frame == 2) {
             gba.EnvDutyLen.init()
                 .write(gba.square1);
@@ -187,14 +187,14 @@ const square1_3 = struct {
 
     fn register() void {
         ct.setInstrument("🞍", 0, .{
-            .press = "square1_3p",
-            .frame = "square1_3f",
+            .press = square1_3p,
+            .frame = square1_3f,
             });
     }
 };
 
 const square1_4 = struct {
-    export fn square1_4p(freq: u32, _: u32) void {
+    fn square1_4p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         base_env_duty_1_4.write(gba.square1);
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
@@ -202,10 +202,10 @@ const square1_4 = struct {
             .write(gba.square1);
         square1_released_at = null;
     }
-    export fn square1_4r(_: u32, _: u32, frame: u32) void {
+    fn square1_4r(_: u32, _: u8, frame: u32) callconv(.C) void {
         square1_released_at = frame;
     }
-    export fn square1_4f(_: u32, _: u32, frame: u32) void {
+    fn square1_4f(_: u32, _: u8, frame: u32) callconv(.C) void {
         const duties = [_]u2{
             gba.dut_1_4,
             gba.dut_3_4,
@@ -228,16 +228,16 @@ const square1_4 = struct {
 
     fn register() void {
         ct.setInstrument("▦", 0, .{
-            .press = "square1_4p",
-            .release = "square1_4r",
-            .frame = "square1_4f",
+            .press = square1_4p,
+            .release = square1_4r,
+            .frame = square1_4f,
             .frames_after_release = 8,
             });
     }
 };
 
 const noise_1 = struct {
-    export fn noise_1p(freq: u32, _: u32) void {
+    fn noise_1p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         gba.EnvDutyLen.init()
             .withEnvStart(0xf)
             .withEnvDir(gba.env_dec)
@@ -255,14 +255,14 @@ const noise_1 = struct {
     }
 
     fn register() void {
-        ct.setInstrument("🟕", 1, .{ .press = "noise_1p" });
+        ct.setInstrument("🟕", 1, .{ .press = noise_1p });
     }
 };
 
 const noise_2 = struct {
     var env_frames: []const ?gba.EnvDutyLen = &.{};
     var ctrl_frames: []const ?gba.NoiseCtrlFreq = &.{};
-    export fn noise_2f(_: u32, _: u32, frame: u32) void {
+    fn noise_2f(_: u32, _: u8, frame: u32) callconv(.C) void {
         if (frame < env_frames.len)
             if (env_frames[frame]) |reg|
                 reg.write(gba.noise);
@@ -270,7 +270,7 @@ const noise_2 = struct {
             if (ctrl_frames[frame]) |reg|
                 reg.write(gba.noise);
     }
-    export fn noise_2p(_: u32, note: u32) void {
+    fn noise_2p(_: u32, note: u8, _: i8, _: i8) callconv(.C) void {
         switch (note % 12) {
             0 => {
                 const Static = struct {
@@ -456,15 +456,15 @@ const noise_2 = struct {
 
     fn register() void {
         ct.setInstrument("🟗", 1, .{
-            .press = "noise_2p",
-            .frame = "noise_2f",
+            .press = noise_2p,
+            .frame = noise_2f,
             .frames_after_release = 15,
             });
     }
 };
 
 const square1_5 = struct {
-    export fn square1_5p(freq: u32, _: u32) void {
+    fn square1_5p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         // 1:superdrum e:d:d:2 f:2:d:2 g e
         gba.Sweep.init()
             .withTime(2)
@@ -484,7 +484,7 @@ const square1_5 = struct {
     }
 
     fn register() void {
-        ct.setInstrument("◎", 1, .{ .press = "square1_5p" });
+        ct.setInstrument("◎", 1, .{ .press = square1_5p });
     }
 };
 
@@ -506,10 +506,10 @@ fn wave_p(freq: u32, table: *const gba.WavTable) void {
         .write(gba.wave);
     wave_decay_at = null;
 }
-export fn wave_env_r(_: u32, _: u32, frame: u32) void {
+fn wave_env_r(_: u32, _: u8, frame: u32) callconv(.C) void {
     wave_decay_at = frame;
 }
-export fn wave_env_f(_: u32, _: u32, frame: u32) void {
+fn wave_env_f(_: u32, _: u8, frame: u32) callconv(.C) void {
     if (wave_decay_at) |decay_frame| {
         if (frame - decay_frame < wave_env_frames.len)
             wave_env_frames[frame - decay_frame].write(gba.wave);
@@ -518,15 +518,15 @@ export fn wave_env_f(_: u32, _: u32, frame: u32) void {
 
 const wave_1 = struct {
     const table = gba.wav(0x0123456789abcdeffedcba9876543210);
-    export fn wave_1p(freq: u32, _: u32) void {
+    fn wave_1p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         wave_p(freq, &table);
     }
 
     fn register() void {
         ct.setInstrument("🛆", 2, .{
-            .press = "wave_1p",
-            .release = "wave_env_r",
-            .frame = "wave_env_f",
+            .press = wave_1p,
+            .release = wave_env_r,
+            .frame = wave_env_f,
             .frames_after_release = 4,
             });
     }
@@ -534,15 +534,15 @@ const wave_1 = struct {
 
 const wave_2 = struct {
     const table = gba.wav(0x11235678999876679adffec985421131);
-    export fn wave_2p(freq: u32, _: u32) void {
+    fn wave_2p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         wave_p(freq, &table);
     }
 
     fn register() void {
         ct.setInstrument("◉", 2, .{
-            .press = "wave_2p",
-            .release = "wave_env_r",
-            .frame = "wave_env_f",
+            .press = wave_2p,
+            .release = wave_env_r,
+            .frame = wave_env_f,
             .frames_after_release = 4,
             });
     }
@@ -550,10 +550,10 @@ const wave_2 = struct {
 
 const wave_3 = struct {
     const table = gba.wav(0xdedcba98765432100000000011111111);
-    export fn wave_3p(freq: u32, _: u32) void {
+    fn wave_3p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         wave_p(freq, &table);
     }
-    export fn wave_3f(freq: u32, _: u32, frame: u32) void {
+    fn wave_3f(freq: u32, _: u8, frame: u32) callconv(.C) void {
         const Static = struct {
             const semitones =  [_]u8{0, 3, 5, 12};
         };
@@ -568,9 +568,9 @@ const wave_3 = struct {
 
     fn register() void {
         ct.setInstrument("▻", 2, .{
-            .press = "wave_3p",
-            .release = "wave_env_r",
-            .frame = "wave_3f",
+            .press = wave_3p,
+            .release = wave_env_r,
+            .frame = wave_3f,
             .frames_after_release = 4,
             });
     }
@@ -578,15 +578,15 @@ const wave_3 = struct {
 
 const wave_4 = struct {
     const table = gba.wav(0xf0f0f0f0f0f0f0f0ff00ff00ff00ff00);
-    export fn wave_4p(freq: u32, _: u32) void {
+    fn wave_4p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         wave_p(freq, &table);
     }
 
     fn register() void {
         ct.setInstrument("🞠", 2, .{
-            .press = "wave_4p",
-            .release = "wave_env_r",
-            .frame = "wave_env_f",
+            .press = wave_4p,
+            .release = wave_env_r,
+            .frame = wave_env_f,
             .frames_after_release = 4,
             });
     }
@@ -595,7 +595,7 @@ const wave_4 = struct {
 const wave_5 = struct {
     const table = gba.wav(0x0234679acdffffeeeeffffdca9764310);
     var current_step_freq: u32 = 0;
-    export fn wave_5p(freq: u32, _: u32) void {
+    fn wave_5p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         gba.WaveRam.setTable(&table);
         gba.WaveVolLen.init()
             .withVolume(gba.vol_100)
@@ -607,7 +607,7 @@ const wave_5 = struct {
         wave_decay_at = 12;
         current_step_freq = freq;
     }
-    export fn wave_5f(_: u32, _: u32, frame: u32) void {
+    fn wave_5f(_: u32, _: u8, frame: u32) callconv(.C) void {
         gba.CtrlFreq.init()
             .withWaveFreq(semitones_steps(3, &current_step_freq))
             .write(gba.wave);
@@ -619,8 +619,8 @@ const wave_5 = struct {
 
     fn register() void {
         ct.setInstrument("◺", 3, .{
-            .press = "wave_5p",
-            .frame = "wave_5f",
+            .press = wave_5p,
+            .frame = wave_5f,
             .frames_after_release = 16,
             });
     }

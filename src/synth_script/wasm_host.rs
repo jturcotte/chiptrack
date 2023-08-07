@@ -51,54 +51,68 @@ impl<F: FnMut(&CStr)> HostFunction for HostFunctionS<F> {
     }
 }
 
-pub struct HostFunctionSIISSSS<F> {
+pub struct HostFunctionSIINNNN<F> {
     closure: F,
     name: CString,
 }
-impl<F> HostFunctionSIISSSS<F> {
-    pub fn new(name: &str, closure: F) -> HostFunctionSIISSSS<F> {
-        HostFunctionSIISSSS {
+impl<F> HostFunctionSIINNNN<F> {
+    pub fn new(name: &str, closure: F) -> HostFunctionSIINNNN<F> {
+        HostFunctionSIINNNN {
             closure: closure,
             name: CString::new(name).unwrap(),
         }
     }
 }
-const SIISSSS_SIG: &str = "($ii$$$$)\0";
-unsafe extern "C" fn trampoline_siisss_<F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr, &CStr)>(
+const SIINNNN_SIG: &str = "($iiiiii)\0";
+unsafe extern "C" fn trampoline_siisss_<
+    F: FnMut(
+        &CStr,
+        i32,
+        i32,
+        Option<WasmIndirectFunction>,
+        Option<WasmIndirectFunction>,
+        Option<WasmIndirectFunction>,
+        Option<WasmIndirectFunction>,
+    ),
+>(
     exec_env: wasm_exec_env_t,
     v1: *const i8,
     v2: i32,
     v3: i32,
-    v4: *const i8,
-    v5: *const i8,
-    v6: *const i8,
-    v7: *const i8,
+    v4: u32,
+    v5: u32,
+    v6: u32,
+    v7: u32,
 ) {
     let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
-    // Create a temporary instance wrapping the handle
-    let mut m = WasmModuleInst {
-        module_inst: Some(wasm_runtime_get_module_inst(exec_env)),
-        _module: None,
-    };
+
     f(
-        &m,
         CStr::from_ptr(v1),
         v2,
         v3,
-        CStr::from_ptr(v4),
-        CStr::from_ptr(v5),
-        CStr::from_ptr(v6),
-        CStr::from_ptr(v7),
+        WasmModuleInst::lookup_indirect_function(v4),
+        WasmModuleInst::lookup_indirect_function(v5),
+        WasmModuleInst::lookup_indirect_function(v6),
+        WasmModuleInst::lookup_indirect_function(v7),
     );
-    // Prevent the module_inst from being deinstantiated during m's drop
-    m.module_inst = None;
 }
-impl<F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr, &CStr)> HostFunction for HostFunctionSIISSSS<F> {
+impl<
+        F: FnMut(
+            &CStr,
+            i32,
+            i32,
+            Option<WasmIndirectFunction>,
+            Option<WasmIndirectFunction>,
+            Option<WasmIndirectFunction>,
+            Option<WasmIndirectFunction>,
+        ),
+    > HostFunction for HostFunctionSIINNNN<F>
+{
     fn to_native_symbol(&mut self) -> NativeSymbol {
         NativeSymbol {
             symbol: self.name.as_ptr(),
             func_ptr: trampoline_siisss_::<F> as *mut c_void,
-            signature: SIISSSS_SIG.as_ptr() as *const i8,
+            signature: SIINNNN_SIG.as_ptr() as *const i8,
             attachment: &mut self.closure as *mut _ as *mut c_void,
         }
     }
@@ -161,8 +175,8 @@ impl<F: FnMut(&[u8])> HostFunction for HostFunctionA<F> {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct WasmFunction {
-    f: wasm_function_inst_t,
+pub struct WasmIndirectFunction {
+    table_index: u32,
 }
 
 pub struct WasmRuntime {
@@ -179,7 +193,7 @@ pub struct WasmModule {
 }
 
 pub struct WasmModuleInst {
-    module_inst: Option<wasm_module_inst_t>,
+    module_inst: wasm_module_inst_t,
     // Only for ownership
     _module: Option<Rc<WasmModule>>,
 }
@@ -308,14 +322,14 @@ impl WasmModuleInst {
             }
 
             let module_inst = WasmModuleInst {
-                module_inst: Some(module_inst),
+                module_inst,
                 _module: Some(module),
             };
 
             let maybe_start = module_inst.lookup_function(CStr::from_ptr("_start\0".as_ptr() as *const i8));
             if let Some(start) = maybe_start {
-                let argv: [u32; 1] = [0];
-                module_inst.call_argv(&start, argv)?;
+                let argv: [u32; 0] = [];
+                module_inst.call_argv(start, argv)?;
             }
 
             post_init_callback();
@@ -324,42 +338,63 @@ impl WasmModuleInst {
         }
     }
 
-    pub fn lookup_function(&self, name: &CStr) -> Option<WasmFunction> {
+    fn lookup_indirect_function(table_index: u32) -> Option<WasmIndirectFunction> {
+        // Zig and others seems to leave the offset 0 of the table empty in generated WASM,
+        // which errors out on calls and is convenient to represent null.
+        if table_index != 0 {
+            Some(WasmIndirectFunction { table_index })
+        } else {
+            None
+        }
+    }
+
+    fn lookup_function(&self, name: &CStr) -> Option<wasm_function_inst_t> {
         unsafe {
-            let f = wasm_runtime_lookup_function(self.module_inst.unwrap(), name.as_ptr(), ptr::null());
+            let f = wasm_runtime_lookup_function(self.module_inst, name.as_ptr(), ptr::null());
             if f != ptr::null_mut() {
-                Some(WasmFunction { f })
+                Some(f)
             } else {
                 None
             }
         }
     }
 
-    pub fn call_ii(&self, function: &WasmFunction, a1: i32, a2: i32) -> Result<(), String> {
+    pub fn call_indirect_ii(&self, function: &WasmIndirectFunction, a1: i32, a2: i32) -> Result<(), String> {
         let argv: [u32; 2] = [a1 as u32, a2 as u32];
-        self.call_argv(function, argv)
+        self.call_indirect_argv(function, argv)
     }
 
-    pub fn call_iii(&self, function: &WasmFunction, a1: i32, a2: i32, a3: i32) -> Result<(), String> {
+    pub fn call_indirect_iii(&self, function: &WasmIndirectFunction, a1: i32, a2: i32, a3: i32) -> Result<(), String> {
         let argv: [u32; 3] = [a1 as u32, a2 as u32, a3 as u32];
-        self.call_argv(function, argv)
+        self.call_indirect_argv(function, argv)
     }
 
-    pub fn call_iiii(&self, function: &WasmFunction, a1: i32, a2: i32, a3: i32, a4: i32) -> Result<(), String> {
+    pub fn call_indirect_iiii(
+        &self,
+        function: &WasmIndirectFunction,
+        a1: i32,
+        a2: i32,
+        a3: i32,
+        a4: i32,
+    ) -> Result<(), String> {
         let argv: [u32; 4] = [a1 as u32, a2 as u32, a3 as u32, a4 as u32];
-        self.call_argv(function, argv)
+        self.call_indirect_argv(function, argv)
     }
 
-    fn call_argv<const ARGC: usize>(&self, function: &WasmFunction, mut argv: [u32; ARGC]) -> Result<(), String> {
+    fn call_argv<const ARGC: usize>(
+        &self,
+        function: wasm_function_inst_t,
+        mut argv: [u32; ARGC],
+    ) -> Result<(), String> {
         unsafe {
             // get the singleton execution environment of this instance to execute the WASM functions
-            let exec_env = wasm_runtime_get_exec_env_singleton(self.module_inst.unwrap());
+            let exec_env = wasm_runtime_get_exec_env_singleton(self.module_inst);
             if exec_env == ptr::null_mut() {
                 return Err("wasm_runtime_get_exec_env_singleton failed.".to_string());
             }
 
             // call the WASM function
-            if wasm_runtime_call_wasm(exec_env, function.f, ARGC as u32, argv.as_mut_ptr()) {
+            if wasm_runtime_call_wasm(exec_env, function, ARGC as u32, argv.as_mut_ptr()) {
                 // the return value is stored in argv[0], ignore it for now.
                 Ok(())
             } else {
@@ -369,14 +404,36 @@ impl WasmModuleInst {
             }
         }
     }
+
+    fn call_indirect_argv<const ARGC: usize>(
+        &self,
+        function: &WasmIndirectFunction,
+        mut argv: [u32; ARGC],
+    ) -> Result<(), String> {
+        unsafe {
+            // get the singleton execution environment of this instance to execute the WASM functions
+            let exec_env = wasm_runtime_get_exec_env_singleton(self.module_inst);
+            if exec_env == ptr::null_mut() {
+                return Err("wasm_runtime_get_exec_env_singleton failed.".to_string());
+            }
+            // call the WASM function
+            if wasm_runtime_call_indirect(exec_env, function.table_index, ARGC as u32, argv.as_mut_ptr()) {
+                // the return value is stored in argv[0], ignore it for now.
+                Ok(())
+            } else {
+                // exception is thrown if call fails
+                let cstr = CStr::from_ptr(wasm_runtime_get_exception(wasm_runtime_get_module_inst(exec_env)));
+                panic!(
+                    "wasm_runtime_call_indirect of table index {:?} failed: {:?}",
+                    function.table_index, cstr
+                );
+            }
+        }
+    }
 }
 
 impl Drop for WasmModuleInst {
     fn drop(&mut self) {
-        unsafe {
-            if let Some(module_inst) = self.module_inst {
-                wasm_runtime_deinstantiate(module_inst)
-            }
-        }
+        unsafe { wasm_runtime_deinstantiate(self.module_inst) }
     }
 }

@@ -67,19 +67,25 @@ impl HostFunction for HostFunctionS {
     }
 }
 
-pub struct HostFunctionSIISSSS {
-    closure: Option<Closure<dyn FnMut(*const i8, i32, i32, *const i8, *const i8, *const i8, *const i8)>>,
+pub struct HostFunctionSIINNNN {
+    native_closure: Option<Closure<dyn FnMut(*const i8, i32, i32, u32, u32, u32, u32)>>,
     name: String,
 }
-impl HostFunctionSIISSSS {
-    pub fn new<F>(name: &str, mut closure: F) -> HostFunctionSIISSSS
+impl HostFunctionSIINNNN {
+    pub fn new<F>(name: &str, mut closure: F) -> HostFunctionSIINNNN
     where
-        F: FnMut(&WasmModuleInst, &CStr, i32, i32, &CStr, &CStr, &CStr, &CStr) + 'static,
+        F: FnMut(
+                &CStr,
+                i32,
+                i32,
+                Option<WasmIndirectFunction>,
+                Option<WasmIndirectFunction>,
+                Option<WasmIndirectFunction>,
+                Option<WasmIndirectFunction>,
+            ) + 'static,
     {
         let native_closure = Closure::new(
-            move |v1: *const i8, v2: i32, v3: i32, v4: *const i8, v5: *const i8, v6: *const i8, v7: *const i8| unsafe {
-                log!("set_instrument_at_column {:?}", v1);
-
+            move |v1: *const i8, v2: i32, v3: i32, v4: u32, v5: u32, v6: u32, v7: u32| unsafe {
                 CURRENT_INSTANCE.with(|current_instance| {
                     let maybe_instance = current_instance.borrow();
                     let exports = maybe_instance
@@ -95,7 +101,7 @@ impl HostFunctionSIISSSS {
                     //        return null-terminated CStrs. Possible alternatives:
                     //        - Asking the instruments to provide the string size would be the safest, but closures
                     //          in wasm-bindgen are currently limited to 8 parameters, so we'd bust that limit
-                    //          and it would probably add an unecessary overhead for the warm ports, which maps the
+                    //          and it would probably add an unecessary overhead for the WAMR ports, which maps the
                     //          instance's memory into the host's.
                     //        - If Int8Array was wrapping the native indexOf we could find the NULL ourselves to only
                     //          copy that part of the memory, but it's not exposed.
@@ -104,31 +110,30 @@ impl HostFunctionSIISSSS {
                     let vec = typebuf.to_vec();
 
                     closure(
-                        &WasmModuleInst::dummy(),
                         CStr::from_ptr(vec.as_ptr().offset(v1 as isize)),
                         v2,
                         v3,
-                        CStr::from_ptr(vec.as_ptr().offset(v4 as isize)),
-                        CStr::from_ptr(vec.as_ptr().offset(v5 as isize)),
-                        CStr::from_ptr(vec.as_ptr().offset(v6 as isize)),
-                        CStr::from_ptr(vec.as_ptr().offset(v7 as isize)),
+                        WasmModuleInst::lookup_indirect_function(v4),
+                        WasmModuleInst::lookup_indirect_function(v5),
+                        WasmModuleInst::lookup_indirect_function(v6),
+                        WasmModuleInst::lookup_indirect_function(v7),
                     );
                 });
             },
         );
 
-        HostFunctionSIISSSS {
-            closure: Some(native_closure),
+        HostFunctionSIINNNN {
+            native_closure: Some(native_closure),
             name: name.to_owned(),
         }
     }
 }
-impl HostFunction for HostFunctionSIISSSS {
+impl HostFunction for HostFunctionSIINNNN {
     fn move_into_import(&mut self, env: &Object) -> () {
         Reflect::set(
             &env,
             &mem::take(&mut self.name).into(),
-            &self.closure.take().unwrap().into_js_value(),
+            &self.native_closure.take().unwrap().into_js_value(),
         )
         .unwrap();
     }
@@ -207,7 +212,7 @@ impl HostFunction for HostFunctionA {
 }
 
 #[derive(Debug, Clone)]
-pub struct WasmFunction {
+pub struct WasmIndirectFunction {
     function: Function,
 }
 
@@ -223,7 +228,7 @@ pub struct WasmModule {
 
 pub struct WasmModuleInst {
     // Only for ownership
-    _module: Option<Rc<WasmModule>>,
+    _module: Rc<WasmModule>,
 }
 
 impl WasmRuntime {
@@ -245,8 +250,7 @@ async fn run_async(wasm_buffer: Vec<u8>, imports: Object) -> Result<(), JsValue>
 
     CURRENT_INSTANCE.with(|current_instance| {
         // FIXME: It would be cleaner to only set the thread_local instance when entering a call through WasmModuleInst
-        //        so that this supports multiple module instances. But I don't need this now and it's simpler that
-        //        way when it's time to construct a dummy WasmModuleInst for host function calls that provide one.
+        //        so that this supports multiple module instances. But I don't need this now and it's simpler that way.
         assert!(current_instance.replace(Some(instance)).is_none());
     });
 
@@ -277,49 +281,49 @@ impl WasmModuleInst {
             run_async(wasm_buffer, imports).await.unwrap();
             post_init_callback();
         });
-        Ok(WasmModuleInst { _module: Some(module) })
+        Ok(WasmModuleInst { _module: module })
     }
 
-    /// Used internally to provide to callback during _start
-    fn dummy() -> WasmModuleInst {
-        WasmModuleInst { _module: None }
+    fn lookup_indirect_function(table_index: u32) -> Option<WasmIndirectFunction> {
+        if table_index != 0 {
+            let function = CURRENT_INSTANCE.with(|current_instance| {
+                let maybe_instance = current_instance.borrow();
+                let exports = maybe_instance
+                    .as_ref()
+                    .expect("CURRENT_INSTANCE hasn't been initialized yet, async race condition?")
+                    .exports();
+                let table = Reflect::get(exports.as_ref(), &"__indirect_function_table".into())
+                    .unwrap()
+                    .dyn_into::<WebAssembly::Table>()
+                    .unwrap();
+                table.get(table_index).expect("Table.get failed")
+            });
+            Some(WasmIndirectFunction { function })
+        } else {
+            None
+        }
     }
 
-    pub fn lookup_function(&self, name: &CStr) -> Option<WasmFunction> {
-        let function = CURRENT_INSTANCE.with(|current_instance| {
-            let maybe_instance = current_instance.borrow();
-            let exports = maybe_instance
-                .as_ref()
-                .expect("CURRENT_INSTANCE hasn't been initialized yet, async race condition?")
-                .exports();
-            let js_name = name.to_str().unwrap().into();
-            if Reflect::has(exports.as_ref(), &js_name).unwrap() {
-                let js_function = Reflect::get(exports.as_ref(), &name.to_str().unwrap().into()).unwrap();
-                Some(
-                    js_function
-                        .dyn_into::<Function>()
-                        .expect("Function export was found but not a Function."),
-                )
-            } else {
-                None
-            }
-        });
-        function.map(|f| WasmFunction { function: f })
-    }
-
-    pub fn call_ii(&self, function: &WasmFunction, a1: i32, a2: i32) -> Result<(), JsValue> {
+    pub fn call_indirect_ii(&self, function: &WasmIndirectFunction, a1: i32, a2: i32) -> Result<(), JsValue> {
         function.function.call2(&JsValue::undefined(), &a1.into(), &a2.into())?;
         Ok(())
     }
 
-    pub fn call_iii(&self, function: &WasmFunction, a1: i32, a2: i32, a3: i32) -> Result<(), JsValue> {
+    pub fn call_indirect_iii(&self, function: &WasmIndirectFunction, a1: i32, a2: i32, a3: i32) -> Result<(), JsValue> {
         function
             .function
             .call3(&JsValue::undefined(), &a1.into(), &a2.into(), &a3.into())?;
         Ok(())
     }
 
-    pub fn call_iiii(&self, function: &WasmFunction, a1: i32, a2: i32, a3: i32, a4: i32) -> Result<(), JsValue> {
+    pub fn call_indirect_iiii(
+        &self,
+        function: &WasmIndirectFunction,
+        a1: i32,
+        a2: i32,
+        a3: i32,
+        a4: i32,
+    ) -> Result<(), JsValue> {
         let array = Array::new();
         array.push(&a1.into());
         array.push(&a2.into());
