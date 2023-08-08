@@ -71,7 +71,6 @@ export global GlobalEngine {
         {number: 8, empty: true}, {number: 9, empty: true}, {number: 10, empty: true}, {number: 11, empty: true},
         {number: 12, empty: true}, {number: 13, empty: true}, {number: 14, empty: true}, {number: 15, empty: true},
         ];
-    in-out property<int> sequencer_pattern_active: 0;
 
     in-out property<[string]> script_instrument_ids: ["S1", "S2", "T1", "T2", "W1", "W2", "N2", "N4"];
     in-out property<int> sequencer_pattern_instruments_len: 6;
@@ -141,8 +140,6 @@ export global GlobalEngine {
     callback cycle_step_param_end();
     callback cycle_step_param(int, bool);
     callback toggle_mute_instrument(int);
-    callback select_next_pattern(bool);
-    callback pattern_clicked(int);
     callback toggle_step(int);
     callback toggle_step_release(int);
     callback toggle_current_step_release();

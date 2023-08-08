@@ -5,7 +5,6 @@ import {
 // State shared by the desktop and gba UIs is put here in a
 // global to avoid having to duplicate them in the separate root components.
 export global GlobalUI {
-    in-out property<bool> song_mode: false;
     in-out property<bool> instruments_grid: false;
 }
 
@@ -15,11 +14,8 @@ export component PatternsFocusScope inherits FocusScope {
     callback root_key_released(KeyEvent) -> EventResult;
 
     key_pressed(event) => {
-        if (event.text == " ") { GlobalUI.song_mode = !GlobalUI.song_mode; }
-        else if (GlobalUI.song_mode && event.text == Key.UpArrow) { GlobalEngine.select_next_song_pattern(false); }
-        else if (GlobalUI.song_mode && event.text == Key.DownArrow) { GlobalEngine.select_next_song_pattern(true); }
-        else if (event.text == Key.UpArrow) { GlobalEngine.select_next_pattern(false); }
-        else if (event.text == Key.DownArrow) { GlobalEngine.select_next_pattern(true); }
+        if (event.text == Key.UpArrow) { GlobalEngine.select_next_song_pattern(false); }
+        else if (event.text == Key.DownArrow) { GlobalEngine.select_next_song_pattern(true); }
         else {
             return root_key_pressed(event);
         }

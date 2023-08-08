@@ -417,20 +417,6 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
-    global_engine.on_select_next_pattern(move |forwards| {
-        cloned_sound_renderer
-            .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().select_next_pattern(forwards));
-    });
-
-    let cloned_sound_renderer = sound_renderer.clone();
-    global_engine.on_pattern_clicked(move |pattern_num| {
-        cloned_sound_renderer
-            .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().select_pattern(pattern_num as u32));
-    });
-
-    let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_toggle_step(move |step_num| {
         cloned_sound_renderer
             .borrow_mut()

@@ -485,25 +485,11 @@ impl Sequencer {
             .unwrap();
     }
 
-    pub fn select_next_pattern(&mut self, forwards: bool) -> () {
-        if forwards && self.selected_pattern < NUM_PATTERNS - 1 {
-            self.select_pattern(self.selected_pattern as u32 + 1);
-        } else if !forwards && self.selected_pattern > 0 {
-            self.select_pattern(self.selected_pattern as u32 - 1);
-        };
-    }
-
     pub fn select_pattern(&mut self, pattern: u32) -> () {
         // FIXME: Queue the playback?
         self.selected_pattern = pattern as usize;
 
         self.update_steps();
-
-        self.main_window
-            .upgrade_in_event_loop(move |handle| {
-                GlobalEngine::get(&handle).set_sequencer_pattern_active(pattern as i32);
-            })
-            .unwrap();
     }
 
     pub fn select_step(&mut self, step: u32) -> () {

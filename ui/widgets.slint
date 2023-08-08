@@ -5,7 +5,7 @@ export component ToolbarButton inherits Rectangle {
     callback clicked();
     in property text <=> t.text;
     in property text_color <=> t.color;
-    property<bool> enabled: true;
+    in property<bool> enabled: true;
     background: !ta.pressed && enabled ? white : #f4f4f4;
     border_width: 1px;
     border_color: enabled ? #a0a0a0 : transparent;

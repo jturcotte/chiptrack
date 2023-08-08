@@ -122,33 +122,27 @@ component PatternsList {
 
         Text {
             x: 0px;
-            text: GlobalUI.song_mode ? "Song" : "Patt";
+            text: "Song";
             height: 100%;
             font_size: self.height * 0.8;
         }
     }
 
     Flickable {
-        property<[PatternData]> model: GlobalUI.song_mode
-            ? GlobalEngine.sequencer_song_patterns
-            : GlobalEngine.sequencer_patterns;
-        property<int> active_idx: GlobalUI.song_mode
-            ? GlobalEngine.sequencer_song_pattern_active
-            : GlobalEngine.sequencer_pattern_active;
         y: root.height_of_cell + layout.spacing;
         interactive: false;
         height: parent.height - self.y;
-        viewport_height: self.height * model.length / 16;
+        viewport_height: self.height * GlobalEngine.sequencer_song_patterns.length / 16;
 
         layout := VerticalLayout {
             spacing: 1px;
-            for pattern[idx] in parent.model:
+            for pattern[idx] in GlobalEngine.sequencer_song_patterns:
             SequencerPattern {
                 number: pattern.number;
                 property<PatternData> pattern: GlobalEngine.sequencer_patterns[self.number];
-                highlighted: idx == active_idx;
+                highlighted: idx == GlobalEngine.sequencer_song_pattern_active;
                 fill: !pattern.empty;
-                clicked => { GlobalEngine.pattern_clicked(self.number); }
+                clicked => { GlobalEngine.song_pattern_clicked(idx); }
             }
         }
     }

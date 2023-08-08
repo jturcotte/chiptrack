@@ -70,16 +70,6 @@ export component MainWindow inherits Window {
     function root_key_pressed(event: KeyEvent) -> EventResult {
         if (event.modifiers.control && event.text == "s") { GlobalEngine.save_project(); }
         else if (event.modifiers.control && event.text == "g") { GlobalEngine.export_project_as_gba_sav(); }
-        else if (event.modifiers.control && event.text == "1") { GlobalEngine.pattern_clicked(0); }
-        else if (event.modifiers.control && event.text == "2") { GlobalEngine.pattern_clicked(1); }
-        else if (event.modifiers.control && event.text == "3") { GlobalEngine.pattern_clicked(2); }
-        else if (event.modifiers.control && event.text == "4") { GlobalEngine.pattern_clicked(3); }
-        else if (event.modifiers.control && event.text == "5") { GlobalEngine.pattern_clicked(4); }
-        else if (event.modifiers.control && event.text == "6") { GlobalEngine.pattern_clicked(5); }
-        else if (event.modifiers.control && event.text == "7") { GlobalEngine.pattern_clicked(6); }
-        else if (event.modifiers.control && event.text == "8") { GlobalEngine.pattern_clicked(7); }
-        else if (event.modifiers.control && event.text == "9") { GlobalEngine.pattern_clicked(8); }
-        else if (event.modifiers.control && event.text == "0") { GlobalEngine.pattern_clicked(9); }
         else if (event.text == "a") { GlobalEngine.note_key_pressed(first_note); }
         else if (event.text == "s") { GlobalEngine.note_key_pressed(first_note + 2); }
         else if (event.text == "d") { GlobalEngine.note_key_pressed(first_note + 4); }
@@ -164,11 +154,10 @@ export component MainWindow inherits Window {
                     root.show_settings = true;
                 }
             }
-            song_mode_button := ToolbarButton {
-                text: GlobalUI.song_mode ? "▩" : "▨";
-                clicked => {
-                    GlobalUI.song_mode = !GlobalUI.song_mode;
-                }
+            // placeholder to align with the 60% split left pane.
+            ToolbarButton {
+                enabled: false;
+                text: " ";
             }
             ToolbarButton {
                 text: GlobalUI.instruments_grid ? "▦" : "▤";

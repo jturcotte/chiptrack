@@ -189,7 +189,6 @@ impl MainScreen {
             .model_tracker()
             .attach_peer(Pin::as_ref(&self.instruments_tracker).model_peer());
         // Start dirty
-        *self.was_in_song_mode.borrow_mut() = !GlobalUI::get(&handle).get_song_mode();
         *self.was_in_instruments_grid.borrow_mut() = !GlobalUI::get(&handle).get_instruments_grid();
     }
 
@@ -197,8 +196,6 @@ impl MainScreen {
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
         let global_engine = GlobalEngine::get(&handle);
         let global_ui = GlobalUI::get(&handle);
-        let song_mode = global_ui.get_song_mode();
-        let song_mode_dirty = self.was_in_song_mode.replace(song_mode) != song_mode;
         let instruments_grid = global_ui.get_instruments_grid();
         let instruments_grid_dirty = self.was_in_instruments_grid.replace(instruments_grid) != instruments_grid;
         let sequencer_song_pattern_active = global_engine.get_sequencer_song_pattern_active() as usize;
@@ -206,9 +203,6 @@ impl MainScreen {
             .sequencer_song_pattern_active_previous
             .replace(sequencer_song_pattern_active)
             != sequencer_song_pattern_active;
-        let sequencer_pattern_active = global_engine.get_sequencer_pattern_active() as usize;
-        let sequencer_pattern_active_dirty =
-            self.sequencer_pattern_active_previous.replace(sequencer_pattern_active) != sequencer_pattern_active;
         let sequencer_step_active = global_engine.get_sequencer_step_active() as usize;
         let sequencer_step_active_dirty =
             self.sequencer_step_active_previous.replace(sequencer_step_active) != sequencer_step_active;
@@ -226,32 +220,16 @@ impl MainScreen {
             .index(6)
             .write(TextEntry::new().with_tile(handle.get_steps_have_focus() as u16 * 7));
 
-        if song_mode_dirty {
+        if sequencer_song_pattern_active_dirty || self.sequencer_song_patterns_tracker.take_dirtiness() {
+            let pattern_model = global_engine.get_sequencer_song_patterns();
+            let active_index = global_engine.get_sequencer_song_patterns();
             let vid_row = tsb.get_row(0).unwrap();
-            let s = if song_mode { "Song" } else { "Patt" };
             vid_row
                 .iter()
-                .zip(s.chars())
+                .zip("Song".chars())
                 .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
-        }
-        let dirty_pattern_model = if !song_mode
-            && (song_mode_dirty || sequencer_pattern_active_dirty || self.sequencer_patterns_tracker.take_dirtiness())
-        {
-            Some((global_engine.get_sequencer_patterns(), sequencer_pattern_active))
-        } else if song_mode
-            && (song_mode_dirty
-                || sequencer_song_pattern_active_dirty
-                || self.sequencer_song_patterns_tracker.take_dirtiness())
-        {
-            Some((
-                global_engine.get_sequencer_song_patterns(),
-                sequencer_song_pattern_active,
-            ))
-        } else {
-            None
-        };
-        if let Some((pattern_model, active_index)) = dirty_pattern_model {
-            let scroll_pos = active_index.max(8).min(pattern_model.row_count() - 8) - 8;
+
+            let scroll_pos = sequencer_song_pattern_active.max(8).min(pattern_model.row_count() - 8) - 8;
             for i in scroll_pos..(pattern_model.row_count().min(scroll_pos + 16)) {
                 let vid_row = tsb.get_row(i - scroll_pos + 1).unwrap();
                 let row_data = pattern_model.row_data(i).unwrap();
@@ -262,7 +240,7 @@ impl MainScreen {
                 vid_row.index(2).write(TextEntry::new().with_tile(c2 as u16));
                 vid_row
                     .index(0)
-                    .write(TextEntry::new().with_tile((i == active_index) as u16 * 7));
+                    .write(TextEntry::new().with_tile((i == sequencer_song_pattern_active) as u16 * 7));
             }
         }
 
