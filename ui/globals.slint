@@ -1,9 +1,8 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-export struct PatternData {
+export struct SongPatternData {
     number: int,
-    empty: bool,
 }
 export struct PatternInstrumentData {
     id: string,
@@ -54,7 +53,7 @@ export struct SongSettings {
 }
 
 export global GlobalEngine {
-    in-out property<[PatternData]> sequencer_song_patterns: [
+    in-out property<[SongPatternData]> sequencer_song_patterns: [
         {number: 0},
         {number: 1},
         {number: 0},
@@ -64,14 +63,6 @@ export global GlobalEngine {
         {number: 2},
         {number: 3}];
     in-out property<int> sequencer_song_pattern_active: 0;
-
-    in-out property<[PatternData]> sequencer_patterns: [
-        {number: 0, empty: true, active: true},
-        {number: 1, empty: true}, {number: 2, empty: true}, {number: 3, empty: true},
-        {number: 4, empty: true}, {number: 5, empty: true}, {number: 6, empty: true}, {number: 7, empty: true},
-        {number: 8, empty: true}, {number: 9, empty: true}, {number: 10, empty: true}, {number: 11, empty: true},
-        {number: 12, empty: true}, {number: 13, empty: true}, {number: 14, empty: true}, {number: 15, empty: true},
-        ];
 
     in-out property<[string]> script_instrument_ids: ["S1", "S2", "T1", "T2", "W1", "W2", "N2", "N4"];
     in-out property<int> sequencer_pattern_instruments_len: 6;
@@ -94,7 +85,7 @@ export global GlobalEngine {
         {press: false}, {press: false}, {press: false},
         {press: true, release: true, note: 65},
         {press: false}, {press: false}, {press: false},
-        {press: true, note: 65},
+        {press: true, note: 65, selected: true},
         {press: false}, {press: false}, {press: false},
         {press: false, release: true},
         {press: false}, {press: false}, {press: false}];

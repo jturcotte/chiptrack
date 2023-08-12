@@ -11,7 +11,7 @@ use crate::utils::MidiNote;
 use crate::utils::WeakWindowWrapper;
 use crate::GlobalEngine;
 use crate::GlobalSettings;
-use crate::PatternData;
+use crate::SongPatternData;
 use crate::SongSettings;
 use core::fmt;
 use serde::de::{self, Deserializer, SeqAccess, Visitor};
@@ -215,10 +215,6 @@ struct Pattern {
 }
 
 impl Pattern {
-    fn is_empty(&self) -> bool {
-        self.instruments.is_empty()
-    }
-
     fn get_steps<'a>(&'a self, instrument: u8) -> Option<&'a [InstrumentStep; NUM_STEPS]> {
         self.instruments
             .iter()
@@ -326,14 +322,8 @@ impl Pattern {
         set_press_note: Option<Option<u8>>,
         set_release: Option<bool>,
         set_params: Option<(Option<i8>, Option<i8>)>,
-    ) -> bool {
+    ) {
         let step = &mut self.get_steps_mut(instrument_id, Some(instrument))[step_num];
-        if set_press_note.map_or(true, |v| v == step.press_note())
-            && set_release.map_or(true, |v| v == step.release)
-            && set_params.map_or(true, |v| v == (step.param0(), step.param1()))
-        {
-            return false;
-        }
 
         if let Some(release) = set_release {
             step.release = release;
@@ -346,16 +336,7 @@ impl Pattern {
             step.set_param1(param1);
         }
 
-        let pattern_empty = if set_press_note.map_or(false, |o| o.is_some()) || set_release.unwrap_or(false) {
-            false
-        } else {
-            // FIXME: Remove empty instruments instead and get the caller to use is_empty(),
-            // but what should happen about entered notes and params?
-            self.instruments
-                .iter()
-                .all(|i| i.steps.iter().all(|step| !step.press() && !step.release))
-        };
-        pattern_empty
+        // FIXME: Remove empty instruments
     }
 
     fn update_synth_index(&mut self, new_instrument_ids: &Vec<SharedString>) {
@@ -546,23 +527,6 @@ impl Sequencer {
             .unwrap();
     }
 
-    fn update_patterns(&mut self) -> () {
-        let non_empty_patterns: Vec<usize> = (0..NUM_PATTERNS)
-            .filter(|&p| !self.song.patterns[p].is_empty())
-            .collect();
-
-        self.main_window
-            .upgrade_in_event_loop(move |handle| {
-                let patterns = GlobalEngine::get(&handle).get_sequencer_patterns();
-                for p in non_empty_patterns {
-                    let mut pattern_row_data = patterns.row_data(p).unwrap();
-                    pattern_row_data.empty = false;
-                    patterns.set_row_data(p, pattern_row_data);
-                }
-            })
-            .unwrap();
-    }
-
     fn update_steps(&mut self) -> () {
         let pattern = &self.song.patterns[self.current_pattern];
         let maybe_steps = pattern.get_steps(self.selected_instrument).map(|s| s.clone());
@@ -720,7 +684,7 @@ impl Sequencer {
         set_params: Option<(Option<i8>, Option<i8>)>,
     ) -> () {
         let instrument_id = &self.synth_instrument_ids[self.selected_instrument as usize];
-        let pattern_empty = self.song.patterns[pattern].set_step_events(
+        self.song.patterns[pattern].set_step_events(
             self.selected_instrument,
             instrument_id,
             step_num,
@@ -729,14 +693,8 @@ impl Sequencer {
             set_params,
         );
 
-        let current_pattern = self.current_pattern;
         self.main_window
             .upgrade_in_event_loop(move |handle| {
-                let patterns = GlobalEngine::get(&handle).get_sequencer_patterns();
-                let mut pattern_row_data = patterns.row_data(current_pattern).unwrap();
-                pattern_row_data.empty = pattern_empty;
-                patterns.set_row_data(current_pattern, pattern_row_data);
-
                 let steps = GlobalEngine::get(&handle).get_sequencer_steps();
                 let mut step_row_data = steps.row_data(step_num).unwrap();
                 if let Some(maybe_note) = set_press_note {
@@ -1167,10 +1125,9 @@ impl Sequencer {
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let vec_model = model.as_any().downcast_ref::<VecModel<PatternData>>().unwrap();
-                vec_model.push(PatternData {
+                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                vec_model.push(SongPatternData {
                     number: pattern as i32,
-                    empty: false,
                 });
             })
             .unwrap();
@@ -1190,7 +1147,7 @@ impl Sequencer {
             self.main_window
                 .upgrade_in_event_loop(move |handle| {
                     let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                    let vec_model = model.as_any().downcast_ref::<VecModel<PatternData>>().unwrap();
+                    let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
                     vec_model.remove(vec_model.row_count() - 1);
                 })
                 .unwrap();
@@ -1204,7 +1161,7 @@ impl Sequencer {
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let vec_model = model.as_any().downcast_ref::<VecModel<PatternData>>().unwrap();
+                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
                 vec_model.set_vec(Vec::new());
             })
             .unwrap();
@@ -1224,11 +1181,10 @@ impl Sequencer {
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let vec_model = model.as_any().downcast_ref::<VecModel<PatternData>>().unwrap();
+                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
                 for number in song_patterns.iter() {
-                    vec_model.push(PatternData {
+                    vec_model.push(SongPatternData {
                         number: *number as i32,
-                        empty: false,
                     });
                 }
 
@@ -1245,7 +1201,6 @@ impl Sequencer {
                 .unwrap_or(&0_usize) as u32,
         );
         self.select_instrument(self.selected_instrument);
-        self.update_patterns();
     }
 
     pub fn load_default(&mut self) {

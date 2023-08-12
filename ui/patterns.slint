@@ -15,7 +15,7 @@ import {
 } from "common.slint";
 
 import {
-    PatternData,
+    SongPatternData,
     PatternInstrumentData,
     StepData,
     GlobalEngine,
@@ -38,7 +38,6 @@ component SequencerPattern {
     callback clicked();
     in property<int> number;
     in property<bool> highlighted;
-    in property<bool> fill;
     if highlighted:
     Cursor {
         parent_width: parent.width;
@@ -52,9 +51,7 @@ component SequencerPattern {
         font_size: min(self.width, self.height) * 0.7;
         color: highlighted
             ? black
-            : fill 
-                ? #a0a0a0
-                : #d0d0d0;
+            : #a0a0a0;
         horizontal_alignment: left;
         vertical_alignment: center;
     }
@@ -140,9 +137,7 @@ component PatternsList {
             for pattern[idx] in GlobalEngine.sequencer_song_patterns:
             SequencerPattern {
                 number: pattern.number;
-                property<PatternData> pattern: GlobalEngine.sequencer_patterns[self.number];
                 highlighted: idx == GlobalEngine.sequencer_song_pattern_active;
-                fill: !pattern.empty;
                 clicked => { GlobalEngine.song_pattern_clicked(idx); }
             }
         }

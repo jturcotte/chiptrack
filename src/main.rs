@@ -27,7 +27,6 @@ use wasm_bindgen::prelude::*;
 #[cfg(feature = "desktop")]
 use crate::midi::Midi;
 use crate::sound_engine::NUM_INSTRUMENTS;
-use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
 use crate::sound_renderer::new_sound_renderer;
 use crate::utils::MidiNote;
@@ -107,11 +106,6 @@ fn run_main() {
         (None::<PathBuf>, search_params.get("gist"))
     };
 
-    let sequencer_pattern_model = Rc::new(slint::VecModel::<_>::from(
-        (0..NUM_PATTERNS as i32)
-            .map(|i| PatternData { number: i, empty: true })
-            .collect::<Vec<PatternData>>(),
-    ));
     let sequencer_step_model = Rc::new(slint::VecModel::<_>::from(vec![StepData::default(); NUM_STEPS]));
     let instruments_model = Rc::new(slint::VecModel::<_>::from(vec![
         InstrumentData::default();
@@ -158,7 +152,6 @@ fn run_main() {
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.
     global_engine.set_sequencer_song_patterns(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
-    global_engine.set_sequencer_patterns(slint::ModelRc::from(sequencer_pattern_model));
     global_engine.set_sequencer_steps(slint::ModelRc::from(sequencer_step_model));
     global_engine.set_instruments(slint::ModelRc::from(instruments_model));
     global_engine.set_synth_trace_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
