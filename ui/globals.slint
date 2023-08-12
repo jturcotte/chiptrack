@@ -13,6 +13,7 @@ export struct StepData {
     press: bool,
     release: bool,
     note: int,
+    selected: bool,
     param0_set: bool,
     param0_val: int,
     param1_set: bool,
@@ -143,7 +144,7 @@ export global GlobalEngine {
     callback toggle_step(int);
     callback toggle_step_release(int);
     callback toggle_current_step_release();
-    callback manually_advance_step(bool);
+    callback select_next_step(bool);
     callback play_clicked(bool);
     callback record_clicked(bool);
     callback select_next_song_pattern(bool);

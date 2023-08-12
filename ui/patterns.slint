@@ -74,6 +74,7 @@ component SequencerStep inherits Rectangle {
     border_width: 1px;
     border_color: highlighted ? black : transparent;
     border_radius: self.height / 8;
+    background: step.selected ? lightgrey : transparent;
     Text {
         x: 0px;
         text: (step.param0_set ? step.param0_val : "") + " / " + (step.param1_set ? step.param1_val : "");

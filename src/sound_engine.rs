@@ -252,7 +252,7 @@ impl SoundEngine {
 
     pub fn cycle_instrument_param_start(&mut self) -> () {
         let seq = self.sequencer.borrow();
-        let note = seq.current_note();
+        let note = seq.selected_note();
         let (p0, p1) = seq.current_instrument_params();
         self.script
             .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
@@ -268,38 +268,56 @@ impl SoundEngine {
     }
 
     pub fn cycle_step_param_start(&mut self) -> () {
-        let seq = self.sequencer.borrow();
-        let (note, p0, p1) = seq.current_note_and_params();
-        self.script
-            .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
+        if !self.sequencer.borrow().playing() {
+            let seq = self.sequencer.borrow();
+            let (note, p0, p1) = seq.selected_note_and_params();
+            self.script
+                .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
+        }
     }
     pub fn cycle_step_param_end(&mut self) -> () {
-        // FIXME: Ref-count the press or something to handle +Shift,+Ctrl,-Shift,-Ctrl
-        self.script
-            .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
+        if !self.sequencer.borrow().playing() {
+            // FIXME: Ref-count the press or something to handle +Shift,+Ctrl,-Shift,-Ctrl
+            self.script
+                .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
+        }
     }
     pub fn cycle_step_param(&mut self, param_num: u8, forward: bool) -> () {
         let new_val = self.sequencer.borrow_mut().cycle_step_param(param_num, forward);
-        self.script
-            .set_instrument_param(self.sequencer.borrow().selected_instrument, param_num, new_val)
+        if !self.sequencer.borrow().playing() {
+            self.script
+                .set_instrument_param(self.sequencer.borrow().selected_instrument, param_num, new_val)
+        }
     }
 
     pub fn cycle_note_start(&mut self) -> () {
-        let note = self.sequencer.borrow().current_note();
-        self.press_note(note);
+        let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_note(None, false);
+        if !self.sequencer.borrow().playing() {
+            self.script.press_instrument_note(
+                self.frame_number,
+                self.sequencer.borrow().selected_instrument,
+                new_note,
+                p0,
+                p1,
+            );
+        }
     }
     pub fn cycle_note_end(&mut self) -> () {
-        let note = self.sequencer.borrow().current_note();
-        self.release_note(note);
+        if !self.sequencer.borrow().playing() {
+            self.script
+                .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
+        }
     }
     pub fn cycle_note(&mut self, forward: bool, large_inc: bool) -> () {
-        let note = self.sequencer.borrow().current_note();
-        let inc = if large_inc { 12 } else { 1 };
-        if forward && note + inc <= 127 {
-            self.press_note(note + inc);
-        } else if !forward && note - inc >= 24 {
-            // The GBA only handles frenquencies from C1 upwards.
-            self.press_note(note - inc);
+        let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_note(Some(forward), large_inc);
+        if !self.sequencer.borrow().playing() {
+            self.script.press_instrument_note(
+                self.frame_number,
+                self.sequencer.borrow().selected_instrument,
+                new_note,
+                p0,
+                p1,
+            );
         }
     }
 

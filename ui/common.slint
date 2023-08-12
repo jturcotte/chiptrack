@@ -55,8 +55,8 @@ export component StepsFocusScope inherits Rectangle {
             else if (!GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.DownArrow) { GlobalEngine.cycle_step_param(1, false); }
             else if (!GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.LeftArrow) { GlobalEngine.cycle_step_param(0, false); }
             else if (!GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.RightArrow) { GlobalEngine.cycle_step_param(0, true); }
-            else if (e.text == Key.UpArrow) { GlobalEngine.manually_advance_step(false); }
-            else if (e.text == Key.DownArrow) { GlobalEngine.manually_advance_step(true); }
+            else if (e.text == Key.UpArrow) { GlobalEngine.select_next_step(false); }
+            else if (e.text == Key.DownArrow) { GlobalEngine.select_next_step(true); }
             else {
                 return root_key_pressed(e);
             }

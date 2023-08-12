@@ -438,10 +438,10 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
-    global_engine.on_manually_advance_step(move |forwards| {
+    global_engine.on_select_next_step(move |forwards| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().manually_advance_step(forwards));
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().select_next_step(forwards));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
