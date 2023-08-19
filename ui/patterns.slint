@@ -34,24 +34,25 @@ component Cursor inherits Rectangle {
     border_radius: self.height / 8;
 }
 
-component SequencerPattern {
+component SequencerPattern inherits Rectangle {
     callback clicked();
     in property<int> number;
     in property<bool> highlighted;
+    in property<bool> fill;
+    border_radius: self.height / 8;
+    background: fill ? lightgrey : transparent;
     if highlighted:
     Cursor {
         parent_width: parent.width;
         parent_height: parent.height;
     }
     Text {
-        text: number + 1;
+        text: number != -1 ? number + 1 : "--";
+        color: number != -1 ? black : #a0a0a0;
         x: 2px;
         width: parent.width - 4px;
         height: 100%;
         font_size: min(self.width, self.height) * 0.7;
-        color: highlighted
-            ? black
-            : #a0a0a0;
         horizontal_alignment: left;
         vertical_alignment: center;
     }
@@ -138,6 +139,7 @@ component PatternsList {
             SequencerPattern {
                 number: pattern.number;
                 highlighted: idx == GlobalEngine.sequencer_song_pattern_active;
+                fill: pattern.selected;
                 clicked => { GlobalEngine.song_pattern_clicked(idx); }
             }
         }
