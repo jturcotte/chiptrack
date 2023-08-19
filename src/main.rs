@@ -424,10 +424,10 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
-    global_engine.on_toggle_current_step_release(move || {
+    global_engine.on_toggle_active_step_release(move || {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().toggle_current_step_release());
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().toggle_active_step_release());
     });
 
     let cloned_sound_renderer = sound_renderer.clone();

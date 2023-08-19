@@ -78,7 +78,6 @@ impl InstrumentStep {
         self.note != 0
     }
 
-    // FIXME: Rename to pressed everywhere
     pub fn press_note(&self) -> Option<u8> {
         // 0 is a valid MIDI note, but the GBA hardware doesn't support that frequence, so use it to represent "no press".
         if self.note == 0 {
@@ -399,9 +398,9 @@ impl Default for SequencerSong {
 
 pub struct Sequencer {
     pub song: SequencerSong,
-    current_frame: u32,
-    current_step: usize,
-    current_song_pattern: usize,
+    active_frame: u32,
+    active_step: usize,
+    active_song_pattern: usize,
     pub selected_instrument: u8,
     selected_step: usize,
     selected_song_pattern: usize,
@@ -421,10 +420,9 @@ impl Sequencer {
     pub fn new(main_window: WeakWindowWrapper) -> Sequencer {
         Sequencer {
             song: Default::default(),
-            // FIXME: Maybe rename current to active everywhere and suffix with idx
-            current_frame: 0,
-            current_step: 0,
-            current_song_pattern: 0,
+            active_frame: 0,
+            active_step: 0,
+            active_song_pattern: 0,
             selected_instrument: 0,
             selected_step: 0,
             selected_song_pattern: 0,
@@ -444,12 +442,12 @@ impl Sequencer {
         self.song.song_patterns[song_pattern_idx]
     }
 
-    fn current_pattern_idx(&self) -> usize {
-        self.pattern_idx(self.current_song_pattern)
+    fn active_pattern_idx(&self) -> usize {
+        self.pattern_idx(self.active_song_pattern)
     }
 
     fn activate_song_pattern(&mut self, song_pattern: usize) -> () {
-        self.current_song_pattern = song_pattern;
+        self.active_song_pattern = song_pattern;
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
@@ -459,9 +457,9 @@ impl Sequencer {
     }
 
     fn activate_step(&mut self, step: usize) -> () {
-        self.current_step = step as usize;
+        self.active_step = step as usize;
 
-        let active_step = if self.current_song_pattern == self.selected_song_pattern {
+        let active_step = if self.active_song_pattern == self.selected_song_pattern {
             step as i32
         } else {
             -1
@@ -529,7 +527,7 @@ impl Sequencer {
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
-                GlobalEngine::get(&handle).set_current_instrument(instrument as i32);
+                GlobalEngine::get(&handle).set_selected_instrument(instrument as i32);
             })
             .unwrap();
     }
@@ -544,7 +542,7 @@ impl Sequencer {
 
     pub fn cycle_pattern_instrument(&mut self, forwards: bool) -> () {
         let maybe_next =
-            self.song.patterns[self.current_pattern_idx()].next_instrument(self.selected_instrument, forwards);
+            self.song.patterns[self.active_pattern_idx()].next_instrument(self.selected_instrument, forwards);
         if let Some(instrument) = maybe_next {
             self.select_instrument(instrument)
         }
@@ -570,8 +568,8 @@ impl Sequencer {
         let pattern = &self.song.patterns[self.pattern_idx(self.selected_song_pattern)];
         let maybe_steps = pattern.get_steps(self.selected_instrument).map(|s| s.clone());
 
-        let active_step = if self.current_song_pattern == self.selected_song_pattern {
-            self.current_step as i32
+        let active_step = if self.active_song_pattern == self.selected_song_pattern {
+            self.active_step as i32
         } else {
             -1
         };
@@ -644,11 +642,11 @@ impl Sequencer {
     }
 
     pub fn toggle_step(&mut self, step_num: usize) -> () {
-        let maybe_steps = self.song.patterns[self.current_pattern_idx()].get_steps(self.selected_instrument);
+        let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
         let toggled = !maybe_steps.map_or(false, |ss| ss[step_num as usize].press());
         self.set_pattern_step_events(
             step_num as usize,
-            self.current_pattern_idx(),
+            self.active_pattern_idx(),
             // FIXME: Remember the last edited/cut/toggled note and insert it here
             Some(if toggled { Some(DEFAULT_NOTE) } else { None }),
             Some(toggled),
@@ -658,14 +656,14 @@ impl Sequencer {
         self.select_step(step_num);
     }
 
-    pub fn toggle_current_step_release(&mut self) -> () {
-        self.toggle_step_release(self.current_step as usize)
+    pub fn toggle_active_step_release(&mut self) -> () {
+        self.toggle_step_release(self.active_step as usize)
     }
 
     pub fn toggle_step_release(&mut self, step_num: usize) -> () {
-        let maybe_steps = self.song.patterns[self.current_pattern_idx()].get_steps(self.selected_instrument);
+        let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
         let toggled = !maybe_steps.map_or(false, |ss| ss[step_num as usize].release);
-        self.set_pattern_step_events(step_num as usize, self.current_pattern_idx(), None, Some(toggled), None);
+        self.set_pattern_step_events(step_num as usize, self.active_pattern_idx(), None, Some(toggled), None);
 
         self.select_step(step_num);
     }
@@ -687,12 +685,12 @@ impl Sequencer {
     fn advance_step(&mut self, forwards: bool) -> () {
         let (next_step, next_song_pattern) = Self::next_step_and_pattern_and_song_pattern(
             forwards,
-            self.current_step,
-            self.current_song_pattern,
+            self.active_step,
+            self.active_song_pattern,
             &self.song.song_patterns,
         );
 
-        if next_song_pattern != self.current_song_pattern {
+        if next_song_pattern != self.active_song_pattern {
             self.activate_song_pattern(next_song_pattern);
         }
 
@@ -754,17 +752,17 @@ impl Sequencer {
 
     pub fn set_playing(&mut self, val: bool) -> Vec<(u8, StepEvent)> {
         self.playing = val;
-        // Reset the current_frame so that it's aligned with full
+        // Reset the active_frame so that it's aligned with full
         // steps and that record_press would record any key while
         // stopped to the current frame and not the next.
-        self.current_frame = 0;
+        self.active_frame = 0;
 
         if self.playing {
             // The first advance_frame after playing will move from frame 0 to frame 1 and skip presses
             // of frame 0. Since we don't care about releases of the non-existant previous frame, do the
             // presses now, right after starting the playback.
             let mut note_events: Vec<(u8, StepEvent)> = Vec::new();
-            self.handle_current_step_presses_and_params(&mut note_events);
+            self.handle_active_step_presses_and_params(&mut note_events);
             note_events
         } else {
             Vec::new()
@@ -777,16 +775,16 @@ impl Sequencer {
         self.erasing = val;
         // Already remove the current step.
         self.set_pattern_step_events(
-            self.current_step,
-            self.current_pattern_idx(),
+            self.active_step,
+            self.active_pattern_idx(),
             Some(None),
             Some(false),
             Some((None, None)),
         );
     }
 
-    fn handle_current_step_presses_and_params(&mut self, note_events: &mut Vec<(u8, StepEvent)>) {
-        for instrument in &self.song.patterns[self.current_pattern_idx()].instruments {
+    fn handle_active_step_presses_and_params(&mut self, note_events: &mut Vec<(u8, StepEvent)>) {
+        for instrument in &self.song.patterns[self.active_pattern_idx()].instruments {
             let i = match instrument.synth_index {
                 Some(i) => i,
                 None => {
@@ -802,9 +800,9 @@ impl Sequencer {
                 continue;
             }
 
-            if let Some(step) = self.song.patterns[self.current_pattern_idx()]
+            if let Some(step) = self.song.patterns[self.active_pattern_idx()]
                 .get_steps(i)
-                .map(|ss| ss[self.current_step])
+                .map(|ss| ss[self.active_step])
             {
                 if let Some(note) = step.press_note() {
                     // Use the default if the sequencer didn't have any param set for that press.
@@ -832,8 +830,8 @@ impl Sequencer {
         }
     }
 
-    fn handle_current_step_releases(&mut self, note_events: &mut Vec<(u8, StepEvent)>) {
-        for instrument in &self.song.patterns[self.current_pattern_idx()].instruments {
+    fn handle_active_step_releases(&mut self, note_events: &mut Vec<(u8, StepEvent)>) {
+        for instrument in &self.song.patterns[self.active_pattern_idx()].instruments {
             let i = match instrument.synth_index {
                 Some(i) => i,
                 None => {
@@ -853,9 +851,9 @@ impl Sequencer {
                 release,
                 param0: _,
                 param1: _,
-            }) = self.song.patterns[self.current_pattern_idx()]
+            }) = self.song.patterns[self.active_pattern_idx()]
                 .get_steps(i)
-                .map(|ss| ss[self.current_step])
+                .map(|ss| ss[self.active_step])
             {
                 if release {
                     log!("➖ REL {}", self.synth_instrument_ids[i as usize]);
@@ -873,39 +871,39 @@ impl Sequencer {
         }
 
         // FIXME: Reset or remove overflow check
-        self.current_frame += 1;
-        if self.current_frame % self.song.frames_per_step == 0 {
+        self.active_frame += 1;
+        if self.active_frame % self.song.frames_per_step == 0 {
             // Release are at then end of a step, so start by triggering any release of the
             // previous frame.
-            self.handle_current_step_releases(&mut note_events);
+            self.handle_active_step_releases(&mut note_events);
 
             self.advance_step(true);
             if self.erasing {
                 self.set_pattern_step_events(
-                    self.current_step,
-                    self.current_pattern_idx(),
+                    self.active_step,
+                    self.active_pattern_idx(),
                     Some(None),
                     Some(false),
                     Some((None, None)),
                 );
             }
 
-            self.handle_current_step_presses_and_params(&mut note_events);
-            (Some(self.current_step as u32), note_events)
+            self.handle_active_step_presses_and_params(&mut note_events);
+            (Some(self.active_step as u32), note_events)
         } else {
             (None, note_events)
         }
     }
 
     pub fn selected_note(&self) -> u8 {
-        let maybe_steps = self.song.patterns[self.current_pattern_idx()].get_steps(self.selected_instrument);
+        let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
         maybe_steps
             .and_then(|steps| steps[self.selected_step].press_note())
             .unwrap_or(DEFAULT_NOTE)
     }
 
     pub fn selected_note_and_params(&self) -> (u8, i8, i8) {
-        let maybe_steps = self.song.patterns[self.current_pattern_idx()].get_steps(self.selected_instrument);
+        let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
         maybe_steps
             .map(|steps| {
                 let s = steps[self.selected_step];
@@ -925,15 +923,15 @@ impl Sequencer {
 
         let (press_note, release, (step, song_pattern)) = match event {
             KeyEvent::Press if !self.playing => {
-                let pressed = self.song.patterns[self.current_pattern_idx()]
+                let pressed = self.song.patterns[self.active_pattern_idx()]
                     .get_steps(self.selected_instrument)
-                    .map_or(false, |ss| ss[self.current_step as usize].press());
+                    .map_or(false, |ss| ss[self.active_step as usize].press());
                 if !pressed {
                     // If the step isn't already pressed, record it both as pressed and released.
-                    (Some(note), Some(true), (self.current_step, self.current_song_pattern))
+                    (Some(note), Some(true), (self.active_step, self.active_song_pattern))
                 } else {
                     // Else, only set the note.
-                    (Some(note), None, (self.current_step, self.current_song_pattern))
+                    (Some(note), None, (self.active_step, self.active_song_pattern))
                 }
             }
             KeyEvent::Release if !self.playing =>
@@ -948,14 +946,14 @@ impl Sequencer {
                     None,
                     // Try to clamp the event to the nearest frame.
                     // Use 4 instead of 3 just to try to compensate for the key press to visual and audible delay.
-                    if self.current_frame % self.song.frames_per_step < self.snap_at_step_frame() {
-                        (self.current_step, self.current_song_pattern)
+                    if self.active_frame % self.song.frames_per_step < self.snap_at_step_frame() {
+                        (self.active_step, self.active_song_pattern)
                     } else {
                         self.just_recorded_over_next_step = true;
                         Self::next_step_and_pattern_and_song_pattern(
                             true,
-                            self.current_step,
-                            self.current_song_pattern,
+                            self.active_step,
+                            self.active_song_pattern,
                             &self.song.song_patterns,
                         )
                     },
@@ -972,14 +970,14 @@ impl Sequencer {
                     (n + to / 2) / to * to
                 }
                 let rounded_steps_note_length = round(
-                    self.current_frame - self.last_press_frame.unwrap(),
+                    self.active_frame - self.last_press_frame.unwrap(),
                     self.song.frames_per_step,
                 );
                 // We need to place the release in the previous step (its end), so substract one step.
                 let rounded_end_frame = self.last_press_frame.unwrap() + (rounded_steps_note_length.max(1) - 1);
 
                 let is_end_in_prev_step =
-                    rounded_end_frame / self.song.frames_per_step < self.current_frame / self.song.frames_per_step;
+                    rounded_end_frame / self.song.frames_per_step < self.active_frame / self.song.frames_per_step;
                 let end_snaps_to_next_step = rounded_end_frame % self.song.frames_per_step < self.snap_at_step_frame();
                 (
                     None,
@@ -989,22 +987,22 @@ impl Sequencer {
                         // Register the release at the end of the previous step.
                         Self::next_step_and_pattern_and_song_pattern(
                             false,
-                            self.current_step,
-                            self.current_song_pattern,
+                            self.active_step,
+                            self.active_song_pattern,
                             &self.song.song_patterns,
                         )
                     } else if is_end_in_prev_step || end_snaps_to_next_step {
                         // It ends between the snap frame of the previous step and the snap frame of the current step
                         // Register the release at the end of the current step.
-                        (self.current_step, self.current_song_pattern)
+                        (self.active_step, self.active_song_pattern)
                     } else {
                         self.just_recorded_over_next_step = true;
                         // It ends on or after the snap frame of the current step.
                         // Register the release at the end of the next step.
                         Self::next_step_and_pattern_and_song_pattern(
                             true,
-                            self.current_step,
-                            self.current_song_pattern,
+                            self.active_step,
+                            self.active_song_pattern,
                             &self.song.song_patterns,
                         )
                     },
@@ -1015,13 +1013,13 @@ impl Sequencer {
     }
 
     pub fn record_press(&mut self, note: u8) -> (i8, i8) {
-        let (p0, p1) = self.current_instrument_params();
+        let (p0, p1) = self.selected_instrument_params();
         self.record_key_event(
             KeyEvent::Press,
             Some(note),
             Some((Some(p0).filter(|v| *v != 0), Some(p1).filter(|v| *v != 0))),
         );
-        self.last_press_frame = Some(self.current_frame);
+        self.last_press_frame = Some(self.active_frame);
         (p0, p1)
     }
 
@@ -1035,27 +1033,27 @@ impl Sequencer {
         // The GBA only handles frenquencies from C1 upwards.
         const LOWEST_NOTE: u8 = 24;
 
-        let (maybe_current_note, p0, p1) = self.song.patterns[self.current_pattern_idx()]
+        let (maybe_active_note, p0, p1) = self.song.patterns[self.active_pattern_idx()]
             .get_steps(self.selected_instrument)
             .map_or((None, None, None), |ss| {
                 let s = ss[self.selected_step as usize];
                 (s.press_note(), s.param0(), s.param1())
             });
         let inc = if large_inc { 12 } else { 1 };
-        let current_note = maybe_current_note.unwrap_or(DEFAULT_NOTE);
-        let new_note = if forward.unwrap_or(false) && current_note + inc <= 127 {
-            current_note + inc
-        } else if forward.map(|f| !f).unwrap_or(false) && current_note - inc >= LOWEST_NOTE {
-            current_note - inc
+        let active_note = maybe_active_note.unwrap_or(DEFAULT_NOTE);
+        let new_note = if forward.unwrap_or(false) && active_note + inc <= 127 {
+            active_note + inc
+        } else if forward.map(|f| !f).unwrap_or(false) && active_note - inc >= LOWEST_NOTE {
+            active_note - inc
         } else {
-            current_note
+            active_note
         };
 
         // Also set the note as released if it wasn't previously pressed.
-        let set_release = if maybe_current_note.is_none() { Some(true) } else { None };
+        let set_release = if maybe_active_note.is_none() { Some(true) } else { None };
         self.set_pattern_step_events(
             self.selected_step,
-            self.current_pattern_idx(),
+            self.active_pattern_idx(),
             Some(Some(new_note)),
             set_release,
             None,
@@ -1067,7 +1065,7 @@ impl Sequencer {
         )
     }
 
-    pub fn current_instrument_params(&self) -> (i8, i8) {
+    pub fn selected_instrument_params(&self) -> (i8, i8) {
         let instrument = self.selected_instrument as usize;
         self.instrument_parameters[instrument]
     }
@@ -1105,7 +1103,7 @@ impl Sequencer {
     }
 
     pub fn cycle_step_param(&mut self, param_num: u8, forward: bool) -> i8 {
-        let mut step_parameters = self.song.patterns[self.current_pattern_idx()]
+        let mut step_parameters = self.song.patterns[self.active_pattern_idx()]
             .get_steps(self.selected_instrument)
             .map_or((None, None), |ss| {
                 let s = ss[self.selected_step as usize];
@@ -1132,7 +1130,7 @@ impl Sequencer {
         let val2 = val.unwrap();
         self.set_pattern_step_events(
             self.selected_step,
-            self.current_pattern_idx(),
+            self.active_pattern_idx(),
             None,
             None,
             Some(step_parameters),
@@ -1158,7 +1156,7 @@ impl Sequencer {
     pub fn remove_last_song_pattern(&mut self) {
         if !self.song.song_patterns.is_empty() {
             self.song.song_patterns.pop();
-            if self.current_song_pattern > self.song.song_patterns.len() {
+            if self.active_song_pattern > self.song.song_patterns.len() {
                 self.select_song_pattern(self.song.song_patterns.len());
             }
 

@@ -253,7 +253,7 @@ impl SoundEngine {
     pub fn cycle_instrument_param_start(&mut self) -> () {
         let seq = self.sequencer.borrow();
         let note = seq.selected_note();
-        let (p0, p1) = seq.current_instrument_params();
+        let (p0, p1) = seq.selected_instrument_params();
         self.script
             .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
     }

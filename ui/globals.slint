@@ -103,7 +103,7 @@ export global GlobalEngine {
         {active: false}, {active: false}, {active: false}, {active: false},
         ];
 
-    in-out property<int> current_instrument: 0;
+    in-out property<int> selected_instrument: 0;
     pure callback phase_visualization_tick(float) -> float;
 
     in-out property<[ChannelTraceNote]> synth_trace_notes: [
@@ -135,7 +135,7 @@ export global GlobalEngine {
     callback toggle_mute_instrument(int);
     callback toggle_step(int);
     callback toggle_step_release(int);
-    callback toggle_current_step_release();
+    callback toggle_active_step_release();
     callback select_next_step(bool);
     callback play_clicked(bool);
     callback record_clicked(bool);
