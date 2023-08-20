@@ -704,7 +704,7 @@ impl Sequencer {
         let toggled = !maybe_steps.map_or(false, |ss| ss[step_num as usize].press());
         self.set_pattern_step_events(
             step_num as usize,
-            self.active_pattern_idx(),
+            self.active_song_pattern,
             // FIXME: Remember the last edited/cut/toggled note and insert it here
             Some(if toggled { Some(DEFAULT_NOTE) } else { None }),
             Some(toggled),
@@ -721,7 +721,7 @@ impl Sequencer {
     pub fn toggle_step_release(&mut self, step_num: usize) -> () {
         let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
         let toggled = !maybe_steps.map_or(false, |ss| ss[step_num as usize].release);
-        self.set_pattern_step_events(step_num as usize, self.active_pattern_idx(), None, Some(toggled), None);
+        self.set_pattern_step_events(step_num as usize, self.active_song_pattern, None, Some(toggled), None);
 
         self.select_step(step_num);
     }
@@ -744,11 +744,16 @@ impl Sequencer {
     fn set_pattern_step_events(
         &mut self,
         step_num: usize,
-        pattern: usize,
+        song_pattern: usize,
         set_press_note: Option<Option<u8>>,
         set_release: Option<bool>,
         set_params: Option<(Option<i8>, Option<i8>)>,
     ) -> () {
+        if song_pattern == self.song.song_patterns.len() - 1 {
+            self.commit_stub_song_pattern();
+        }
+
+        let pattern = self.pattern_idx(song_pattern);
         let instrument_id = &self.synth_instrument_ids[self.selected_instrument as usize];
         self.song.patterns[pattern].set_step_events(
             self.selected_instrument,
@@ -820,7 +825,7 @@ impl Sequencer {
         // Already remove the current step.
         self.set_pattern_step_events(
             self.active_step,
-            self.active_pattern_idx(),
+            self.active_song_pattern,
             Some(None),
             Some(false),
             Some((None, None)),
@@ -925,7 +930,7 @@ impl Sequencer {
             if self.erasing {
                 self.set_pattern_step_events(
                     self.active_step,
-                    self.active_pattern_idx(),
+                    self.active_song_pattern,
                     Some(None),
                     Some(false),
                     Some((None, None)),
@@ -1053,7 +1058,7 @@ impl Sequencer {
                 )
             }
         };
-        self.set_pattern_step_events(step, self.pattern_idx(song_pattern), press_note, release, params);
+        self.set_pattern_step_events(step, song_pattern, press_note, release, params);
     }
 
     pub fn record_press(&mut self, note: u8) -> (i8, i8) {
@@ -1097,7 +1102,7 @@ impl Sequencer {
         let set_release = if maybe_active_note.is_none() { Some(true) } else { None };
         self.set_pattern_step_events(
             self.selected_step,
-            self.active_pattern_idx(),
+            self.active_song_pattern,
             Some(Some(new_note)),
             set_release,
             None,
@@ -1174,12 +1179,43 @@ impl Sequencer {
         let val2 = val.unwrap();
         self.set_pattern_step_events(
             self.selected_step,
-            self.active_pattern_idx(),
+            self.active_song_pattern,
             None,
             None,
             Some(step_parameters),
         );
         val2
+    }
+
+    fn append_stub_song_pattern(&mut self) {
+        // The song must have at least one song pattern pointing to a valid pattern.
+        self.song
+            .song_patterns
+            .push(self.song.song_patterns.iter().max().map_or(0, |m| m + 1));
+    }
+
+    fn commit_stub_song_pattern(&mut self) {
+        let committed_song_pattern = self.song.song_patterns.len() - 1;
+        let committed_pattern = self.song.song_patterns[committed_song_pattern] as i32;
+        self.append_stub_song_pattern();
+
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
+                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+
+                // Show the real pattern number for the previous stub
+                let mut row_data = vec_model.row_data(committed_song_pattern).unwrap();
+                row_data.number = committed_pattern;
+                vec_model.set_row_data(committed_song_pattern, row_data);
+
+                // Append a new stub without showing the pattern number
+                vec_model.push(SongPatternData {
+                    number: -1,
+                    selected: false,
+                });
+            })
+            .unwrap();
     }
 
     pub fn append_song_pattern(&mut self, pattern: usize) {
@@ -1212,13 +1248,6 @@ impl Sequencer {
                 })
                 .unwrap();
         }
-    }
-
-    fn append_stub_song_pattern(&mut self) {
-        // The song must have at least one song pattern pointing to a valid pattern.
-        self.song
-            .song_patterns
-            .push(self.song.song_patterns.iter().max().map_or(0, |m| m + 1));
     }
 
     fn set_song(&mut self, song: SequencerSong) {
