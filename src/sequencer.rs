@@ -404,6 +404,7 @@ pub struct Sequencer {
     pub selected_instrument: u8,
     selected_step: usize,
     selected_song_pattern: usize,
+    pin_selection_to_active: bool,
     playing: bool,
     recording: bool,
     erasing: bool,
@@ -426,6 +427,7 @@ impl Sequencer {
             selected_instrument: 0,
             selected_step: 0,
             selected_song_pattern: 0,
+            pin_selection_to_active: true,
             playing: false,
             recording: true,
             erasing: false,
@@ -454,6 +456,10 @@ impl Sequencer {
                 GlobalEngine::get(&handle).set_sequencer_song_pattern_active(song_pattern as i32);
             })
             .unwrap();
+
+        if self.playing && self.pin_selection_to_active {
+            self.select_song_pattern_internal(song_pattern);
+        }
     }
 
     fn activate_step(&mut self, step: usize) -> () {
@@ -470,6 +476,10 @@ impl Sequencer {
                 GlobalEngine::get(&handle).set_sequencer_step_active(active_step);
             })
             .unwrap();
+
+        if self.playing && self.pin_selection_to_active {
+            self.select_step_internal(step);
+        }
     }
 
     pub fn apply_song_settings(&mut self, settings: &SongSettings) {
@@ -486,6 +496,17 @@ impl Sequencer {
     }
 
     pub fn select_song_pattern(&mut self, song_pattern: usize) -> () {
+        self.select_song_pattern_internal(song_pattern);
+
+        if self.playing {
+            self.pin_selection_to_active = false;
+        } else {
+            self.pin_selection_to_active = true;
+            self.activate_song_pattern(song_pattern);
+        }
+    }
+
+    fn select_song_pattern_internal(&mut self, song_pattern: usize) -> () {
         let prev_selected = self.selected_song_pattern;
         self.selected_song_pattern = song_pattern;
 
@@ -505,6 +526,22 @@ impl Sequencer {
     }
 
     pub fn select_step(&mut self, step: usize) -> () {
+        self.select_step_internal(step);
+
+        if self.playing {
+            self.pin_selection_to_active = false;
+        } else {
+            if !self.pin_selection_to_active {
+                self.pin_selection_to_active = true;
+                // When re-pinning, make sure that the selected pattern is also activated.
+                // activate_step also need this to properly show the current step as active.
+                self.activate_song_pattern(self.selected_song_pattern);
+            }
+            self.activate_step(step);
+        }
+    }
+
+    fn select_step_internal(&mut self, step: usize) -> () {
         let prev_selected = self.selected_step;
         self.selected_step = step as usize;
 
@@ -520,6 +557,23 @@ impl Sequencer {
             })
             .unwrap();
     }
+
+    pub fn select_next_step(&mut self, forwards: bool) -> () {
+        let (next_step, next_song_pattern) = Self::next_step_and_pattern_and_song_pattern(
+            forwards,
+            self.selected_step,
+            self.selected_song_pattern,
+            &self.song.song_patterns,
+        );
+
+        // Potentially activate the pattern first so that activate_step knows that it's current.
+        if next_song_pattern != self.selected_song_pattern {
+            self.select_song_pattern(next_song_pattern);
+        }
+
+        self.select_step(next_step);
+    }
+
     pub fn select_instrument(&mut self, instrument: u8) -> () {
         self.selected_instrument = instrument;
 
@@ -666,20 +720,6 @@ impl Sequencer {
         self.set_pattern_step_events(step_num as usize, self.active_pattern_idx(), None, Some(toggled), None);
 
         self.select_step(step_num);
-    }
-
-    pub fn select_next_step(&mut self, forwards: bool) -> () {
-        let (next_step, next_song_pattern) = Self::next_step_and_pattern_and_song_pattern(
-            forwards,
-            self.selected_step,
-            self.selected_song_pattern,
-            &self.song.song_patterns,
-        );
-        self.select_step(next_step);
-
-        if next_song_pattern != self.selected_song_pattern {
-            self.select_song_pattern(next_song_pattern);
-        }
     }
 
     fn advance_step(&mut self, forwards: bool) -> () {
