@@ -412,6 +412,7 @@ pub struct Sequencer {
     playing: bool,
     recording: bool,
     erasing: bool,
+    has_stub_pattern: bool,
     last_press_frame: Option<u32>,
     just_recorded_over_next_step: bool,
     // FIXME: Use a bitset
@@ -435,6 +436,7 @@ impl Sequencer {
             playing: false,
             recording: true,
             erasing: false,
+            has_stub_pattern: false,
             last_press_frame: None,
             just_recorded_over_next_step: false,
             muted_instruments: BTreeSet::new(),
@@ -467,6 +469,7 @@ impl Sequencer {
 
         if self.playing && self.pin_selection_to_active {
             self.select_song_pattern_internal(song_pattern);
+            self.update_steps();
         }
     }
 
@@ -496,7 +499,10 @@ impl Sequencer {
 
     pub fn select_next_song_pattern(&mut self, forwards: bool) -> () {
         let selected = self.selected_song_pattern;
-        if forwards && selected < self.song.song_patterns.len() - 1 {
+        // Leave the possibility of selecting the stub pattern
+        let last_pattern = self.song.song_patterns.len() - if self.has_stub_pattern { 1 } else { 0 };
+
+        if forwards && selected < last_pattern {
             self.select_song_pattern(selected as usize + 1);
         } else if !forwards && selected > 0 {
             self.select_song_pattern(selected as usize - 1);
@@ -512,9 +518,21 @@ impl Sequencer {
             self.pin_selection_to_active = true;
             self.activate_song_pattern(song_pattern);
         }
+
+        // update_steps relies on both the active and selected song pattern to be set to be able
+        // to properly highlight the active step.
+        self.update_steps();
     }
 
     fn select_song_pattern_internal(&mut self, song_pattern: usize) -> () {
+        if !self.has_stub_pattern && song_pattern == self.song.song_patterns.len() {
+            // Only append the stub while selecting it so that it doesn't affect playback unless selected
+            // and also to avoid allowing the user to change patterns before the selection, which could
+            // prevent us from picking the best match for the next pattern index.
+            self.append_stub_song_pattern();
+        } else if self.has_stub_pattern && song_pattern != self.selected_song_pattern {
+            self.remove_stub_song_pattern();
+        }
         let prev_selected = self.selected_song_pattern;
         self.selected_song_pattern = song_pattern;
 
@@ -529,8 +547,6 @@ impl Sequencer {
                 model.set_row_data(song_pattern, row_data);
             })
             .unwrap();
-
-        self.update_steps();
     }
 
     pub fn select_step(&mut self, step: usize) -> () {
@@ -1222,24 +1238,40 @@ impl Sequencer {
 
     fn append_stub_song_pattern(&mut self) {
         // The last song_pattern entry is a stub one to allow editing without an explicit append operation.
-        // To prevent having to check everywhere whether the selected song pattern is real or not, pre-append
-        // a pattern each time a new song pattern stub is comitted with some pattern already empty and not in use.
-        // This can lead to some weird issues where the user can then manually cycle another song pattern onto
-        // the pre-allocated pattern index, without knowing as the UI isn't showing it.
+        // To prevent having to check everywhere whether the selected song pattern is real or not, append
+        // a stub pattern only when the user select that slot, and commit it if any edit of an explicit pattern cycle was made.
+        let patterns_to_skip = self.song.song_patterns.iter().max().map_or(0, |m| m + 1);
         self.song.song_patterns.push(
             self.song
                 .patterns
                 .iter()
-                .enumerate()
-                .position(|(i, p)| p.is_empty() && !self.song.song_patterns.contains(&i))
-                .unwrap_or(0),
+                .skip(patterns_to_skip)
+                .position(Pattern::is_empty)
+                .map_or(0, |p| p + patterns_to_skip),
         );
+        self.has_stub_pattern = true;
+    }
+
+    fn remove_stub_song_pattern(&mut self) {
+        // The UI will still show the stub and we'll append it back if it gets selected again.
+        self.song.song_patterns.pop();
+        self.has_stub_pattern = false;
+        // The song was currently playing the stub and the user moved the selection away so we have to remove it.
+        // Ideally we'd delay the removal until the pattern is done playing, but for now just move the playback
+        // back into the previous song pattern, which could replay some notes and sound buggy, but still better
+        // than cutting up the beginning of the song if we'd move the playback halfway through the first song pattern.
+        if self.active_song_pattern == self.selected_song_pattern {
+            self.activate_song_pattern(self.song.song_patterns.len() - 1);
+        }
     }
 
     fn commit_stub_song_pattern(&mut self) {
+        if !self.has_stub_pattern {
+            return;
+        }
         let committed_song_pattern = self.song.song_patterns.len() - 1;
         let committed_pattern = self.song.song_patterns[committed_song_pattern] as i32;
-        self.append_stub_song_pattern();
+        self.has_stub_pattern = false;
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
@@ -1251,7 +1283,7 @@ impl Sequencer {
                 row_data.number = committed_pattern;
                 vec_model.set_row_data(committed_song_pattern, row_data);
 
-                // Append a new stub without showing the pattern number so that it looks unused
+                // Append a new UI-only stub
                 vec_model.push(SongPatternData {
                     number: -1,
                     selected: false,
@@ -1264,42 +1296,53 @@ impl Sequencer {
         // Eventually we should be able to multi-select, cut and paste multiple song patterns,
         // but for now we only allow appending at the end and removing the last non-stub song pattern,
         // requiring the user to select exactly that one.
-        if self.selected_song_pattern + 2 == self.song.song_patterns.len() {
-            debug_assert!(self.song.song_patterns.len() > 1);
+        if !self.has_stub_pattern && self.selected_song_pattern + 1 == self.song.song_patterns.len() {
             self.song.song_patterns.remove(self.selected_song_pattern);
 
             self.main_window
                 .upgrade_in_event_loop(move |handle| {
                     let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
                     let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                    // The last index is the UI-only stub, so remove the one before.
                     vec_model.remove(vec_model.row_count() - 2);
                 })
                 .unwrap();
 
+            let next_selection = if !self.song.song_patterns.is_empty() {
+                self.song.song_patterns.len() - 1
+            } else {
+                // select_song_pattern_internal(0) in this case will append a stub pattern.
+                0
+            };
             if self.active_song_pattern == self.selected_song_pattern {
-                self.activate_song_pattern(self.song.song_patterns.len() - 1);
+                self.activate_song_pattern(next_selection);
             }
-            self.select_song_pattern_internal(self.song.song_patterns.len() - 1);
+            self.select_song_pattern_internal(next_selection);
+            self.update_steps();
         }
     }
 
     fn set_song(&mut self, song: SequencerSong) {
         self.song = song;
-        self.append_stub_song_pattern();
+        // self.append_stub_song_pattern();
 
         let song_patterns = self.song.song_patterns.clone();
         let frames_per_step = self.song.frames_per_step;
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let last = song_patterns.len() - 1;
                 let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-                for (i, number) in song_patterns.iter().enumerate() {
+                for number in song_patterns.iter() {
                     vec_model.push(SongPatternData {
-                        number: if i != last { *number as i32 } else { -1 },
+                        number: *number as i32,
                         selected: false,
                     });
                 }
+                // Append a UI-only stub
+                vec_model.push(SongPatternData {
+                    number: -1,
+                    selected: false,
+                });
 
                 let mut settings: SongSettings = Default::default();
                 settings.frames_per_step = frames_per_step as i32;
@@ -1307,7 +1350,10 @@ impl Sequencer {
             })
             .unwrap();
 
+        self.select_step_internal(0);
+        self.select_song_pattern_internal(0);
         self.activate_song_pattern(0);
+        self.update_steps();
         self.select_instrument(self.selected_instrument);
     }
 
