@@ -448,6 +448,10 @@ impl Sequencer {
         self.pattern_idx(self.active_song_pattern)
     }
 
+    fn selected_pattern_idx(&self) -> usize {
+        self.pattern_idx(self.selected_song_pattern)
+    }
+
     fn activate_song_pattern(&mut self, song_pattern: usize) -> () {
         self.active_song_pattern = song_pattern;
 
@@ -596,7 +600,7 @@ impl Sequencer {
 
     pub fn cycle_pattern_instrument(&mut self, forwards: bool) -> () {
         let maybe_next =
-            self.song.patterns[self.active_pattern_idx()].next_instrument(self.selected_instrument, forwards);
+            self.song.patterns[self.selected_pattern_idx()].next_instrument(self.selected_instrument, forwards);
         if let Some(instrument) = maybe_next {
             self.select_instrument(instrument)
         }
@@ -619,7 +623,7 @@ impl Sequencer {
     }
 
     fn update_steps(&mut self) -> () {
-        let pattern = &self.song.patterns[self.pattern_idx(self.selected_song_pattern)];
+        let pattern = &self.song.patterns[self.selected_pattern_idx()];
         let maybe_steps = pattern.get_steps(self.selected_instrument).map(|s| s.clone());
 
         let active_step = if self.active_song_pattern == self.selected_song_pattern {
