@@ -16,6 +16,7 @@ export component PatternsFocusScope inherits FocusScope {
     key_pressed(e) => {
         if (e.text == Key.UpArrow) { GlobalEngine.select_next_song_pattern(false); }
         else if (e.text == Key.DownArrow) { GlobalEngine.select_next_song_pattern(true); }
+        else if (e.modifiers.shift && e.text == Key.Control) { GlobalEngine.remove_last_song_pattern(); }
         else if (e.text == Key.Control) { GlobalEngine.cycle_song_pattern_start(); }
         else if (e.modifiers.control && e.text == Key.LeftArrow) { GlobalEngine.cycle_song_pattern(false); }
         else if (e.modifiers.control && e.text == Key.RightArrow) { GlobalEngine.cycle_song_pattern(true); }

@@ -1261,19 +1261,25 @@ impl Sequencer {
     }
 
     pub fn remove_last_song_pattern(&mut self) {
-        if !self.song.song_patterns.is_empty() {
-            self.song.song_patterns.pop();
-            if self.active_song_pattern > self.song.song_patterns.len() {
-                self.select_song_pattern(self.song.song_patterns.len());
-            }
+        // Eventually we should be able to multi-select, cut and paste multiple song patterns,
+        // but for now we only allow appending at the end and removing the last non-stub song pattern,
+        // requiring the user to select exactly that one.
+        if self.selected_song_pattern + 2 == self.song.song_patterns.len() {
+            debug_assert!(self.song.song_patterns.len() > 1);
+            self.song.song_patterns.remove(self.selected_song_pattern);
 
             self.main_window
                 .upgrade_in_event_loop(move |handle| {
                     let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
                     let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-                    vec_model.remove(vec_model.row_count() - 1);
+                    vec_model.remove(vec_model.row_count() - 2);
                 })
                 .unwrap();
+
+            if self.active_song_pattern == self.selected_song_pattern {
+                self.activate_song_pattern(self.song.song_patterns.len() - 1);
+            }
+            self.select_song_pattern_internal(self.song.song_patterns.len() - 1);
         }
     }
 
