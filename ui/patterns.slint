@@ -67,12 +67,13 @@ component SequencerStep inherits Rectangle {
     callback pressed();
     callback right_pressed();
     in property<bool> highlighted;
+    in property<bool> show_selection;
     in property<StepData> step;
     in property<string> name;
     border_width: 1px;
     border_color: highlighted ? black : transparent;
     border_radius: self.height / 8;
-    background: step.selected ? lightgrey : transparent;
+    background: step.selected && root.show_selection ? lightgrey : transparent;
     Text {
         x: 0px;
         text: (step.param0_set ? step.param0_val : "") + " / " + (step.param1_set ? step.param1_val : "");
@@ -192,6 +193,7 @@ export component PatternsPanel inherits HorizontalLayout {
             HorizontalLayout {
                 SequencerStep {
                     highlighted: idx == GlobalEngine.sequencer_step_active;
+                    show_selection: steps_key_handler.has_focus;
                     step: step;
                     name: GlobalUtils.get_midi_note_name(step.note);
                     pressed => { GlobalEngine.toggle_step(idx); }
