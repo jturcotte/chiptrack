@@ -215,6 +215,10 @@ struct Pattern {
 }
 
 impl Pattern {
+    fn is_empty(&self) -> bool {
+        self.instruments.is_empty()
+    }
+
     fn get_steps<'a>(&'a self, instrument: u8) -> Option<&'a [InstrumentStep; NUM_STEPS]> {
         self.instruments
             .iter()
@@ -1187,11 +1191,49 @@ impl Sequencer {
         val2
     }
 
+    pub fn cycle_song_pattern_start(&mut self) {
+        if self.selected_song_pattern == self.song.song_patterns.len() - 1 {
+            self.commit_stub_song_pattern();
+        }
+    }
+
+    pub fn cycle_song_pattern(&mut self, forward: bool) {
+        let song_pattern_idx = self.selected_song_pattern;
+        let pattern = &mut self.song.song_patterns[song_pattern_idx];
+        if forward && *pattern < NUM_PATTERNS - 1 {
+            *pattern += 1;
+        } else if !forward && *pattern > 0 {
+            *pattern -= 1;
+        }
+
+        let new_pattern = *pattern as i32;
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
+
+                let mut row_data = model.row_data(song_pattern_idx).unwrap();
+                row_data.number = new_pattern;
+                model.set_row_data(song_pattern_idx, row_data);
+            })
+            .unwrap();
+
+        self.update_steps();
+    }
+
     fn append_stub_song_pattern(&mut self) {
-        // The song must have at least one song pattern pointing to a valid pattern.
-        self.song
-            .song_patterns
-            .push(self.song.song_patterns.iter().max().map_or(0, |m| m + 1));
+        // The last song_pattern entry is a stub one to allow editing without an explicit append operation.
+        // To prevent having to check everywhere whether the selected song pattern is real or not, pre-append
+        // a pattern each time a new song pattern stub is comitted with some pattern already empty and not in use.
+        // This can lead to some weird issues where the user can then manually cycle another song pattern onto
+        // the pre-allocated pattern index, without knowing as the UI isn't showing it.
+        self.song.song_patterns.push(
+            self.song
+                .patterns
+                .iter()
+                .enumerate()
+                .position(|(i, p)| p.is_empty() && !self.song.song_patterns.contains(&i))
+                .unwrap_or(0),
+        );
     }
 
     fn commit_stub_song_pattern(&mut self) {
@@ -1209,24 +1251,9 @@ impl Sequencer {
                 row_data.number = committed_pattern;
                 vec_model.set_row_data(committed_song_pattern, row_data);
 
-                // Append a new stub without showing the pattern number
+                // Append a new stub without showing the pattern number so that it looks unused
                 vec_model.push(SongPatternData {
                     number: -1,
-                    selected: false,
-                });
-            })
-            .unwrap();
-    }
-
-    pub fn append_song_pattern(&mut self, pattern: usize) {
-        self.song.song_patterns.push(pattern);
-
-        self.main_window
-            .upgrade_in_event_loop(move |handle| {
-                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
-                vec_model.push(SongPatternData {
-                    number: pattern as i32,
                     selected: false,
                 });
             })

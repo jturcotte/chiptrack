@@ -13,11 +13,14 @@ export component PatternsFocusScope inherits FocusScope {
     callback root_key_pressed(KeyEvent) -> EventResult;
     callback root_key_released(KeyEvent) -> EventResult;
 
-    key_pressed(event) => {
-        if (event.text == Key.UpArrow) { GlobalEngine.select_next_song_pattern(false); }
-        else if (event.text == Key.DownArrow) { GlobalEngine.select_next_song_pattern(true); }
+    key_pressed(e) => {
+        if (e.text == Key.UpArrow) { GlobalEngine.select_next_song_pattern(false); }
+        else if (e.text == Key.DownArrow) { GlobalEngine.select_next_song_pattern(true); }
+        else if (e.text == Key.Control) { GlobalEngine.cycle_song_pattern_start(); }
+        else if (e.modifiers.control && e.text == Key.LeftArrow) { GlobalEngine.cycle_song_pattern(false); }
+        else if (e.modifiers.control && e.text == Key.RightArrow) { GlobalEngine.cycle_song_pattern(true); }
         else {
-            return root_key_pressed(event);
+            return root_key_pressed(e);
         }
         accept
     }
