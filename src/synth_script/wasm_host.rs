@@ -30,7 +30,7 @@ pub struct HostFunctionS<F> {
 impl<F> HostFunctionS<F> {
     pub fn new(name: &str, closure: F) -> HostFunctionS<F> {
         HostFunctionS {
-            closure: closure,
+            closure,
             name: CString::new(name).unwrap(),
         }
     }
@@ -58,7 +58,7 @@ pub struct HostFunctionSIINNNN<F> {
 impl<F> HostFunctionSIINNNN<F> {
     pub fn new(name: &str, closure: F) -> HostFunctionSIINNNN<F> {
         HostFunctionSIINNNN {
-            closure: closure,
+            closure,
             name: CString::new(name).unwrap(),
         }
     }
@@ -125,7 +125,7 @@ pub struct HostFunctionII<F> {
 impl<F> HostFunctionII<F> {
     pub fn new(name: &str, closure: F) -> HostFunctionII<F> {
         HostFunctionII {
-            closure: closure,
+            closure,
             name: CString::new(name).unwrap(),
         }
     }
@@ -153,7 +153,7 @@ pub struct HostFunctionA<F> {
 impl<F> HostFunctionA<F> {
     pub fn new(name: &str, closure: F) -> HostFunctionA<F> {
         HostFunctionA {
-            closure: closure,
+            closure,
             name: CString::new(name).unwrap(),
         }
     }
@@ -210,7 +210,7 @@ unsafe fn malloc_func(size: usize) -> *mut u8 {
     // free only provides the allocated pointer, so we need to expand the allocation,
     // store the size at the beginning and return the address just after to the application.
     core::slice::from_raw_parts_mut(ptr as *mut usize, 1)[0] = size;
-    ptr.offset(PTR_SIZE as isize)
+    ptr.add(PTR_SIZE)
 }
 
 unsafe fn free_func(ptr: *mut u8) {
@@ -226,7 +226,7 @@ unsafe fn realloc_func(ptr: *mut u8, new_size: usize) -> *mut u8 {
     let layout = Layout::from_size_align(size, PTR_SIZE).unwrap();
     let new_ptr = realloc(alloc_ptr, layout, new_size);
     core::slice::from_raw_parts_mut(alloc_ptr as *mut usize, 1)[0] = new_size;
-    new_ptr.offset(PTR_SIZE as isize)
+    new_ptr.add(PTR_SIZE)
 }
 
 impl WasmRuntime {
@@ -283,7 +283,7 @@ impl WasmModule {
                 error_buf.as_mut_ptr(),
                 error_buf.len() as u32,
             );
-            if module == ptr::null_mut() {
+            if module.is_null() {
                 panic!("wasm_runtime_load failed: {:?}", CStr::from_ptr(error_buf.as_ptr()));
             }
             Ok(WasmModule {
@@ -314,7 +314,7 @@ impl WasmModuleInst {
                 error_buf.as_mut_ptr(),
                 error_buf.len() as u32,
             );
-            if module_inst == ptr::null_mut() {
+            if module_inst.is_null() {
                 panic!(
                     "wasm_runtime_instantiate failed: {:?}",
                     CStr::from_ptr(error_buf.as_ptr())
@@ -351,7 +351,7 @@ impl WasmModuleInst {
     fn lookup_function(&self, name: &CStr) -> Option<wasm_function_inst_t> {
         unsafe {
             let f = wasm_runtime_lookup_function(self.module_inst, name.as_ptr(), ptr::null());
-            if f != ptr::null_mut() {
+            if !f.is_null() {
                 Some(f)
             } else {
                 None
@@ -389,7 +389,7 @@ impl WasmModuleInst {
         unsafe {
             // get the singleton execution environment of this instance to execute the WASM functions
             let exec_env = wasm_runtime_get_exec_env_singleton(self.module_inst);
-            if exec_env == ptr::null_mut() {
+            if exec_env.is_null() {
                 return Err("wasm_runtime_get_exec_env_singleton failed.".to_string());
             }
 
@@ -413,7 +413,7 @@ impl WasmModuleInst {
         unsafe {
             // get the singleton execution environment of this instance to execute the WASM functions
             let exec_env = wasm_runtime_get_exec_env_singleton(self.module_inst);
-            if exec_env == ptr::null_mut() {
+            if exec_env.is_null() {
                 return Err("wasm_runtime_get_exec_env_singleton failed.".to_string());
             }
             // call the WASM function

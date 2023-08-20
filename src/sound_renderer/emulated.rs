@@ -69,10 +69,10 @@ impl SyncPulse {
     fn new(enabled: bool, sample_rate: u32, tone_freq: u32, loops: u32) -> SyncPulse {
         let period = sample_rate / tone_freq;
         SyncPulse {
-            enabled: enabled,
+            enabled,
             state: PulseState::Up(period, 2),
-            period: period,
-            loops: loops,
+            period,
+            loops,
         }
     }
 
@@ -119,7 +119,7 @@ impl Iterator for SyncPulse {
 
 impl rboy::AudioPlayer for FakePlayer {
     fn play(&mut self, left_channel: &[f32], right_channel: &[f32], viz_channel: &[f32]) {
-        let mut left_iter = left_channel.iter();
+        let left_iter = left_channel.iter();
         let mut right_iter = right_channel.iter();
         let mut state = self.state.lock().unwrap();
         let gain = state.gain;
@@ -127,7 +127,7 @@ impl rboy::AudioPlayer for FakePlayer {
         state.buffer_viz.extend_from_slice(viz_channel);
 
         state.buffer.reserve(left_channel.len() * 2);
-        while let Some(left) = left_iter.next() {
+        for left in left_iter {
             if let Some(pulse_sample) = state.sync_pulse.next() {
                 let right = (left + right_iter.next().unwrap()) / 2.0;
                 state.buffer.push(pulse_sample);
@@ -161,12 +161,12 @@ impl Synth {
         let output_data = Arc::new(Mutex::new(OutputData {
             buffer: Vec::new(),
             buffer_viz: Vec::new(),
-            gain: gain,
+            gain,
             sync_pulse: SyncPulse::new(settings.sync_enabled, sample_rate, 300, 2),
         }));
 
         let player = Box::new(FakePlayer {
-            sample_rate: sample_rate,
+            sample_rate,
             state: output_data.clone(),
         });
         let mut dmg = rboy::Sound::new(player);
@@ -175,8 +175,8 @@ impl Synth {
 
         Synth {
             dmg: Rc::new(RefCell::new(dmg)),
-            output_data: output_data,
-            main_window: main_window,
+            output_data,
+            main_window,
         }
     }
 
@@ -212,12 +212,12 @@ impl Synth {
         move |addr: i32, value: i32| {
             let (maybe_lsb, maybe_msb) = Synth::gba_to_gb_addr(addr);
             let mut dmg = dmg_cell.borrow_mut();
-            maybe_lsb.map(|a| {
+            if let Some(a) = maybe_lsb {
                 dmg.wb(a, value as u8);
-            });
-            maybe_msb.map(|a| {
+            }
+            if let Some(a) = maybe_msb {
                 dmg.wb(a, (value >> 8) as u8);
-            });
+            }
         }
     }
 
@@ -362,7 +362,8 @@ impl Synth {
                                     && last.volume == trace.volume
                                 {
                                     last.num_ticks += trace.num_ticks;
-                                    Some(trace_vec_model.set_row_data(last_index, last))
+                                    trace_vec_model.set_row_data(last_index, last);
+                                    Some(())
                                 } else {
                                     None
                                 }
@@ -443,7 +444,7 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
     }
 }
 
-fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) -> () {
+fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) {
     #[cfg(not(target_arch = "wasm32"))]
     while let Ok(msg) = notify_recv.try_recv() {
         let reload = if let Some(instruments_path) = engine.instruments_path() {
@@ -577,7 +578,7 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
                 move |dest: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     SOUND_ENGINE.with(|maybe_engine_cell| {
                         let mut maybe_engine = maybe_engine_cell.borrow_mut();
-                        if let None = *maybe_engine {
+                        if maybe_engine.is_none() {
                             let synth = Synth::new(window_weak.clone(), sample_rate, initial_settings.clone());
                             *maybe_engine = Some(SoundEngine::new(synth, window_weak.clone()));
                         }
@@ -600,7 +601,7 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
                                 synth_output = synth_output_mutex.lock().unwrap();
 
                                 if last_waveform_consumed.load(Ordering::Relaxed) {
-                                    let buffer_viz = std::mem::replace(&mut synth_output.buffer_viz, Vec::new());
+                                    let buffer_viz = std::mem::take(&mut synth_output.buffer_viz);
                                     last_waveform_consumed.store(false, Ordering::Relaxed);
                                     let consumed_clone = last_waveform_consumed.clone();
                                     window_weak

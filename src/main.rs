@@ -57,7 +57,7 @@ pub fn main() {
 }
 
 // FIXME: Can it be moved?
-#[cfg(any(feature = "gba"))]
+#[cfg(feature = "gba")]
 #[no_mangle]
 extern "C" fn main() -> ! {
     gba_platform::init();
@@ -257,30 +257,22 @@ fn run_main() {
             if pressed {
                 if !already_pressed.contains(&code) {
                     already_pressed.push(code.to_owned());
-                    match code {
-                        // Key.Backspace
-                        '\u{8}' => {
-                            cloned_sound_renderer
-                                .borrow_mut()
-                                .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().set_erasing(true));
-                            return true;
-                        }
-                        _ => (),
+                    if code == '\u{8}' {
+                        cloned_sound_renderer
+                            .borrow_mut()
+                            .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().set_erasing(true));
+                        return true;
                     }
                 }
             } else {
                 if let Some(index) = already_pressed.iter().position(|x| *x == code) {
                     already_pressed.swap_remove(index);
                 }
-                match code {
-                    // Key.Backspace
-                    '\u{8}' => {
-                        cloned_sound_renderer
-                            .borrow_mut()
-                            .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().set_erasing(false));
-                        return true;
-                    }
-                    _ => (),
+                if code == '\u{8}' {
+                    cloned_sound_renderer
+                        .borrow_mut()
+                        .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().set_erasing(false));
+                    return true;
                 };
             }
         }
@@ -553,7 +545,7 @@ fn run_main() {
         .on_get_midi_note_name(|note| MidiNote(note).name().into());
     window
         .global::<GlobalUtils>()
-        .on_get_midi_note_short_name(|note| MidiNote(note).short_name().into());
+        .on_get_midi_note_short_name(|note| MidiNote(note).short_name());
 
     // For WASM we need to wait for the user to trigger the creation of the sound
     // device through an input event. For other platforms, artificially force the

@@ -62,12 +62,12 @@ impl MidiNote {
         }
     }
     pub fn base_note_name(&self) -> char {
-        ('A' as u8 + (self.key_pos() as u8 + 2) % 7) as char
+        (b'A' + (self.key_pos() as u8 + 2) % 7) as char
     }
     pub fn char_desc(&self) -> [char; 3] {
         let note_name = self.base_note_name();
         let sharp_char = if self.is_black() { '#' } else { '-' };
-        let octave_char = ('0' as u8 + self.octave() as u8) as char;
+        let octave_char = (b'0' + self.octave() as u8) as char;
         [note_name, sharp_char, octave_char]
     }
     pub fn name(&self) -> String {

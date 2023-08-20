@@ -41,7 +41,7 @@ struct PressedNote {
     extended_frames: Option<usize>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct InstrumentState {
     press_function: Option<WasmIndirectFunction>,
     release_function: Option<WasmIndirectFunction>,
@@ -49,19 +49,6 @@ struct InstrumentState {
     set_param_function: Option<WasmIndirectFunction>,
     frames_after_release: i32,
     pressed_note: Option<PressedNote>,
-}
-
-impl Default for InstrumentState {
-    fn default() -> Self {
-        InstrumentState {
-            press_function: None,
-            release_function: None,
-            frame_function: None,
-            set_param_function: None,
-            frames_after_release: 0,
-            pressed_note: None,
-        }
-    }
 }
 
 trait InstrumentColArrayExt {
@@ -99,61 +86,61 @@ impl SynthScript {
         let instrument_ids_clone = instrument_ids.clone();
         let instrument_states_clone = instrument_states.clone();
 
-        let set_instrument_at_column = move |cid: &CStr,
-                                             col: i32,
-                                             frames_after_release: i32,
-                                             press: Option<WasmIndirectFunction>,
-                                             release: Option<WasmIndirectFunction>,
-                                             frame: Option<WasmIndirectFunction>,
-                                             set_param: Option<WasmIndirectFunction>|
-              -> () {
-            let id = cid.to_str().unwrap();
-            assert!(
-                !id.is_empty(),
-                "set_instrument_at_column: id must not be empty, got {:?}",
-                id
-            );
-            assert!(
-                !instrument_ids_clone.borrow().is_empty(),
-                "set_instrument_at_column: can only be called during start/main"
-            );
-            assert!(
-                !instrument_ids_clone.borrow().iter().any(|i| i == id),
-                "set_instrument_at_column: id {} must be unique, but was already set",
-                id
-            );
-            assert!(
-                col >= 0 && col <= NUM_INSTRUMENT_COLS as i32,
-                "set_instrument_at_column: column must be 0 <= col <= {}, got {}",
-                NUM_INSTRUMENT_COLS,
-                col
-            );
-            let mut state_cols = instrument_states_clone.borrow_mut();
-            let (state, index) = {
-                let state_col = &mut state_cols[col as usize];
-                if state_col.len() >= 16 {
-                    elog!(
-                        "set_instrument_at_column: column {} already contains 16 instruments",
-                        col
-                    );
-                }
-                state_col.push(Default::default());
-                // Column index is in the two lsb
-                // 0, 1, 2, 3,
-                // 4, 5, 6, 7,
-                // ...
-                let index = ((state_col.len() - 1) << 2) + col as usize;
-                (&mut state_col.last_mut().unwrap(), index)
+        let set_instrument_at_column =
+            move |cid: &CStr,
+                  col: i32,
+                  frames_after_release: i32,
+                  press: Option<WasmIndirectFunction>,
+                  release: Option<WasmIndirectFunction>,
+                  frame: Option<WasmIndirectFunction>,
+                  set_param: Option<WasmIndirectFunction>| {
+                let id = cid.to_str().unwrap();
+                assert!(
+                    !id.is_empty(),
+                    "set_instrument_at_column: id must not be empty, got {:?}",
+                    id
+                );
+                assert!(
+                    !instrument_ids_clone.borrow().is_empty(),
+                    "set_instrument_at_column: can only be called during start/main"
+                );
+                assert!(
+                    !instrument_ids_clone.borrow().iter().any(|i| i == id),
+                    "set_instrument_at_column: id {} must be unique, but was already set",
+                    id
+                );
+                assert!(
+                    col >= 0 && col <= NUM_INSTRUMENT_COLS as i32,
+                    "set_instrument_at_column: column must be 0 <= col <= {}, got {}",
+                    NUM_INSTRUMENT_COLS,
+                    col
+                );
+                let mut state_cols = instrument_states_clone.borrow_mut();
+                let (state, index) = {
+                    let state_col = &mut state_cols[col as usize];
+                    if state_col.len() >= 16 {
+                        elog!(
+                            "set_instrument_at_column: column {} already contains 16 instruments",
+                            col
+                        );
+                    }
+                    state_col.push(Default::default());
+                    // Column index is in the two lsb
+                    // 0, 1, 2, 3,
+                    // 4, 5, 6, 7,
+                    // ...
+                    let index = ((state_col.len() - 1) << 2) + col as usize;
+                    (&mut state_col.last_mut().unwrap(), index)
+                };
+
+                instrument_ids_clone.borrow_mut()[index] = id.into();
+
+                state.frames_after_release = frames_after_release;
+                state.press_function = press;
+                state.release_function = release;
+                state.frame_function = frame;
+                state.set_param_function = set_param;
             };
-
-            instrument_ids_clone.borrow_mut()[index] = id.into();
-
-            state.frames_after_release = frames_after_release;
-            state.press_function = press;
-            state.release_function = release;
-            state.frame_function = frame;
-            state.set_param_function = set_param;
-        };
 
         let functions: Vec<Box<dyn wasm::HostFunction>> = vec![
             Box::new(wasm::HostFunctionS::new("print", instrument_print)),
@@ -171,8 +158,8 @@ impl SynthScript {
         SynthScript {
             wasm_runtime: runtime,
             wasm_module_inst: None,
-            instrument_ids: instrument_ids,
-            instrument_states: instrument_states,
+            instrument_ids,
+            instrument_states,
             apply_instrument_ids_callback: Rc::new(apply_instrument_ids),
         }
     }
@@ -221,7 +208,7 @@ impl SynthScript {
             let buffer = std::fs::read(instruments_path)?;
             Ok(self.load_wasm_or_wat_bytes(buffer)?)
         } else {
-            return Err(format!("Project instruments file {:?} doesn't exist.", instruments_path).into());
+            Err(format!("Project instruments file {:?} doesn't exist.", instruments_path).into())
         }
     }
 
@@ -233,19 +220,12 @@ impl SynthScript {
         Ok(())
     }
 
-    pub fn press_instrument_note(
-        &mut self,
-        frame_number: usize,
-        instrument: u8,
-        note: u8,
-        param0: i8,
-        param1: i8,
-    ) -> () {
+    pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u8, note: u8, param0: i8, param1: i8) {
         let mut states = self.instrument_states.borrow_mut();
         if let Some(state) = states.get_instrument(instrument) {
             if let Some(f) = &state.press_function {
                 state.pressed_note = Some(PressedNote {
-                    note: note,
+                    note,
                     pressed_frame: frame_number,
                     extended_frames: None,
                 });
@@ -258,7 +238,7 @@ impl SynthScript {
         }
     }
 
-    pub fn release_instrument(&mut self, frame_number: usize, instrument: u8) -> () {
+    pub fn release_instrument(&mut self, frame_number: usize, instrument: u8) {
         let mut states = self.instrument_states.borrow_mut();
         if let Some(state) = states.get_instrument(instrument) {
             if let Some(PressedNote {
@@ -294,7 +274,7 @@ impl SynthScript {
         }
     }
 
-    pub fn set_instrument_param(&mut self, instrument: u8, param_num: u8, val: i8) -> () {
+    pub fn set_instrument_param(&mut self, instrument: u8, param_num: u8, val: i8) {
         let mut states = self.instrument_states.borrow_mut();
         if let Some(state) = states.get_instrument(instrument) {
             if let Some(f) = &state.set_param_function {

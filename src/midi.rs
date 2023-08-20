@@ -17,8 +17,8 @@ impl Midi {
         let callback2 = move |_stamp: u64, message: &[u8], _: &mut ()| {
             let event = LiveEvent::parse(message).unwrap();
             println!("{:?} hex: {:x?}", event, message);
-            match event {
-                LiveEvent::Midi { channel, message } => match message {
+            if let LiveEvent::Midi { channel, message } = event {
+                match message {
                     MidiMessage::NoteOn { key, vel } if vel == 0 => {
                         println!("release note {} on channel {} vel {}", key, channel, vel);
                         release_callback(key.as_int());
@@ -32,8 +32,7 @@ impl Midi {
                         release_callback(key.as_int());
                     }
                     _ => {}
-                },
-                _ => {}
+                }
             }
         };
 
@@ -45,9 +44,9 @@ impl Midi {
                 let mut midi_in = MidiInput::new("Chiptrack").unwrap();
                 midi_in.ignore(midir::Ignore::All);
                 let port = &midi_in.ports()[i];
-                log!("Connecting to port {}", midi_in.port_name(&port).unwrap());
+                log!("Connecting to port {}", midi_in.port_name(port).unwrap());
                 midi_in
-                    .connect(&port, &format!("Chiptrack Input Port {}", i), callback2.clone(), ())
+                    .connect(port, &format!("Chiptrack Input Port {}", i), callback2.clone(), ())
                     .map_err(|e| elog!("Couldn't connect to MIDI input: {}", e))
                     .ok()
             })

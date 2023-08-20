@@ -87,11 +87,11 @@ impl SoundEngine {
         );
 
         SoundEngine {
-            sequencer: sequencer,
-            synth: synth,
-            script: script,
+            sequencer,
+            synth,
+            script,
             frame_number: 0,
-            main_window: main_window,
+            main_window,
             pressed_note: None,
             project_source: ProjectSource::New,
         }
@@ -199,12 +199,12 @@ impl SoundEngine {
         }
     }
 
-    pub fn set_playing(&mut self, val: bool) -> () {
+    pub fn set_playing(&mut self, val: bool) {
         let note_events = self.sequencer.borrow_mut().set_playing(val);
         self.send_note_events_to_synth(note_events);
     }
 
-    pub fn advance_frame(&mut self) -> () {
+    pub fn advance_frame(&mut self) {
         let (step_change, note_events) = self.sequencer.borrow_mut().advance_frame();
 
         self.send_note_events_to_synth(note_events);
@@ -215,7 +215,7 @@ impl SoundEngine {
         self.frame_number += 1;
     }
 
-    pub fn select_instrument(&mut self, instrument: u8) -> () {
+    pub fn select_instrument(&mut self, instrument: u8) {
         self.sequencer.borrow_mut().select_instrument(instrument);
 
         self.pressed_note = None;
@@ -234,7 +234,7 @@ impl SoundEngine {
             .unwrap();
     }
 
-    fn release_note_visually(&mut self, _note: u8) -> () {
+    fn release_note_visually(&mut self, _note: u8) {
         #[cfg(feature = "desktop")]
         self.main_window
             .upgrade_in_event_loop(move |handle| {
@@ -250,24 +250,24 @@ impl SoundEngine {
             .unwrap();
     }
 
-    pub fn cycle_instrument_param_start(&mut self) -> () {
+    pub fn cycle_instrument_param_start(&mut self) {
         let seq = self.sequencer.borrow();
         let note = seq.selected_note();
         let (p0, p1) = seq.selected_instrument_params();
         self.script
             .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
     }
-    pub fn cycle_instrument_param_end(&mut self) -> () {
+    pub fn cycle_instrument_param_end(&mut self) {
         self.script
             .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
     }
-    pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) -> () {
+    pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) {
         let new_val = self.sequencer.borrow_mut().cycle_instrument_param(param_num, forward);
         self.script
             .set_instrument_param(self.sequencer.borrow().selected_instrument, param_num, new_val)
     }
 
-    pub fn cycle_step_param_start(&mut self) -> () {
+    pub fn cycle_step_param_start(&mut self) {
         if !self.sequencer.borrow().playing() {
             let seq = self.sequencer.borrow();
             let (note, p0, p1) = seq.selected_note_and_params();
@@ -275,14 +275,14 @@ impl SoundEngine {
                 .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
         }
     }
-    pub fn cycle_step_param_end(&mut self) -> () {
+    pub fn cycle_step_param_end(&mut self) {
         if !self.sequencer.borrow().playing() {
             // FIXME: Ref-count the press or something to handle +Shift,+Ctrl,-Shift,-Ctrl
             self.script
                 .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
         }
     }
-    pub fn cycle_step_param(&mut self, param_num: u8, forward: bool) -> () {
+    pub fn cycle_step_param(&mut self, param_num: u8, forward: bool) {
         let new_val = self.sequencer.borrow_mut().cycle_step_param(param_num, forward);
         if !self.sequencer.borrow().playing() {
             self.script
@@ -290,7 +290,7 @@ impl SoundEngine {
         }
     }
 
-    pub fn cycle_note_start(&mut self) -> () {
+    pub fn cycle_note_start(&mut self) {
         let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_note(None, false);
         if !self.sequencer.borrow().playing() {
             self.script.press_instrument_note(
@@ -302,13 +302,13 @@ impl SoundEngine {
             );
         }
     }
-    pub fn cycle_note_end(&mut self) -> () {
+    pub fn cycle_note_end(&mut self) {
         if !self.sequencer.borrow().playing() {
             self.script
                 .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
         }
     }
-    pub fn cycle_note(&mut self, forward: bool, large_inc: bool) -> () {
+    pub fn cycle_note(&mut self, forward: bool, large_inc: bool) {
         let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_note(Some(forward), large_inc);
         if !self.sequencer.borrow().playing() {
             self.script.press_instrument_note(
@@ -321,7 +321,7 @@ impl SoundEngine {
         }
     }
 
-    pub fn press_note(&mut self, note: u8) -> () {
+    pub fn press_note(&mut self, note: u8) {
         let (p0, p1) = self.sequencer.borrow_mut().record_press(note);
         self.script.press_instrument_note(
             self.frame_number,
@@ -351,7 +351,7 @@ impl SoundEngine {
             .unwrap();
     }
 
-    pub fn release_note(&mut self, note: u8) -> () {
+    pub fn release_note(&mut self, note: u8) {
         // Instruments are monophonic, ignore any note release, either sequenced or live,
         // for the current instrument if it wasn't the last pressed one.
         if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), false) {
@@ -577,7 +577,7 @@ impl SoundEngine {
     pub fn reload_instruments_from_file(&mut self) {
         if let ProjectSource::File((_, path)) = &self.project_source {
             self.script
-                .load_file(&path.as_path())
+                .load_file(path.as_path())
                 .map_err(|e| elog!("Couldn't reload instruments from file {:?}.\n\tError: {:?}", path, e))
                 .unwrap();
         }

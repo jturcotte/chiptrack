@@ -64,7 +64,7 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
         let pattern_re = Regex::new(r"Pattern (\d+)").unwrap();
         let setting_re = Regex::new(r"(\w+): (.*)").unwrap();
 
-        while let Some((event, tag_range)) = self.iter.next() {
+        for (event, tag_range) in self.iter.by_ref() {
             match event {
                 Start(tag) => {
                     match tag {
@@ -119,7 +119,7 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                 }
                 Text(text) => {
                     if matches!(self.tag_stack.last(), Some(Heading(..))) {
-                        self.section = if let Some(pattern_cap) = pattern_re.captures(&*text) {
+                        self.section = if let Some(pattern_cap) = pattern_re.captures(&text) {
                             let num: usize = pattern_cap.get(1).unwrap().as_str().parse()?;
                             if num == 0 || num > NUM_PATTERNS {
                                 return Err(format!("Pattern headings must be >= 1 and <= 64: [{}]", &*text).into());
@@ -139,7 +139,7 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                         };
                     } else if self.section == Section::Song && self.tag_stack.contains(&Item) {
                         let caps = pattern_re
-                            .captures(&*text)
+                            .captures(&text)
                             .ok_or_else(|| format!("Invalid song pattern name: [{}]", &*text))?;
                         let parsed: usize = caps.get(1).unwrap().as_str().parse()?;
                         self.out.song_patterns.push(parsed - 1);
@@ -149,14 +149,14 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                     } else if matches!(self.section, Section::Pattern(_)) && self.tag_stack.contains(&TableRow) {
                         if let Section::Pattern(pattern_idx) = self.section {
                             let (text, ends_with_period) = text
-                                .strip_suffix(".")
+                                .strip_suffix('.')
                                 .map(|prefix| (prefix.trim(), true))
                                 .unwrap_or((text.trim(), false));
                             let instrument_id = &self.table_instrument_ids[self.table_column.unwrap()];
                             let step = &mut self.out.patterns[pattern_idx].get_steps_mut(instrument_id, None)
                                 [self.table_row.unwrap()];
                             if !text.is_empty() && text != "-" {
-                                let MidiNote(note) = MidiNote::from_name(&text)?;
+                                let MidiNote(note) = MidiNote::from_name(text)?;
                                 step.note = note as u8;
                             }
                             if ends_with_period {
@@ -164,7 +164,7 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                             }
                         }
                     } else if self.section == Section::Settings && self.tag_stack.contains(&Item) {
-                        let caps = setting_re.captures(&*text).ok_or_else(|| {
+                        let caps = setting_re.captures(&text).ok_or_else(|| {
                             format!("Invalid setting format: [{}]. Should be [SettingName: Value].", &*text)
                         })?;
                         let name = caps.get(1).unwrap().as_str();
@@ -234,10 +234,10 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
         write!(f, "## Song\n\n")?;
 
         for spi in song.song_patterns.iter() {
-            write!(f, "- [Pattern {}](#pattern-{})\n", spi + 1, spi + 1)?;
+            writeln!(f, "- [Pattern {}](#pattern-{})", spi + 1, spi + 1)?;
         }
 
-        write!(f, "\n")?;
+        writeln!(f)?;
     }
 
     for (pi, p) in song.patterns.iter().enumerate() {
@@ -281,11 +281,11 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
                 let id = &p.instruments[*ii].id;
                 write!(f, "|{: ^1$}", id, 4 + param_width)?;
             }
-            write!(f, "|\n")?;
+            writeln!(f, "|")?;
             for (_, param_width) in non_empty.iter().zip(param_max_widths.iter()) {
                 write!(f, "|----{:-^1$}", "", param_width)?;
             }
-            write!(f, "|\n")?;
+            writeln!(f, "|")?;
 
             for si in 0..NUM_STEPS {
                 for (ii, param_width) in non_empty.iter().zip(param_max_widths.iter()) {
@@ -303,16 +303,16 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
                     }
                     write!(f, "{:width$}", params_string(&s), width = param_width)?;
                 }
-                write!(f, "|\n")?;
+                writeln!(f, "|")?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
     }
 
     write!(f, "## Settings\n\n")?;
-    write!(f, "- {}: {}\n", INSTRUMENTS_FILE_SETTING, song.instruments_file)?;
-    write!(f, "- {}: {}\n", FRAMES_PER_STEP_SETTING, song.frames_per_step)?;
-    write!(f, "\n")?;
+    writeln!(f, "- {}: {}", INSTRUMENTS_FILE_SETTING, song.instruments_file)?;
+    writeln!(f, "- {}: {}", FRAMES_PER_STEP_SETTING, song.frames_per_step)?;
+    writeln!(f)?;
 
     f.flush()?;
 
