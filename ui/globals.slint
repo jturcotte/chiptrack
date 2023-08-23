@@ -90,7 +90,7 @@ export global GlobalEngine {
         {press: false}, {press: false}, {press: false},
         {press: false, release: true},
         {press: false}, {press: false}, {press: false}];
-    in-out property<int> sequencer_step_active: 0;
+    in-out property<int> sequencer_step_active: 8;
 
     in-out property<[InstrumentData]> instruments: [
         {id: "1", active: false}, {active: true}, {active: false}, {active: false},
@@ -136,8 +136,9 @@ export global GlobalEngine {
     callback cycle_song_pattern(bool);
     callback toggle_mute_instrument(int);
     callback toggle_step(int);
+    callback toggle_selected_step();
     callback toggle_step_release(int);
-    callback toggle_active_step_release();
+    callback toggle_selected_step_release();
     callback select_next_step(bool);
     callback play_clicked(bool);
     callback record_clicked(bool);

@@ -11,6 +11,7 @@ import { InstrumentsPanel } from "instruments.slint";
 import {
     GlobalUI,
     PatternsFocusScope,
+    StepColumn,
     StepsFocusScope
 } from "common.slint";
 
@@ -63,38 +64,60 @@ component SequencerPattern inherits Rectangle {
     }
 }
 
-component SequencerStep inherits Rectangle {
+component StepSelectableText inherits Rectangle {
+    in property<bool> selected;
+    in property text <=> t.text;
+    in property text_color <=> t.color;
+    in property horizontal_alignment <=> t.horizontal_alignment;
+    border_radius: self.height / 8;
+    background: selected ? lightgrey : transparent;
+    t := Text {
+        font_size: self.height * 0.75;
+        width: 100%;
+        height: 100%;
+        horizontal_alignment: center;
+        vertical_alignment: center;
+    }
+}
+
+component SequencerStep { 
     callback pressed();
     callback right_pressed();
     in property<bool> highlighted;
     in property<bool> show_selection;
     in property<StepData> step;
     in property<string> name;
-    border_width: 1px;
-    border_color: highlighted ? black : transparent;
-    border_radius: self.height / 8;
-    background: step.selected && root.show_selection ? lightgrey : transparent;
-    Text {
-        x: 0px;
-        text: (step.param0_set ? step.param0_val : "") + " / " + (step.param1_set ? step.param1_val : "");
-        width: 50%;
-        height: 100%;
-        font_size: self.height * 0.75;
-        horizontal_alignment: center;
-        vertical_alignment: center;
-        color: step.press ? black : #a0a0a0;
+    Rectangle {
+        border_width: 1px;
+        border_color: highlighted ? black : transparent;
+        border_radius: self.height / 8;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
     }
-    Text {
-        text:
-            (step.press ? "[" : "-") + (step.press ? name : "---") + (step.release ? "]" : "-");
-        x: parent.width / 2;
-        y: (parent.height - self.height) / 2;
-        width: 50%;
-        height: 100%;
-        font_size: self.height * 0.75;
-        color: step.press || step.release ? black : #a0a0a0;
-        horizontal_alignment: center;
-        vertical_alignment: center;
+
+    HorizontalLayout {
+        x: 0px;
+        spacing: 1px;
+        StepSelectableText {
+            selected: step.selected && root.show_selection && GlobalUI.selected_column == StepColumn.params;
+            width: 50%;
+            text: (step.param0_set ? step.param0_val : "") + " / " + (step.param1_set ? step.param1_val : "");
+            text_color: step.press ? black : #a0a0a0;
+        }
+        StepSelectableText {
+            text: (step.press ? "[" : "-") + (step.press ? name : "---");
+            selected: step.selected && root.show_selection && GlobalUI.selected_column == StepColumn.press;
+            y: (parent.height - self.height) / 2;
+            text_color: step.press || step.release ? black : #a0a0a0;
+            horizontal_alignment: right;
+        }
+        StepSelectableText {
+            text: (step.release ? "]" : "-");
+            selected: step.selected && root.show_selection && GlobalUI.selected_column != StepColumn.params;
+            y: (parent.height - self.height) / 2;
+            text_color: step.press || step.release ? black : #a0a0a0;
+            horizontal_alignment: left;
+        }
     }
     TouchArea {
         width: 100%;

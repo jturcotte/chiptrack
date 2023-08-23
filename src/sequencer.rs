@@ -226,10 +226,10 @@ impl Pattern {
             .map(|i| &i.steps)
     }
 
-    fn next_instrument(&self, current_instrument: u8, forwards: bool) -> Option<u8> {
-        match self.find_nearest_instrument_pos(current_instrument, forwards) {
-            // current_instrument is already in the pattern, cycle once forwards
-            Some((ii, i)) if i == current_instrument && forwards => self
+    fn next_instrument(&self, current_instrument: u8, forward: bool) -> Option<u8> {
+        match self.find_nearest_instrument_pos(current_instrument, forward) {
+            // current_instrument is already in the pattern, cycle once forward
+            Some((ii, i)) if i == current_instrument && forward => self
                 .instruments
                 .iter()
                 .cycle()
@@ -261,8 +261,8 @@ impl Pattern {
         ai
     }
 
-    fn find_nearest_instrument_pos(&self, instrument: u8, forwards: bool) -> Option<(usize, u8)> {
-        let cmp = if forwards { |t, b| t < b } else { |t, b| t > b };
+    fn find_nearest_instrument_pos(&self, instrument: u8, forward: bool) -> Option<(usize, u8)> {
+        let cmp = if forward { |t, b| t < b } else { |t, b| t > b };
         let mut best = None;
 
         for (ii, i) in self.instruments.iter().enumerate() {
@@ -497,14 +497,14 @@ impl Sequencer {
         self.song.frames_per_step = settings.frames_per_step as u32;
     }
 
-    pub fn select_next_song_pattern(&mut self, forwards: bool) {
+    pub fn select_next_song_pattern(&mut self, forward: bool) {
         let selected = self.selected_song_pattern;
         // Leave the possibility of selecting the stub pattern
         let last_pattern = self.song.song_patterns.len() - if self.has_stub_pattern { 1 } else { 0 };
 
-        if forwards && selected < last_pattern {
+        if forward && selected < last_pattern {
             self.select_song_pattern(selected + 1);
-        } else if !forwards && selected > 0 {
+        } else if !forward && selected > 0 {
             self.select_song_pattern(selected - 1);
         };
     }
@@ -582,9 +582,9 @@ impl Sequencer {
             .unwrap();
     }
 
-    pub fn select_next_step(&mut self, forwards: bool) {
+    pub fn select_next_step(&mut self, forward: bool) {
         let (next_step, next_song_pattern) = Self::next_step_and_pattern_and_song_pattern(
-            forwards,
+            forward,
             self.selected_step,
             self.selected_song_pattern,
             &self.song.song_patterns,
@@ -618,9 +618,9 @@ impl Sequencer {
         self.select_instrument((col + row * 4) as u8)
     }
 
-    pub fn cycle_pattern_instrument(&mut self, forwards: bool) {
+    pub fn cycle_pattern_instrument(&mut self, forward: bool) {
         let maybe_next =
-            self.song.patterns[self.selected_pattern_idx()].next_instrument(self.selected_instrument, forwards);
+            self.song.patterns[self.selected_pattern_idx()].next_instrument(self.selected_instrument, forward);
         if let Some(instrument) = maybe_next {
             self.select_instrument(instrument)
         }
@@ -734,8 +734,8 @@ impl Sequencer {
         self.select_step(step_num);
     }
 
-    pub fn toggle_active_step_release(&mut self) {
-        self.toggle_step_release(self.active_step)
+    pub fn toggle_selected_step(&mut self) {
+        self.toggle_step(self.selected_step)
     }
 
     pub fn toggle_step_release(&mut self, step_num: usize) {
@@ -746,9 +746,13 @@ impl Sequencer {
         self.select_step(step_num);
     }
 
-    fn advance_step(&mut self, forwards: bool) {
+    pub fn toggle_selected_step_release(&mut self) {
+        self.toggle_step_release(self.selected_step)
+    }
+
+    fn advance_step(&mut self, forward: bool) {
         let (next_step, next_song_pattern) = Self::next_step_and_pattern_and_song_pattern(
-            forwards,
+            forward,
             self.active_step,
             self.active_song_pattern,
             &self.song.song_patterns,
@@ -1436,14 +1440,14 @@ impl Sequencer {
     }
 
     fn next_step_and_pattern_and_song_pattern(
-        forwards: bool,
+        forward: bool,
         from_step: usize,
         from_song_pattern: usize,
         song_patterns: &Vec<usize>,
     ) -> (usize, usize) {
-        let delta = if forwards { 1_isize } else { -1 };
+        let delta = if forward { 1_isize } else { -1 };
         let next_step = ((from_step as isize + NUM_STEPS as isize + delta) % NUM_STEPS as isize) as usize;
-        let wraps = forwards && next_step == 0 || !forwards && from_step == 0;
+        let wraps = forward && next_step == 0 || !forward && from_step == 0;
         if wraps {
             let next_song_pattern = ((from_song_pattern as isize + song_patterns.len() as isize + delta)
                 % song_patterns.len() as isize) as usize;
