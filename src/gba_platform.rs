@@ -81,18 +81,15 @@ unsafe impl critical_section::Impl for GbaCriticalSection {
 }
 
 pub struct MainScreen {
-    sequencer_patterns_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     sequencer_song_patterns_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     sequencer_steps_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     sequencer_pattern_instruments_tracker:
         Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
-    was_in_song_mode: RefCell<bool>,
     was_in_instruments_grid: RefCell<bool>,
     sequencer_song_pattern_active_previous: RefCell<usize>,
-    sequencer_pattern_active_previous: RefCell<usize>,
     sequencer_step_active_previous: RefCell<usize>,
-    current_instrument_previous: RefCell<usize>,
+    selected_instrument_previous: RefCell<usize>,
 }
 
 struct ModelDirtinessTracker {
@@ -150,28 +147,21 @@ impl MainScreen {
             .write(Color(0b0_11010_11010_11010));
 
         Self {
-            sequencer_patterns_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             sequencer_song_patterns_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             sequencer_steps_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             sequencer_pattern_instruments_tracker: Box::pin(
                 ModelChangeListenerContainer::<ModelDirtinessTracker>::default(),
             ),
             instruments_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
-            was_in_song_mode: RefCell::new(false),
             was_in_instruments_grid: RefCell::new(false),
             sequencer_song_pattern_active_previous: RefCell::new(0),
-            sequencer_pattern_active_previous: RefCell::new(0),
             sequencer_step_active_previous: RefCell::new(0),
-            current_instrument_previous: RefCell::new(0),
+            selected_instrument_previous: RefCell::new(0),
         }
     }
 
     fn attach_trackers(&self) {
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
-        GlobalEngine::get(&handle)
-            .get_sequencer_patterns()
-            .model_tracker()
-            .attach_peer(Pin::as_ref(&self.sequencer_patterns_tracker).model_peer());
         GlobalEngine::get(&handle)
             .get_sequencer_song_patterns()
             .model_tracker()
@@ -206,9 +196,9 @@ impl MainScreen {
         let sequencer_step_active = global_engine.get_sequencer_step_active() as usize;
         let sequencer_step_active_dirty =
             self.sequencer_step_active_previous.replace(sequencer_step_active) != sequencer_step_active;
-        let current_instrument = global_engine.get_current_instrument() as usize;
-        let current_instrument_dirty =
-            self.current_instrument_previous.replace(current_instrument) != current_instrument;
+        let selected_instrument = global_engine.get_selected_instrument() as usize;
+        let selected_instrument_dirty =
+            self.selected_instrument_previous.replace(selected_instrument) != selected_instrument;
 
         let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
 
@@ -222,7 +212,6 @@ impl MainScreen {
 
         if sequencer_song_pattern_active_dirty || self.sequencer_song_patterns_tracker.take_dirtiness() {
             let pattern_model = global_engine.get_sequencer_song_patterns();
-            let active_index = global_engine.get_sequencer_song_patterns();
             let vid_row = tsb.get_row(0).unwrap();
             vid_row
                 .iter()
@@ -245,12 +234,12 @@ impl MainScreen {
         }
 
         if self.sequencer_steps_tracker.take_dirtiness() || sequencer_step_active_dirty {
-            let current_instrument = global_engine.get_current_instrument() as usize;
+            let selected_instrument = global_engine.get_selected_instrument() as usize;
             let vid_row = tsb.get_row(0).unwrap();
-            let current_instrument_id = global_engine.get_instruments().row_data(current_instrument).unwrap().id;
+            let selected_instrument_id = global_engine.get_instruments().row_data(selected_instrument).unwrap().id;
             vid_row
                 .iter_range(6..6 + 3)
-                .zip(current_instrument_id.chars().chain(core::iter::repeat(' ')))
+                .zip(selected_instrument_id.chars().chain(core::iter::repeat(' ')))
                 .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
 
             let sequencer_steps = global_engine.get_sequencer_steps();
@@ -341,10 +330,10 @@ impl MainScreen {
             }
         }
         if instruments_grid
-            && (instruments_grid_dirty || current_instrument_dirty || self.instruments_tracker.take_dirtiness())
+            && (instruments_grid_dirty || selected_instrument_dirty || self.instruments_tracker.take_dirtiness())
         {
             let instruments = global_engine.get_instruments();
-            let scroll_pos = (current_instrument / 4).max(2).min(instruments.row_count() / 4 - 2) - 2;
+            let scroll_pos = (selected_instrument / 4).max(2).min(instruments.row_count() / 4 - 2) - 2;
             for y in scroll_pos..scroll_pos + 4 {
                 let vid_row = tsb.get_row((y - scroll_pos) * 4 + 2).unwrap();
                 let sel_vid_row = tsb.get_row((y - scroll_pos) * 4 + 3).unwrap();
@@ -360,7 +349,7 @@ impl MainScreen {
                         .zip(instrument.id.chars().chain(core::iter::repeat(' ')))
                         .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
                     let sel_char =
-                        TextEntry::new().with_tile((instrument_idx == current_instrument) as u16 * '-' as u16);
+                        TextEntry::new().with_tile((instrument_idx == selected_instrument) as u16 * '-' as u16);
                     sel_vid_row
                         .iter_range(x * 4 + 11..x * 4 + 11 + 4)
                         .for_each(|a| a.write(sel_char));
