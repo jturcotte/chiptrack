@@ -3,6 +3,7 @@
 
 extern crate alloc;
 
+use crate::elog;
 use crate::log;
 use crate::sound_renderer::SoundRenderer;
 use crate::GlobalEngine;
@@ -31,9 +32,6 @@ use slint::Model;
 use slint::PlatformError;
 use slint::SharedString;
 
-#[cfg(feature = "panic-probe")]
-use panic_probe as _;
-
 #[alloc_error_handler]
 fn oom(layout: core::alloc::Layout) -> ! {
     panic!("Out of memory {:?}", layout);
@@ -43,7 +41,10 @@ fn oom(layout: core::alloc::Layout) -> ! {
 fn panic_handler(info: &core::panic::PanicInfo) -> ! {
     if let Ok(mut logger) = MgbaBufferedLogger::try_new(MgbaMessageLevel::Fatal) {
         write!(logger, "{info}").ok();
+    } else {
+        elog!("{info}");
     }
+
     loop {}
 }
 
@@ -68,6 +69,7 @@ const KEYS_REPEATABLE: u16 = 0b00_11110000;
 const NORMAL_TEXT: u16 = 0;
 const FADED_TEXT: u16 = 0b001;
 const SELECTED_TEXT: u16 = 0b010;
+const ERROR_TEXT: u16 = 0b101;
 
 // This is a type alias for the enabled `restore-state-*` feature.
 // For example, it is `bool` if you enable `restore-state-bool`.
@@ -188,14 +190,17 @@ fn draw_ascii_chars<RB: core::ops::RangeBounds<usize>, U: Iterator<Item = char>,
     draw_ascii(vid_row, range, chars.map(|c| c as u8), palbank)
 }
 
+pub fn draw_error_text(t: &str) {
+    let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
+    draw_ascii_chars(tsb.get_row(19).unwrap(), 0.., t.chars(), ERROR_TEXT);
+}
+
 impl MainScreen {
     pub fn new() -> Self {
-        {
-            // Copy text data into the first tile indices, the tile index is then the ASCII code.
-            // Set the offset to 1 (including transparent pixels) since I want the
-            // background color to be set by the palette as well.
-            Cga8x8Thick.bitunpack_4bpp(CHARBLOCK0_4BPP.as_region(), 0x80000001);
-        }
+        // Copy text data into the first tile indices, the tile index is then the ASCII code.
+        // Set the offset to 1 (including transparent pixels) since I want the
+        // background color to be set by the palette as well.
+        Cga8x8Thick.bitunpack_4bpp(CHARBLOCK0_4BPP.as_region(), 0x80000001);
 
         BG0CNT.write(BackgroundControl::new().with_screenblock(31));
         BACKDROP_COLOR.write(Color::WHITE);
@@ -218,6 +223,7 @@ impl MainScreen {
             FADED_TEXT | SELECTED_TEXT,
             [Color(0b0_11000_11000_11000), Color(0b0_11110_10010_00100)],
         );
+        set_palette(ERROR_TEXT, [Color::WHITE, Color::RED]);
 
         Self {
             sequencer_song_patterns_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),

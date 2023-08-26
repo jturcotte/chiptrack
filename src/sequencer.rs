@@ -1411,7 +1411,6 @@ impl Sequencer {
 
     #[cfg(feature = "gba")]
     pub fn load_postcard_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
-        log!("SSSS {}", bytes.len());
         let song: SequencerSong = from_bytes(bytes).unwrap();
         self.set_song(song);
         Ok(())
