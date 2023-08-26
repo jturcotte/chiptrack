@@ -310,7 +310,10 @@ impl MainScreen {
 
             // sequencer_song_patterns_tracker will be dirty and trigger a redraw any time this is changed.
             let sequencer_song_pattern_selected = global_engine.get_sequencer_song_pattern_selected() as usize;
-            let scroll_pos = sequencer_song_pattern_selected.max(8).min(pattern_model.row_count() - 8) - 8;
+            let scroll_pos = sequencer_song_pattern_selected
+                .max(8)
+                .min(pattern_model.row_count() - 8)
+                - 8;
             for i in scroll_pos..(pattern_model.row_count().min(scroll_pos + 16)) {
                 let vid_row = tsb.get_row(i - scroll_pos + 1).unwrap();
                 let row_data = pattern_model.row_data(i).unwrap();
@@ -484,30 +487,30 @@ impl MainScreen {
             && (instruments_grid_dirty || selected_instrument_dirty || self.instruments_tracker.take_dirtiness())
         {
             let instruments = global_engine.get_instruments();
-            let scroll_pos = (selected_instrument / 4).max(2).min(instruments.row_count() / 4 - 2) - 2;
-            for y in scroll_pos..scroll_pos + 4 {
-                let vid_row = tsb.get_row((y - scroll_pos) * 4 + 2).unwrap();
-                let sel_vid_row = tsb.get_row((y - scroll_pos) * 4 + 3).unwrap();
+            let scroll_pos =
+                // 4 instruments per row
+                (selected_instrument / 4)
+                // Keep the cursor on the middle row even if the first row is selected
+                    .max(4)
+                // With the cursor in the middle of the screen, keep the last row at the bottom of the screen (4 rows more)
+                    .min(instruments.row_count() / 4 - 4)
+                // Work with the pos of the top of the screen.
+                    - 4;
+            for row in scroll_pos..scroll_pos + 8 {
+                let vid_row = tsb.get_row((row - scroll_pos) * 2 + 2).unwrap();
                 for col in 0..4 {
                     let x = col * 4 + INSTR_START_X;
-                    let instrument_idx = y * 4 + col;
+                    let instrument_idx = row * 4 + col;
                     let instrument = instruments.row_data(instrument_idx).unwrap();
+                    let palbank = if instrument_idx == selected_instrument {
+                        SELECTED_TEXT
+                    } else {
+                        NORMAL_TEXT
+                    };
                     // Active indicator
-                    draw_ascii_byte(vid_row, x, instrument.active as u8 * Cga8x8Thick::BULLET, NORMAL_TEXT);
+                    draw_ascii_byte(vid_row, x, instrument.active as u8 * Cga8x8Thick::BULLET, palbank);
                     // Instrument ID
-                    draw_ascii_chars(
-                        vid_row,
-                        x + 1..x + 5,
-                        instrument.id.chars().chain(repeat(' ')),
-                        NORMAL_TEXT,
-                    );
-                    // Selection underline
-                    draw_ascii(
-                        sel_vid_row,
-                        x..x + 4,
-                        repeat((instrument_idx == selected_instrument) as u8 * b'-'),
-                        NORMAL_TEXT,
-                    );
+                    draw_ascii_chars(vid_row, x + 1..x + 5, instrument.id.chars().chain(repeat(' ')), palbank);
                 }
             }
         }
