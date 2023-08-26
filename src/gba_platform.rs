@@ -308,7 +308,11 @@ impl MainScreen {
                 let vid_row = tsb.get_row(i - scroll_pos + 1).unwrap();
                 let row_data = pattern_model.row_data(i).unwrap();
                 let palbank = if row_data.selected { SELECTED_TEXT } else { NORMAL_TEXT };
-                draw_ascii(vid_row, 1.., to_dec(row_data.number as u8 + 1), palbank);
+                if row_data.number > -1 {
+                    draw_ascii(vid_row, 1.., to_dec(row_data.number as u8 + 1), palbank);
+                } else {
+                    draw_ascii(vid_row, 1..3, repeat(b'-'), palbank | FADED_TEXT);
+                }
                 draw_ascii_byte(
                     vid_row,
                     0,
