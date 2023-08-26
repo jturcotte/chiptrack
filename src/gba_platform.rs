@@ -31,6 +31,7 @@ use slint::Global;
 use slint::Model;
 use slint::PlatformError;
 use slint::SharedString;
+use voladdress::{Safe, VolBlock};
 
 #[alloc_error_handler]
 fn oom(layout: core::alloc::Layout) -> ! {
@@ -149,44 +150,43 @@ fn to_dec(v: u8) -> [u8; 2] {
     [c1, c2]
 }
 
-fn draw_ascii_byte<const C: usize>(
-    vid_row: voladdress::VolBlock<TextEntry, voladdress::Safe, voladdress::Safe, C>,
-    index: usize,
-    char: u8,
-    palbank: u16,
-) {
+fn draw_ascii_byte<const C: usize>(vid_row: VolBlock<TextEntry, Safe, Safe, C>, index: usize, char: u8, palbank: u16) {
     vid_row
         .index(index)
         .write(TextEntry::new().with_tile(char as u16).with_palbank(palbank));
 }
 
-fn draw_ascii<RB: core::ops::RangeBounds<usize>, U: IntoIterator<Item = u8>, const C: usize>(
-    vid_row: voladdress::VolBlock<TextEntry, voladdress::Safe, voladdress::Safe, C>,
-    range: RB,
-    chars: U,
-    palbank: u16,
-) {
+fn draw_ascii<RB, U, const C: usize>(vid_row: VolBlock<TextEntry, Safe, Safe, C>, range: RB, chars: U, palbank: u16)
+where
+    RB: core::ops::RangeBounds<usize>,
+    U: IntoIterator<Item = u8>,
+{
     vid_row
         .iter_range(range)
         .zip(chars)
         .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16).with_palbank(palbank)));
 }
 
-fn draw_ascii_ref<RB: core::ops::RangeBounds<usize>, const C: usize>(
-    vid_row: voladdress::VolBlock<TextEntry, voladdress::Safe, voladdress::Safe, C>,
+fn draw_ascii_ref<RB, const C: usize>(
+    vid_row: VolBlock<TextEntry, Safe, Safe, C>,
     range: RB,
     chars: &[u8],
     palbank: u16,
-) {
+) where
+    RB: core::ops::RangeBounds<usize>,
+{
     draw_ascii(vid_row, range, chars.iter().map(|c| *c), palbank)
 }
 
-fn draw_ascii_chars<RB: core::ops::RangeBounds<usize>, U: Iterator<Item = char>, const C: usize>(
-    vid_row: voladdress::VolBlock<TextEntry, voladdress::Safe, voladdress::Safe, C>,
+fn draw_ascii_chars<RB, U, const C: usize>(
+    vid_row: VolBlock<TextEntry, Safe, Safe, C>,
     range: RB,
     chars: U,
     palbank: u16,
-) {
+) where
+    RB: core::ops::RangeBounds<usize>,
+    U: Iterator<Item = char>,
+{
     draw_ascii(vid_row, range, chars.map(|c| c as u8), palbank)
 }
 
