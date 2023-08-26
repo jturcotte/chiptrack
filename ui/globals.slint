@@ -3,6 +3,7 @@
 
 export struct SongPatternData {
     number: int,
+    // For range selection (not yet supported)
     selected: bool,
 }
 export struct PatternInstrumentData {
@@ -63,6 +64,8 @@ export global GlobalEngine {
         {number: 1},
         {number: 2},
         {number: 3}];
+    // The selection cursor, used for keeping it scrolled into the view.
+    in-out property<int> sequencer_song_pattern_selected: 0;
     in-out property<int> sequencer_song_pattern_active: 0;
 
     in-out property<[string]> script_instrument_ids: ["S1", "S2", "T1", "T2", "W1", "W2", "N2", "N4"];

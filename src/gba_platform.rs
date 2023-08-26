@@ -308,8 +308,9 @@ impl MainScreen {
             let pattern_model = global_engine.get_sequencer_song_patterns();
             draw_ascii_ref(tsb.get_row(0).unwrap(), 0.., b"Song", NORMAL_TEXT);
 
-            // FIXME: Add a new selection pos for patterns and use it here and move the pattern active dirty separate
-            let scroll_pos = sequencer_song_pattern_active.max(8).min(pattern_model.row_count() - 8) - 8;
+            // sequencer_song_patterns_tracker will be dirty and trigger a redraw any time this is changed.
+            let sequencer_song_pattern_selected = global_engine.get_sequencer_song_pattern_selected() as usize;
+            let scroll_pos = sequencer_song_pattern_selected.max(8).min(pattern_model.row_count() - 8) - 8;
             for i in scroll_pos..(pattern_model.row_count().min(scroll_pos + 16)) {
                 let vid_row = tsb.get_row(i - scroll_pos + 1).unwrap();
                 let row_data = pattern_model.row_data(i).unwrap();

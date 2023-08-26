@@ -538,6 +538,7 @@ impl Sequencer {
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
+                GlobalEngine::get(&handle).set_sequencer_song_pattern_selected(song_pattern as i32);
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
                 let mut row_data = model.row_data(prev_selected).unwrap();
                 row_data.selected = false;
