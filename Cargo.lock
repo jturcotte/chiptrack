@@ -448,6 +448,7 @@ dependencies = [
  "slint-build",
  "tiny-skia 0.6.6",
  "url",
+ "voladdress",
  "wamr-sys",
  "wat",
 ]

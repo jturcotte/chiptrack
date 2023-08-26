@@ -61,21 +61,21 @@ impl MidiNote {
             semitone % 2 == 0
         }
     }
-    pub fn base_note_name(&self) -> char {
-        (b'A' + (self.key_pos() as u8 + 2) % 7) as char
+    pub fn base_note_name(&self) -> u8 {
+        (b'A' + (self.key_pos() as u8 + 2) % 7) as u8
     }
-    pub fn char_desc(&self) -> [char; 3] {
+    pub fn char_desc(&self) -> [u8; 3] {
         let note_name = self.base_note_name();
-        let sharp_char = if self.is_black() { '#' } else { '-' };
-        let octave_char = (b'0' + self.octave() as u8) as char;
+        let sharp_char = if self.is_black() { '#' } else { '-' } as u8;
+        let octave_char = b'0' + self.octave() as u8;
         [note_name, sharp_char, octave_char]
     }
     pub fn name(&self) -> String {
         let desc = self.char_desc();
-        format!("{}{}{}", desc[0], desc[1], desc[2])
+        format!("{}{}{}", desc[0] as char, desc[1] as char, desc[2] as char)
     }
     pub fn short_name(&self) -> SharedString {
-        let note_name = self.base_note_name();
+        let note_name = self.base_note_name() as char;
         let sharp_char = if self.is_black() { '#' } else { ' ' };
         format!("{}{}", note_name, sharp_char).into()
     }

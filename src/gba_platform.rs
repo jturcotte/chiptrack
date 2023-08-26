@@ -9,11 +9,13 @@ use crate::GlobalEngine;
 use crate::GlobalUI;
 use crate::MainWindow;
 use crate::MidiNote;
+use crate::StepColumn;
 
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use core::fmt::Write;
+use core::iter::repeat;
 use core::pin::Pin;
 
 use embedded_alloc::Heap;
@@ -64,7 +66,8 @@ const KEYS_ALL: u16 = 0b11_11111111;
 const KEYS_REPEATABLE: u16 = 0b00_11110000;
 
 const NORMAL_TEXT: u16 = 0;
-const FADED_TEXT: u16 = 1;
+const FADED_TEXT: u16 = 0b001;
+const SELECTED_TEXT: u16 = 0b010;
 
 // This is a type alias for the enabled `restore-state-*` feature.
 // For example, it is `bool` if you enable `restore-state-bool`.
@@ -87,6 +90,8 @@ pub struct MainScreen {
         Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     was_in_instruments_grid: RefCell<bool>,
+    selected_column_previous: RefCell<StepColumn>,
+    sequencer_pattern_instruments_len_previous: RefCell<usize>,
     sequencer_song_pattern_active_previous: RefCell<usize>,
     sequencer_step_active_previous: RefCell<usize>,
     selected_instrument_previous: RefCell<usize>,
@@ -127,24 +132,92 @@ impl i_slint_core::model::ModelChangeListener for ModelDirtinessTracker {
     }
 }
 
+fn to_hex(v: u8) -> [u8; 2] {
+    let l = v & 0xf;
+    let h = v >> 4;
+    let c1 = if h < 0xa { b'0' + h } else { b'A' + h - 0xa };
+    let c2 = if l < 0xa { b'0' + l } else { b'A' + l - 0xa };
+    [c1, c2]
+}
+
+fn to_dec(v: u8) -> [u8; 2] {
+    debug_assert!(v < 100);
+    let c1 = (v / 10) as u8 + '0' as u8;
+    let c2 = (v % 10) as u8 + '0' as u8;
+    [c1, c2]
+}
+
+fn draw_ascii_byte<const C: usize>(
+    vid_row: voladdress::VolBlock<TextEntry, voladdress::Safe, voladdress::Safe, C>,
+    index: usize,
+    char: u8,
+    palbank: u16,
+) {
+    vid_row
+        .index(index)
+        .write(TextEntry::new().with_tile(char as u16).with_palbank(palbank));
+}
+
+fn draw_ascii<RB: core::ops::RangeBounds<usize>, U: IntoIterator<Item = u8>, const C: usize>(
+    vid_row: voladdress::VolBlock<TextEntry, voladdress::Safe, voladdress::Safe, C>,
+    range: RB,
+    chars: U,
+    palbank: u16,
+) {
+    vid_row
+        .iter_range(range)
+        .zip(chars)
+        .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16).with_palbank(palbank)));
+}
+
+fn draw_ascii_ref<RB: core::ops::RangeBounds<usize>, const C: usize>(
+    vid_row: voladdress::VolBlock<TextEntry, voladdress::Safe, voladdress::Safe, C>,
+    range: RB,
+    chars: &[u8],
+    palbank: u16,
+) {
+    draw_ascii(vid_row, range, chars.iter().map(|c| *c), palbank)
+}
+
+fn draw_ascii_chars<RB: core::ops::RangeBounds<usize>, U: Iterator<Item = char>, const C: usize>(
+    vid_row: voladdress::VolBlock<TextEntry, voladdress::Safe, voladdress::Safe, C>,
+    range: RB,
+    chars: U,
+    palbank: u16,
+) {
+    draw_ascii(vid_row, range, chars.map(|c| c as u8), palbank)
+}
+
 impl MainScreen {
     pub fn new() -> Self {
         {
-            // get our tile data into memory.
-            Cga8x8Thick.bitunpack_4bpp(CHARBLOCK0_4BPP.as_region(), 0);
+            // Copy text data into the first tile indices, the tile index is then the ASCII code.
+            // Set the offset to 1 (including transparent pixels) since I want the
+            // background color to be set by the palette as well.
+            Cga8x8Thick.bitunpack_4bpp(CHARBLOCK0_4BPP.as_region(), 0x80000001);
         }
 
         BG0CNT.write(BackgroundControl::new().with_screenblock(31));
         BACKDROP_COLOR.write(Color::WHITE);
-        DISPCNT.write(
-            DisplayControl::new()
-                // .with_video_mode(VideoMode::_0)
-                .with_show_bg0(true),
+        DISPCNT.write(DisplayControl::new().with_show_bg0(true));
+
+        fn set_palette(bank: u16, colors: [Color; 2]) {
+            bg_palbank(bank as usize)
+                .iter()
+                .skip(1)
+                .zip(colors)
+                .for_each(|(i, c)| i.write(c));
+        }
+        set_palette(NORMAL_TEXT, [Color::WHITE, Color::BLACK]);
+        set_palette(FADED_TEXT, [Color::WHITE, Color(0b0_11010_11010_11010)]);
+        set_palette(
+            SELECTED_TEXT,
+            [Color(0b0_11000_11000_11000), Color(0b0_11110_10010_00100)],
         );
-        bg_palbank(NORMAL_TEXT as usize).index(1).write(Color::BLACK);
-        bg_palbank(FADED_TEXT as usize)
-            .index(1)
-            .write(Color(0b0_11010_11010_11010));
+        set_palette(
+            FADED_TEXT | SELECTED_TEXT,
+            [Color(0b0_11000_11000_11000), Color(0b0_11110_10010_00100)],
+        );
 
         Self {
             sequencer_song_patterns_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
@@ -154,6 +227,8 @@ impl MainScreen {
             ),
             instruments_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             was_in_instruments_grid: RefCell::new(false),
+            selected_column_previous: RefCell::new(StepColumn::Params),
+            sequencer_pattern_instruments_len_previous: RefCell::new(0),
             sequencer_song_pattern_active_previous: RefCell::new(0),
             sequencer_step_active_previous: RefCell::new(0),
             selected_instrument_previous: RefCell::new(0),
@@ -188,6 +263,13 @@ impl MainScreen {
         let global_ui = GlobalUI::get(&handle);
         let instruments_grid = global_ui.get_instruments_grid();
         let instruments_grid_dirty = self.was_in_instruments_grid.replace(instruments_grid) != instruments_grid;
+        let selected_column = global_ui.get_selected_column();
+        let selected_column_dirty = self.selected_column_previous.replace(selected_column) != selected_column;
+        let sequencer_pattern_instruments_len = global_engine.get_sequencer_pattern_instruments_len() as usize;
+        let sequencer_pattern_instruments_len_dirty = self
+            .sequencer_pattern_instruments_len_previous
+            .replace(sequencer_pattern_instruments_len)
+            != sequencer_pattern_instruments_len;
         let sequencer_song_pattern_active = global_engine.get_sequencer_song_pattern_active() as usize;
         let sequencer_song_pattern_active_dirty = self
             .sequencer_song_pattern_active_previous
@@ -203,128 +285,186 @@ impl MainScreen {
         let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
 
         let status_vid_row = tsb.get_row(18).unwrap();
-        status_vid_row
-            .index(0)
-            .write(TextEntry::new().with_tile(handle.get_patterns_have_focus() as u16 * 7));
-        status_vid_row
-            .index(6)
-            .write(TextEntry::new().with_tile(handle.get_steps_have_focus() as u16 * 7));
+        draw_ascii_byte(
+            status_vid_row,
+            0,
+            handle.get_patterns_have_focus() as u8 * Cga8x8Thick::BULLET,
+            NORMAL_TEXT,
+        );
+        draw_ascii_byte(
+            status_vid_row,
+            6,
+            handle.get_steps_have_focus() as u8 * Cga8x8Thick::BULLET,
+            NORMAL_TEXT,
+        );
 
         if sequencer_song_pattern_active_dirty || self.sequencer_song_patterns_tracker.take_dirtiness() {
             let pattern_model = global_engine.get_sequencer_song_patterns();
-            let vid_row = tsb.get_row(0).unwrap();
-            vid_row
-                .iter()
-                .zip("Song".chars())
-                .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
+            draw_ascii_ref(tsb.get_row(0).unwrap(), 0.., b"Song", NORMAL_TEXT);
 
+            // FIXME: Add a new selection pos for patterns and use it here and move the pattern active dirty separate
             let scroll_pos = sequencer_song_pattern_active.max(8).min(pattern_model.row_count() - 8) - 8;
             for i in scroll_pos..(pattern_model.row_count().min(scroll_pos + 16)) {
                 let vid_row = tsb.get_row(i - scroll_pos + 1).unwrap();
                 let row_data = pattern_model.row_data(i).unwrap();
-                let number = row_data.number + 1;
-                let c1 = (number / 10) as u8 + '0' as u8;
-                vid_row.index(1).write(TextEntry::new().with_tile(c1 as u16));
-                let c2 = (number % 10) as u8 + '0' as u8;
-                vid_row.index(2).write(TextEntry::new().with_tile(c2 as u16));
-                vid_row
-                    .index(0)
-                    .write(TextEntry::new().with_tile((i == sequencer_song_pattern_active) as u16 * 7));
+                let palbank = if row_data.selected { SELECTED_TEXT } else { NORMAL_TEXT };
+                draw_ascii(vid_row, 1.., to_dec(row_data.number as u8 + 1), palbank);
+                draw_ascii_byte(
+                    vid_row,
+                    0,
+                    (i == sequencer_song_pattern_active) as u8 * Cga8x8Thick::BULLET,
+                    NORMAL_TEXT,
+                )
             }
         }
 
-        if self.sequencer_steps_tracker.take_dirtiness() || sequencer_step_active_dirty {
+        const PARAMS_START_X: usize = 4;
+        const STEPS_START_X: usize = 10;
+        const INSTR_START_X: usize = 14;
+        if self.sequencer_steps_tracker.take_dirtiness() || sequencer_step_active_dirty || selected_column_dirty {
             let selected_instrument = global_engine.get_selected_instrument() as usize;
             let vid_row = tsb.get_row(0).unwrap();
-            let selected_instrument_id = global_engine.get_instruments().row_data(selected_instrument).unwrap().id;
-            vid_row
-                .iter_range(6..6 + 3)
-                .zip(selected_instrument_id.chars().chain(core::iter::repeat(' ')))
-                .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
+            let selected_instrument_id = global_engine
+                .get_instruments()
+                .row_data(selected_instrument)
+                .unwrap()
+                .id;
+            draw_ascii_chars(
+                vid_row,
+                STEPS_START_X..STEPS_START_X + 3,
+                selected_instrument_id.chars().chain(repeat(' ')),
+                NORMAL_TEXT,
+            );
 
             let sequencer_steps = global_engine.get_sequencer_steps();
             for i in 0..sequencer_steps.row_count() {
                 let vid_row = tsb.get_row(i + 1).unwrap();
                 let row_data = sequencer_steps.row_data(i).unwrap();
-                for (j, &c) in MidiNote(row_data.note).char_desc().iter().enumerate() {
-                    let t = if row_data.press {
-                        TextEntry::new().with_tile(c as u16)
-                    } else {
-                        TextEntry::new().with_tile('-' as u16).with_palbank(FADED_TEXT)
-                    };
-                    vid_row.index(j + 6).write(t);
+                let selected = row_data.selected;
+                let params_bank = if selected && selected_column == StepColumn::Params {
+                    SELECTED_TEXT
+                } else {
+                    NORMAL_TEXT
+                };
+                let press_bank = if selected && selected_column == StepColumn::Press {
+                    SELECTED_TEXT
+                } else {
+                    NORMAL_TEXT
+                };
+                let release_bank = if selected && selected_column != StepColumn::Params {
+                    SELECTED_TEXT
+                } else {
+                    NORMAL_TEXT
+                };
+
+                // Draw params
+                if row_data.param0_set {
+                    draw_ascii(
+                        vid_row,
+                        PARAMS_START_X..,
+                        to_hex(row_data.param0_val as u8),
+                        params_bank,
+                    );
+                } else {
+                    draw_ascii(
+                        vid_row,
+                        PARAMS_START_X..PARAMS_START_X + 2,
+                        repeat(b'-'),
+                        params_bank | FADED_TEXT,
+                    );
                 }
-                vid_row
-                    .index(4)
-                    .write(TextEntry::new().with_tile((i == sequencer_step_active) as u16 * 7));
-                vid_row
-                    .index(5)
-                    .write(TextEntry::new().with_tile(row_data.press as u16 * '[' as u16));
-                vid_row
-                    .index(9)
-                    .write(TextEntry::new().with_tile(row_data.release as u16 * ']' as u16));
+                draw_ascii_byte(vid_row, PARAMS_START_X + 2, b'/', params_bank | FADED_TEXT);
+                if row_data.param1_set {
+                    draw_ascii(
+                        vid_row,
+                        PARAMS_START_X + 3..,
+                        to_hex(row_data.param1_val as u8),
+                        params_bank,
+                    );
+                } else {
+                    draw_ascii(
+                        vid_row,
+                        PARAMS_START_X + 3..PARAMS_START_X + 5,
+                        repeat(b'-'),
+                        params_bank | FADED_TEXT,
+                    );
+                }
+
+                if row_data.press {
+                    draw_ascii(
+                        vid_row,
+                        STEPS_START_X..,
+                        MidiNote(row_data.note).char_desc(),
+                        press_bank,
+                    );
+                } else {
+                    draw_ascii(
+                        vid_row,
+                        STEPS_START_X..STEPS_START_X + 3,
+                        repeat(b'-'),
+                        press_bank | FADED_TEXT,
+                    );
+                }
+
+                draw_ascii_byte(
+                    vid_row,
+                    PARAMS_START_X - 1,
+                    (i == sequencer_step_active) as u8 * Cga8x8Thick::BULLET,
+                    NORMAL_TEXT,
+                );
+                draw_ascii_byte(vid_row, STEPS_START_X - 1, row_data.press as u8 * b'[', press_bank);
+                draw_ascii_byte(vid_row, STEPS_START_X + 3, row_data.release as u8 * b']', release_bank);
             }
         }
 
         if instruments_grid_dirty {
             for i in 0..17 {
-                tsb.get_row(i)
-                    .unwrap()
-                    .iter_range(11..)
-                    .for_each(|a| a.write(TextEntry::new()));
+                draw_ascii(tsb.get_row(i).unwrap(), INSTR_START_X.., repeat(0), NORMAL_TEXT);
             }
             if instruments_grid {
-                tsb.get_row(0)
-                    .unwrap()
-                    .iter_range(11..)
-                    .zip("Instruments".chars())
-                    .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
+                draw_ascii_ref(tsb.get_row(0).unwrap(), INSTR_START_X.., b"Instruments", NORMAL_TEXT);
             }
         }
-        if !instruments_grid && (instruments_grid_dirty || self.sequencer_pattern_instruments_tracker.take_dirtiness())
+        if !instruments_grid
+            && (instruments_grid_dirty
+                || sequencer_pattern_instruments_len_dirty
+                || self.sequencer_pattern_instruments_tracker.take_dirtiness())
         {
             let top_vid_row = tsb.get_row(0).unwrap();
-            let sequencer_pattern_instruments_len = global_engine.get_sequencer_pattern_instruments_len() as usize;
             let sequencer_pattern_instruments = global_engine.get_sequencer_pattern_instruments();
-            let placeholder = TextEntry::new().with_tile('-' as u16).with_palbank(FADED_TEXT);
-            for i in 0..6 {
+            for i in 0..4 {
+                let x = i * 3 + INSTR_START_X;
                 if i < sequencer_pattern_instruments_len {
                     let row_data = sequencer_pattern_instruments.row_data(i).unwrap();
 
-                    top_vid_row.index(i * 3 + 11 + 1).write(TextEntry::new());
-                    top_vid_row.index(i * 3 + 11 + 2).write(TextEntry::new());
-                    for (ci, c) in row_data.id.chars().enumerate() {
-                        top_vid_row
-                            .index(i * 3 + 11 + ci)
-                            .write(TextEntry::new().with_tile(c as u16));
-                    }
+                    draw_ascii_chars(
+                        top_vid_row,
+                        x..x + 2,
+                        row_data.id.chars().chain(repeat(' ')),
+                        NORMAL_TEXT,
+                    );
 
                     let notes = row_data.notes;
                     for j in 0..notes.row_count() {
                         let note = notes.row_data(j).unwrap();
                         let vid_row = tsb.get_row(j + 1).unwrap();
-                        vid_row.index(i * 3 + 11).write(placeholder);
-                        vid_row.index(i * 3 + 11 + 1).write(placeholder);
 
                         if note != -1 {
                             let midi_note = MidiNote(note);
-                            vid_row
-                                .index(i * 3 + 11)
-                                .write(TextEntry::new().with_tile(midi_note.base_note_name() as u16));
+                            draw_ascii_byte(vid_row, x, midi_note.base_note_name(), NORMAL_TEXT);
                             if midi_note.is_black() {
-                                vid_row
-                                    .index(i * 3 + 11 + 1)
-                                    .write(TextEntry::new().with_tile('#' as u16));
+                                draw_ascii_byte(vid_row, x + 1, b'#', NORMAL_TEXT);
+                            } else {
+                                draw_ascii_byte(vid_row, x + 1, b'-', FADED_TEXT);
                             }
-                        };
+                        } else {
+                            draw_ascii(vid_row, x..x + 2, repeat(b'-'), FADED_TEXT);
+                        }
                     }
                 } else {
-                    top_vid_row.index(i * 3 + 11).write(placeholder);
-                    top_vid_row.index(i * 3 + 11 + 1).write(placeholder);
-                    top_vid_row.index(i * 3 + 11 + 2).write(TextEntry::new());
+                    draw_ascii_ref(top_vid_row, x.., b"-- ", FADED_TEXT);
                     for j in 1..17 {
-                        tsb.get_row(j).unwrap().index(i * 3 + 11).write(placeholder);
-                        tsb.get_row(j).unwrap().index(i * 3 + 11 + 1).write(placeholder);
+                        draw_ascii(tsb.get_row(j).unwrap(), x..x + 2, repeat(b'-'), FADED_TEXT);
                     }
                 }
             }
@@ -337,22 +477,26 @@ impl MainScreen {
             for y in scroll_pos..scroll_pos + 4 {
                 let vid_row = tsb.get_row((y - scroll_pos) * 4 + 2).unwrap();
                 let sel_vid_row = tsb.get_row((y - scroll_pos) * 4 + 3).unwrap();
-                for x in 0..4 {
-                    let instrument_idx = y * 4 + x;
+                for col in 0..4 {
+                    let x = col * 4 + INSTR_START_X;
+                    let instrument_idx = y * 4 + col;
                     let instrument = instruments.row_data(instrument_idx).unwrap();
-                    vid_row
-                        .index(x * 4 + 11)
-                        .write(TextEntry::new().with_tile(instrument.active as u16 * 7));
-                    let col = x * 4 + 11 + 1;
-                    vid_row
-                        .iter_range(col..col + 4)
-                        .zip(instrument.id.chars().chain(core::iter::repeat(' ')))
-                        .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16)));
-                    let sel_char =
-                        TextEntry::new().with_tile((instrument_idx == selected_instrument) as u16 * '-' as u16);
-                    sel_vid_row
-                        .iter_range(x * 4 + 11..x * 4 + 11 + 4)
-                        .for_each(|a| a.write(sel_char));
+                    // Active indicator
+                    draw_ascii_byte(vid_row, x, instrument.active as u8 * Cga8x8Thick::BULLET, NORMAL_TEXT);
+                    // Instrument ID
+                    draw_ascii_chars(
+                        vid_row,
+                        x + 1..x + 5,
+                        instrument.id.chars().chain(repeat(' ')),
+                        NORMAL_TEXT,
+                    );
+                    // Selection underline
+                    draw_ascii(
+                        sel_vid_row,
+                        x..x + 4,
+                        repeat((instrument_idx == selected_instrument) as u8 * b'-'),
+                        NORMAL_TEXT,
+                    );
                 }
             }
         }
@@ -382,9 +526,6 @@ pub fn init() {
     TIMER2_RELOAD.write(0xffff - 16);
     TIMER2_CONTROL.write(TimerControl::new().with_enabled(true).with_scale(TimerScale::_1024));
     TIMER3_CONTROL.write(TimerControl::new().with_enabled(true).with_cascade(true));
-
-    BG0CNT.write(BackgroundControl::new().with_screenblock(31));
-    DISPCNT.write(DisplayControl::new().with_video_mode(VideoMode::_3).with_show_bg2(true));
 
     let main_screen = MainScreen::new();
     let window = MinimalSoftwareWindow::new(Default::default());
@@ -428,14 +569,14 @@ impl slint::platform::Platform for GbaPlatform {
     fn run_event_loop(&self) -> Result<(), PlatformError> {
         // FIXME: Those take iwram space by being put on the stack and could probably be used for something better.
         let slint_key_a: SharedString = slint::platform::Key::Control.into();
-        let slint_key_b: SharedString = '\u{8}'.into();
+        let slint_key_b: SharedString = slint::platform::Key::Shift.into();
         let slint_key_select: SharedString = ' '.into();
         let slint_key_start: SharedString = slint::platform::Key::Return.into();
         let slint_key_right: SharedString = slint::platform::Key::RightArrow.into();
         let slint_key_left: SharedString = slint::platform::Key::LeftArrow.into();
         let slint_key_up: SharedString = slint::platform::Key::UpArrow.into();
         let slint_key_down: SharedString = slint::platform::Key::DownArrow.into();
-        let slint_key_r: SharedString = slint::platform::Key::Shift.into();
+        let slint_key_r: SharedString = '\u{8}'.into();
         let slint_key_l: SharedString = slint::platform::Key::Tab.into();
 
         let main_screen = &self.main_screen;
@@ -449,6 +590,8 @@ impl slint::platform::Platform for GbaPlatform {
         let mut prev_used = 0;
         let mut frames_until_repeat: Option<u16> = None;
         loop {
+            // FIXME: Blocking the loop until vsync and rendering first means that we'll delay user input rendering by one frame.
+            //        Try unblocking on input interupts as well and check if this causes tearing when it triggers WASM.
             VBlankIntrWait();
             let released_keys = KEYINPUT.read().to_u16();
 
