@@ -528,11 +528,35 @@ static mut BASE_MILLIS_SINCE_START: u32 = 0;
 static mut SOUND_RENDERER: Option<Rc<RefCell<SoundRenderer>>> = None;
 static mut WINDOW: Option<slint::Weak<MainWindow>> = None;
 
+static TRIGGERED_IRQS: GbaCell<u16> = GbaCell::new(0);
+
+#[link_section = ".iwram"]
+extern "C" fn irq_handler(b: IrqBits) {
+    // IntrWait won't tell us which interrupts made it return from sleep,
+    // so gather this information in the interrupt handler where this is told to us.
+    TRIGGERED_IRQS.write(TRIGGERED_IRQS.read() | b.to_u16());
+}
+
 pub fn init() {
     unsafe { ALLOCATOR.init(0x02000000, HEAP_SIZE) }
 
+    RUST_IRQ_HANDLER.write(Some(irq_handler));
     DISPSTAT.write(DisplayStatus::new().with_irq_vblank(true));
-    IE.write(IrqBits::VBLANK);
+    KEYCNT.write(
+        KeyControl::new()
+            .with_a(true)
+            .with_b(true)
+            .with_select(true)
+            .with_start(true)
+            .with_right(true)
+            .with_left(true)
+            .with_up(true)
+            .with_down(true)
+            .with_r(true)
+            .with_l(true)
+            .with_irq_enabled(true),
+    );
+    IE.write(IrqBits::VBLANK.with_keypad(true));
     IME.write(true);
 
     // 16.78 MHz / (16*1024) = 1024 overflows per second
@@ -603,89 +627,124 @@ impl slint::platform::Platform for GbaPlatform {
         let mut repeating_key_mask = 0u16;
         let mut prev_used = 0;
         let mut frames_until_repeat: Option<u16> = None;
+        // IntrWait seems to never halt if ignore_existing_interrupts is false (which I need to process a possible
+        // pending vblank after processing keys), and this somehow causes multiple missed frames.
+        // So just assume that we're in mgba if mgba_logging_available() is true and skip just one frame
+        // if keys are being handled while vblank is requested.
+        let ignore_existing_interrupts = mgba_logging_available();
+
         loop {
-            // FIXME: Blocking the loop until vsync and rendering first means that we'll delay user input rendering by one frame.
-            //        Try unblocking on input interupts as well and check if this causes tearing when it triggers WASM.
-            VBlankIntrWait();
-            let released_keys = KEYINPUT.read().to_u16();
+            IntrWait(
+                ignore_existing_interrupts,
+                IrqBits::new().with_vblank(true).with_keypad(true),
+            );
+            let process_vblank = TRIGGERED_IRQS.read() & IrqBits::VBLANK.to_u16() != 0;
+            // Processing the keys only after redrawing and then waiting for the next vblank would
+            // mean that all key handlers would be delayed by one frame, including their effect on
+            // the audio through instruments.
+            // So also unblock the loop to process press and releases on keypad interupts so that we
+            // can process key changes after we checked and went back to sleep.
+            // Also check if KEYINPUT changed on vblank since mgba only seems to register key
+            // releases during that time.
+            let process_keys = process_vblank || TRIGGERED_IRQS.read() & IrqBits::KEYPAD.to_u16() != 0;
+            TRIGGERED_IRQS.write(0);
 
             let cps = 16 * 1024 * 1024 / 1024;
-            slint::platform::update_timers_and_animations();
+            // Run main_screen.draw() before key handling to avoid missing the vblank window due to the heaving
+            // processing happening in key handlers.
+            if process_vblank {
+                slint::platform::update_timers_and_animations();
 
-            TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
-            TIMER0_RELOAD.write(0);
-            TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
-            main_screen.draw();
-            let time = TIMER0_COUNT.read() as u32 * 1000 / cps;
-            if time > 0 {
-                log!("--- main_screen.draw(ms) {}", time);
-            }
+                TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
+                TIMER0_RELOAD.write(0);
+                TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
+                main_screen.draw();
+                let time = TIMER0_COUNT.read() as u32 * 1000 / cps;
+                if time > 0 {
+                    log!("--- main_screen.draw(ms) {}", time);
+                }
 
-            TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
-            TIMER0_RELOAD.write(0);
-            TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
-            unsafe {
-                SOUND_RENDERER
-                    .as_ref()
-                    .unwrap()
-                    .borrow_mut()
-                    .sound_engine
-                    .advance_frame();
-            }
-            let time = TIMER0_COUNT.read() as u32 * 1000 / cps;
-            if time > 0 {
-                log!("--- sound_engine.advance_frame(ms) {}", time);
-            }
+                TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
+                TIMER0_RELOAD.write(0);
+                TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
+                unsafe {
+                    SOUND_RENDERER
+                        .as_ref()
+                        .unwrap()
+                        .borrow_mut()
+                        .sound_engine
+                        .advance_frame();
+                }
+                let time = TIMER0_COUNT.read() as u32 * 1000 / cps;
+                if time > 0 {
+                    log!("--- sound_engine.advance_frame(ms) {}", time);
+                }
 
-            if prev_used != ALLOCATOR.used() {
-                log!("--- Memory used: {}kb", ALLOCATOR.used());
-                prev_used = ALLOCATOR.used();
-            }
+                if prev_used != ALLOCATOR.used() {
+                    log!("--- Memory used: {}kb", ALLOCATOR.used());
+                    prev_used = ALLOCATOR.used();
+                }
 
-            let switched_keys = released_keys ^ prev_keys;
-            if switched_keys != 0 || frames_until_repeat == Some(0) {
-                log!("{:#b}, {:#b}, {:#b}", prev_keys, released_keys, switched_keys);
-                let mut process_key = |key_mask: u16, out_key: &SharedString| {
-                    if switched_keys & key_mask != 0 {
-                        if released_keys & key_mask == 0 {
-                            log!("PRESS {}", out_key.chars().next().unwrap() as u8);
-                            window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
-                            if key_mask & KEYS_REPEATABLE != 0 {
-                                repeating_key_mask = key_mask;
-                                frames_until_repeat = Some(8);
-                            }
-                        } else {
-                            log!("RELEASE {}", out_key.chars().next().unwrap() as u8);
-                            window.dispatch_event(WindowEvent::KeyReleased { text: out_key.clone() });
-                        }
-                    }
-
-                    if frames_until_repeat == Some(0) && released_keys & key_mask == 0 && repeating_key_mask == key_mask
-                    {
-                        log!("REPEAT {}", out_key.chars().next().unwrap() as u8);
-                        window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
-                        frames_until_repeat = Some(2);
-                    }
-                };
-
-                process_key(KEY_A, &slint_key_a);
-                process_key(KEY_B, &slint_key_b);
-                process_key(KEY_SELECT, &slint_key_select);
-                process_key(KEY_START, &slint_key_start);
-                process_key(KEY_RIGHT, &slint_key_right);
-                process_key(KEY_LEFT, &slint_key_left);
-                process_key(KEY_UP, &slint_key_up);
-                process_key(KEY_DOWN, &slint_key_down);
-                process_key(KEY_R, &slint_key_r);
-                process_key(KEY_L, &slint_key_l);
-                prev_keys = released_keys;
-
-                if released_keys == KEYS_ALL {
-                    frames_until_repeat = None;
+                if let Some(frames) = frames_until_repeat.as_mut() {
+                    *frames -= 1
                 }
             }
-            if let Some(frames) = frames_until_repeat.as_mut() {
-                *frames -= 1
+
+            if process_keys {
+                TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
+                TIMER0_RELOAD.write(0);
+                TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
+
+                let released_keys = KEYINPUT.read().to_u16();
+                let switched_keys = released_keys ^ prev_keys;
+                if switched_keys != 0 || frames_until_repeat == Some(0) {
+                    log!("{:#b}, {:#b}, {:#b}", prev_keys, released_keys, switched_keys);
+                    let mut process_key = |key_mask: u16, out_key: &SharedString| {
+                        if switched_keys & key_mask != 0 {
+                            if released_keys & key_mask == 0 {
+                                log!("PRESS {}", out_key.chars().next().unwrap() as u8);
+                                window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
+                                if key_mask & KEYS_REPEATABLE != 0 {
+                                    repeating_key_mask = key_mask;
+                                    frames_until_repeat = Some(8);
+                                }
+                            } else {
+                                log!("RELEASE {}", out_key.chars().next().unwrap() as u8);
+                                window.dispatch_event(WindowEvent::KeyReleased { text: out_key.clone() });
+                            }
+                        }
+
+                        if frames_until_repeat == Some(0)
+                            && released_keys & key_mask == 0
+                            && repeating_key_mask == key_mask
+                        {
+                            log!("REPEAT {}", out_key.chars().next().unwrap() as u8);
+                            window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
+                            frames_until_repeat = Some(2);
+                        }
+                    };
+
+                    process_key(KEY_A, &slint_key_a);
+                    process_key(KEY_B, &slint_key_b);
+                    process_key(KEY_SELECT, &slint_key_select);
+                    process_key(KEY_START, &slint_key_start);
+                    process_key(KEY_RIGHT, &slint_key_right);
+                    process_key(KEY_LEFT, &slint_key_left);
+                    process_key(KEY_UP, &slint_key_up);
+                    process_key(KEY_DOWN, &slint_key_down);
+                    process_key(KEY_R, &slint_key_r);
+                    process_key(KEY_L, &slint_key_l);
+                    prev_keys = released_keys;
+
+                    if released_keys == KEYS_ALL {
+                        frames_until_repeat = None;
+                    }
+                }
+
+                let time = TIMER0_COUNT.read() as u32 * 1000 / cps;
+                if time > 0 {
+                    log!("--- process_key(ms) {}", time);
+                }
             }
         }
     }
