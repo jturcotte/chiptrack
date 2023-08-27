@@ -204,7 +204,7 @@ impl SoundEngine {
         if playing {
             self.send_note_events_to_synth(note_events);
         } else {
-            self.synth.mute_instruments();
+            self.mute_instruments();
         }
     }
 
@@ -364,6 +364,29 @@ impl SoundEngine {
             self.sequencer.borrow_mut().record_release(note);
             self.release_note_visually(note_to_release);
         }
+    }
+
+    pub fn mute_instruments(&mut self) {
+        self.synth.mute_instruments();
+        self.script.release_instruments();
+
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                #[cfg(feature = "desktop")]
+                {
+                    let notes_model = handle.get_notes();
+                    for (i, mut row_data) in notes_model.iter().enumerate() {
+                        row_data.active = false;
+                        notes_model.set_row_data(i, row_data.clone());
+                    }
+                }
+                let instruments_model = GlobalEngine::get(&handle).get_instruments();
+                for (i, mut row_data) in instruments_model.iter().enumerate() {
+                    row_data.active = false;
+                    instruments_model.set_row_data(i, row_data.clone());
+                }
+            })
+            .unwrap();
     }
 
     pub fn load_default(&mut self) {

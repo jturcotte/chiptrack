@@ -527,7 +527,7 @@ fn run_main() {
     global_engine.on_mute_instruments(move || {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(|se| se.synth.mute_instruments());
+            .invoke_on_sound_engine(|se| se.mute_instruments());
     });
 
     let cloned_sound_renderer = sound_renderer.clone();

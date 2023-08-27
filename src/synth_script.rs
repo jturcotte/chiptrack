@@ -287,6 +287,14 @@ impl SynthScript {
         }
     }
 
+    pub fn release_instruments(&mut self) {
+        for state_col in &mut *self.instrument_states.borrow_mut() {
+            for state in state_col {
+                state.pressed_note = None;
+            }
+        }
+    }
+
     pub fn advance_frame(&mut self, frame_number: usize) {
         for state_col in &mut *self.instrument_states.borrow_mut() {
             for state in state_col {
