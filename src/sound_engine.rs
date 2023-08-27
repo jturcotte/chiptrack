@@ -199,9 +199,13 @@ impl SoundEngine {
         }
     }
 
-    pub fn set_playing(&mut self, val: bool) {
-        let note_events = self.sequencer.borrow_mut().set_playing(val);
-        self.send_note_events_to_synth(note_events);
+    pub fn set_playing(&mut self, playing: bool) {
+        let note_events = self.sequencer.borrow_mut().set_playing(playing);
+        if playing {
+            self.send_note_events_to_synth(note_events);
+        } else {
+            self.synth.mute_instruments();
+        }
     }
 
     pub fn advance_frame(&mut self) {
