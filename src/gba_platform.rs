@@ -92,7 +92,7 @@ pub struct MainScreen {
     sequencer_pattern_instruments_tracker:
         Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
-    was_in_instruments_grid: RefCell<bool>,
+    instruments_had_focus: RefCell<bool>,
     selected_column_previous: RefCell<StepColumn>,
     sequencer_pattern_instruments_len_previous: RefCell<usize>,
     sequencer_song_pattern_active_previous: RefCell<usize>,
@@ -232,7 +232,7 @@ impl MainScreen {
                 ModelChangeListenerContainer::<ModelDirtinessTracker>::default(),
             ),
             instruments_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
-            was_in_instruments_grid: RefCell::new(false),
+            instruments_had_focus: RefCell::new(false),
             selected_column_previous: RefCell::new(StepColumn::Params),
             sequencer_pattern_instruments_len_previous: RefCell::new(0),
             sequencer_song_pattern_active_previous: RefCell::new(0),
@@ -260,15 +260,15 @@ impl MainScreen {
             .model_tracker()
             .attach_peer(Pin::as_ref(&self.instruments_tracker).model_peer());
         // Start dirty
-        *self.was_in_instruments_grid.borrow_mut() = !GlobalUI::get(&handle).get_instruments_grid();
+        *self.instruments_had_focus.borrow_mut() = !handle.get_instruments_have_focus();
     }
 
     pub fn draw(&self) {
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
         let global_engine = GlobalEngine::get(&handle);
         let global_ui = GlobalUI::get(&handle);
-        let instruments_grid = global_ui.get_instruments_grid();
-        let instruments_grid_dirty = self.was_in_instruments_grid.replace(instruments_grid) != instruments_grid;
+        let instruments_have_focus = handle.get_instruments_have_focus();
+        let instruments_have_focus_dirty = self.instruments_had_focus.replace(instruments_have_focus) != instruments_have_focus;
         let selected_column = global_ui.get_selected_column();
         let selected_column_dirty = self.selected_column_previous.replace(selected_column) != selected_column;
         let sequencer_pattern_instruments_len = global_engine.get_sequencer_pattern_instruments_len() as usize;
@@ -289,6 +289,9 @@ impl MainScreen {
             self.selected_instrument_previous.replace(selected_instrument) != selected_instrument;
 
         let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
+        const PARAMS_START_X: usize = 4;
+        const STEPS_START_X: usize = 10;
+        const INSTR_START_X: usize = 14;
 
         let status_vid_row = tsb.get_row(18).unwrap();
         draw_ascii_byte(
@@ -299,8 +302,14 @@ impl MainScreen {
         );
         draw_ascii_byte(
             status_vid_row,
-            6,
+            PARAMS_START_X - 1,
             handle.get_steps_have_focus() as u8 * Cga8x8Thick::BULLET,
+            NORMAL_TEXT,
+        );
+        draw_ascii_byte(
+            status_vid_row,
+            INSTR_START_X - 1,
+            instruments_have_focus as u8 * Cga8x8Thick::BULLET,
             NORMAL_TEXT,
         );
 
@@ -332,9 +341,6 @@ impl MainScreen {
             }
         }
 
-        const PARAMS_START_X: usize = 4;
-        const STEPS_START_X: usize = 10;
-        const INSTR_START_X: usize = 14;
         if self.sequencer_steps_tracker.take_dirtiness() || sequencer_step_active_dirty || selected_column_dirty {
             let selected_instrument = global_engine.get_selected_instrument() as usize;
             let vid_row = tsb.get_row(0).unwrap();
@@ -431,16 +437,16 @@ impl MainScreen {
             }
         }
 
-        if instruments_grid_dirty {
+        if instruments_have_focus_dirty {
             for i in 0..17 {
                 draw_ascii(tsb.get_row(i).unwrap(), INSTR_START_X.., repeat(0), NORMAL_TEXT);
             }
-            if instruments_grid {
+            if instruments_have_focus {
                 draw_ascii_ref(tsb.get_row(0).unwrap(), INSTR_START_X.., b"Instruments", NORMAL_TEXT);
             }
         }
-        if !instruments_grid
-            && (instruments_grid_dirty
+        if !instruments_have_focus
+            && (instruments_have_focus_dirty
                 || sequencer_pattern_instruments_len_dirty
                 || self.sequencer_pattern_instruments_tracker.take_dirtiness())
         {
@@ -483,8 +489,8 @@ impl MainScreen {
                 }
             }
         }
-        if instruments_grid
-            && (instruments_grid_dirty || selected_instrument_dirty || self.instruments_tracker.take_dirtiness())
+        if instruments_have_focus
+            && (instruments_have_focus_dirty || selected_instrument_dirty || self.instruments_tracker.take_dirtiness())
         {
             let instruments = global_engine.get_instruments();
             let scroll_pos =

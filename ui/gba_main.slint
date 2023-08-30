@@ -3,6 +3,7 @@
 
 import {
     GlobalUI,
+    InstrumentsFocusScope,
     PatternsFocusScope,
     StepsFocusScope
 } from "common.slint";
@@ -22,8 +23,9 @@ export {
 
 export component MainWindow inherits Window {
     in-out property<bool> playing: false;
-    in-out property<bool> patterns_have_focus: patterns_focus_scope.has_focus;
-    in-out property<bool> steps_have_focus: steps_focus_scope.has_focus;
+    out property patterns_have_focus <=> patterns_focus_scope.has_focus;
+    out property steps_have_focus <=> steps_focus_scope.has_focus;
+    out property instruments_have_focus <=> instruments_focus_scope.has_focus;
 
     callback octave_increased(int);
     callback global_key_event(string, bool) -> bool;
@@ -50,6 +52,10 @@ export component MainWindow inherits Window {
     }
     forward_focus: steps_focus_scope;
     steps_focus_scope := StepsFocusScope {
+        root_key_pressed(e) => { root.root_key_pressed(e); }
+        root_key_released(e) => { root.root_key_released(e); }
+    }
+    instruments_focus_scope := InstrumentsFocusScope {
         root_key_pressed(e) => { root.root_key_pressed(e); }
         root_key_released(e) => { root.root_key_released(e); }
     }

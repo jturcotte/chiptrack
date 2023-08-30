@@ -162,9 +162,9 @@ export component MainWindow inherits Window {
                 text: " ";
             }
             ToolbarButton {
-                text: GlobalUI.instruments_grid ? "▦" : "▤";
+                text: patterns.instruments_grid_has_focus ? "▦" : "▤";
                 clicked => {
-                    GlobalUI.instruments_grid = !GlobalUI.instruments_grid;
+                    patterns.toggle_instruments_grid_focus();
                 }
             }
             play_button := ToolbarButton {

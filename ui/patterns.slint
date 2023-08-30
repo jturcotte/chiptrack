@@ -10,6 +10,7 @@ import { InstrumentsPanel } from "instruments.slint";
 
 import {
     GlobalUI,
+    InstrumentsFocusScope,
     PatternsFocusScope,
     StepColumn,
     StepsFocusScope
@@ -173,6 +174,14 @@ component PatternsList {
 }
 
 export component PatternsPanel inherits HorizontalLayout {
+    out property instruments_grid_has_focus <=> instruments_key_handler.has_focus;
+    public function toggle_instruments_grid_focus() {
+        if (!instruments_key_handler.has_focus) {        
+            instruments_key_handler.focus();
+        } else {
+            steps_key_handler.focus();
+        }
+    }
     callback root_key_pressed(KeyEvent) -> EventResult;
     callback root_key_released(KeyEvent) -> EventResult;
     forward_focus: steps_key_handler;
@@ -240,7 +249,7 @@ export component PatternsPanel inherits HorizontalLayout {
     }
 
     HorizontalLayout {
-        if !GlobalUI.instruments_grid:
+        if !instruments_key_handler.has_focus:
         pattern_instruments := HorizontalLayout {
             spacing: 8px;
             for idx in GlobalEngine.sequencer_pattern_instruments.length:
@@ -278,7 +287,13 @@ export component PatternsPanel inherits HorizontalLayout {
             }
         }
 
-        if GlobalUI.instruments_grid:
+        if instruments_key_handler.has_focus:
         InstrumentsPanel { }
+
+        instruments_key_handler := InstrumentsFocusScope {
+            width: 0px;
+            root_key_pressed(e) => { root.root_key_pressed(e); }
+            root_key_released(e) => { root.root_key_released(e); }
+        }
     }
 }

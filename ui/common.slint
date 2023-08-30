@@ -7,7 +7,6 @@ export enum StepColumn { params, press, release }
 // State shared by the desktop and gba UIs is put here in a
 // global to avoid having to duplicate them in the separate root components.
 export global GlobalUI {
-    in-out property<bool> instruments_grid: false;
     in-out property<StepColumn> selected_column: press;
 
     function cycle_step_colum(forward: bool) {
@@ -47,54 +46,66 @@ export component PatternsFocusScope inherits FocusScope {
 
 }
 
-export component StepsFocusScope inherits Rectangle {
+export component StepsFocusScope inherits FocusScope {
     callback root_key_pressed(KeyEvent) -> EventResult;
     callback root_key_released(KeyEvent) -> EventResult;
 
-    out property<bool> has_focus: fs.has_focus;
-    forward_focus: fs;
+    key_pressed(e) => {
+        if (e.modifiers.shift && e.text == Key.Control) { GlobalEngine.toggle_selected_step_release(); }
+        else if (GlobalUI.selected_column == StepColumn.params && e.text == Key.Control) { GlobalEngine.cycle_step_param_start(); }
+        else if (GlobalUI.selected_column == StepColumn.params && e.modifiers.control && e.text == Key.UpArrow) { GlobalEngine.cycle_step_param(1, true); }
+        else if (GlobalUI.selected_column == StepColumn.params && e.modifiers.control && e.text == Key.DownArrow) { GlobalEngine.cycle_step_param(1, false); }
+        else if (GlobalUI.selected_column == StepColumn.params && e.modifiers.control && e.text == Key.LeftArrow) { GlobalEngine.cycle_step_param(0, false); }
+        else if (GlobalUI.selected_column == StepColumn.params && e.modifiers.control && e.text == Key.RightArrow) { GlobalEngine.cycle_step_param(0, true); }
+        else if (GlobalUI.selected_column == StepColumn.press && e.text == Key.Control) { GlobalEngine.cycle_note_start(); }
+        else if (GlobalUI.selected_column == StepColumn.press && e.modifiers.control && e.text == Key.UpArrow) { GlobalEngine.cycle_note(true, true); }
+        else if (GlobalUI.selected_column == StepColumn.press && e.modifiers.control && e.text == Key.DownArrow) { GlobalEngine.cycle_note(false, true); }
+        else if (GlobalUI.selected_column == StepColumn.press && e.modifiers.control && e.text == Key.LeftArrow) { GlobalEngine.cycle_note(false, false); }
+        else if (GlobalUI.selected_column == StepColumn.press && e.modifiers.control && e.text == Key.RightArrow) { GlobalEngine.cycle_note(true, false); }
+        else if (GlobalUI.selected_column == StepColumn.release && e.text == Key.Control) { GlobalEngine.toggle_selected_step_release(); }
+        else if (!e.modifiers.shift && e.text == Key.LeftArrow) { GlobalUI.cycle_step_colum(false); }
+        else if (!e.modifiers.shift && e.text == Key.RightArrow) { GlobalUI.cycle_step_colum(true); }
+        else if (!e.modifiers.shift && e.text == Key.UpArrow) { GlobalEngine.select_next_step(false); }
+        else if (!e.modifiers.shift && e.text == Key.DownArrow) { GlobalEngine.select_next_step(true); }
+        else {
+            return root_key_pressed(e);
+        }
+        accept
+    }
+    key_released(e) => { 
+        if (GlobalUI.selected_column == StepColumn.params && e.text == Key.Control) { GlobalEngine.cycle_step_param_end(); }
+        else if (GlobalUI.selected_column == StepColumn.press && e.text == Key.Control) { GlobalEngine.cycle_note_end(); }
+        else {
+            return root_key_released(e);
+        }
+        accept
+    }
+}
 
-    fs := FocusScope {
-        key_pressed(e) => {
-            if (e.text == " ") { GlobalUI.instruments_grid = !GlobalUI.instruments_grid; }
-            else if (GlobalUI.instruments_grid && e.text == Key.Control) { GlobalEngine.cycle_instrument_param_start(); }
-            else if (GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.UpArrow) { GlobalEngine.cycle_instrument_param(1, true); }
-            else if (GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.DownArrow) { GlobalEngine.cycle_instrument_param(1, false); }
-            else if (GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument_param(0, false); }
-            else if (GlobalUI.instruments_grid && e.modifiers.control && e.text == Key.RightArrow) { GlobalEngine.cycle_instrument_param(0, true); }
-            else if (GlobalUI.instruments_grid && e.text == Key.UpArrow) { GlobalEngine.cycle_instrument(0, -1); }
-            else if (GlobalUI.instruments_grid && e.text == Key.DownArrow) { GlobalEngine.cycle_instrument(0, 1); }
-            else if (GlobalUI.instruments_grid && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument(-1, 0); }
-            else if (GlobalUI.instruments_grid && e.text == Key.RightArrow) { GlobalEngine.cycle_instrument(1, 0); }
-            else if (!GlobalUI.instruments_grid && e.modifiers.shift && e.text == Key.Control) { GlobalEngine.toggle_selected_step(); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.params && e.text == Key.Control) { GlobalEngine.cycle_step_param_start(); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.params && e.modifiers.control && e.text == Key.UpArrow) { GlobalEngine.cycle_step_param(1, true); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.params && e.modifiers.control && e.text == Key.DownArrow) { GlobalEngine.cycle_step_param(1, false); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.params && e.modifiers.control && e.text == Key.LeftArrow) { GlobalEngine.cycle_step_param(0, false); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.params && e.modifiers.control && e.text == Key.RightArrow) { GlobalEngine.cycle_step_param(0, true); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.press && e.text == Key.Control) { GlobalEngine.cycle_note_start(); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.press && e.modifiers.control && e.text == Key.UpArrow) { GlobalEngine.cycle_note(true, true); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.press && e.modifiers.control && e.text == Key.DownArrow) { GlobalEngine.cycle_note(false, true); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.press && e.modifiers.control && e.text == Key.LeftArrow) { GlobalEngine.cycle_note(false, false); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.press && e.modifiers.control && e.text == Key.RightArrow) { GlobalEngine.cycle_note(true, false); }
-            else if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.release && e.text == Key.Control) { GlobalEngine.toggle_selected_step_release(); }
-            else if (!e.modifiers.shift && e.text == Key.LeftArrow) { GlobalUI.cycle_step_colum(false); }
-            else if (!e.modifiers.shift && e.text == Key.RightArrow) { GlobalUI.cycle_step_colum(true); }
-            else if (!e.modifiers.shift && e.text == Key.UpArrow) { GlobalEngine.select_next_step(false); }
-            else if (!e.modifiers.shift && e.text == Key.DownArrow) { GlobalEngine.select_next_step(true); }
-            else {
-                return root_key_pressed(e);
-            }
-            accept
+export component InstrumentsFocusScope inherits FocusScope {
+    callback root_key_pressed(KeyEvent) -> EventResult;
+    callback root_key_released(KeyEvent) -> EventResult;
+
+    key_pressed(e) => {
+        if (e.text == Key.Control) { GlobalEngine.cycle_instrument_param_start(); }
+        else if (e.modifiers.control && e.text == Key.UpArrow) { GlobalEngine.cycle_instrument_param(1, true); }
+        else if (e.modifiers.control && e.text == Key.DownArrow) { GlobalEngine.cycle_instrument_param(1, false); }
+        else if (e.modifiers.control && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument_param(0, false); }
+        else if (e.modifiers.control && e.text == Key.RightArrow) { GlobalEngine.cycle_instrument_param(0, true); }
+        else if (e.text == Key.UpArrow) { GlobalEngine.cycle_instrument(0, -1); }
+        else if (e.text == Key.DownArrow) { GlobalEngine.cycle_instrument(0, 1); }
+        else if (e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument(-1, 0); }
+        else if (e.text == Key.RightArrow) { GlobalEngine.cycle_instrument(1, 0); }
+        else {
+            return root_key_pressed(e);
         }
-        key_released(e) => { 
-            if (GlobalUI.instruments_grid && e.text == Key.Shift) { GlobalEngine.cycle_instrument_param_end(); }
-            if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.params && e.text == Key.Control) { GlobalEngine.cycle_step_param_end(); }
-            if (!GlobalUI.instruments_grid && GlobalUI.selected_column == StepColumn.press && e.text == Key.Control) { GlobalEngine.cycle_note_end(); }
-            else {
-                return root_key_released(e);
-            }
-            accept
+        accept
+    }
+    key_released(e) => { 
+        if (e.text == Key.Control) { GlobalEngine.cycle_instrument_param_end(); }
+        else {
+            return root_key_released(e);
         }
+        accept
     }
 }
