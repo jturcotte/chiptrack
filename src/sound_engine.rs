@@ -295,7 +295,7 @@ impl SoundEngine {
     }
 
     pub fn cycle_note_start(&mut self) {
-        let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_note(None, false);
+        let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_selected_step_note(None, false);
         if !self.sequencer.borrow().playing() {
             self.script.press_instrument_note(
                 self.frame_number,
@@ -307,13 +307,15 @@ impl SoundEngine {
         }
     }
     pub fn cycle_note_end(&mut self) {
-        if !self.sequencer.borrow().playing() {
+        let mut seq = self.sequencer.borrow_mut();
+        if !seq.playing() {
+            seq.copy_selected_step_note();
             self.script
-                .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
+                .release_instrument(self.frame_number, seq.selected_instrument);
         }
     }
     pub fn cycle_note(&mut self, forward: bool, large_inc: bool) {
-        let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_note(Some(forward), large_inc);
+        let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_selected_step_note(Some(forward), large_inc);
         if !self.sequencer.borrow().playing() {
             self.script.press_instrument_note(
                 self.frame_number,
@@ -326,6 +328,7 @@ impl SoundEngine {
     }
 
     pub fn press_note(&mut self, note: u8) {
+
         let (p0, p1) = self.sequencer.borrow_mut().record_press(note);
         self.script.press_instrument_note(
             self.frame_number,

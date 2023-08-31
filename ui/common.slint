@@ -51,7 +51,7 @@ export component StepsFocusScope inherits FocusScope {
     callback root_key_released(KeyEvent) -> EventResult;
 
     key_pressed(e) => {
-        if (e.modifiers.shift && e.text == Key.Control) { GlobalEngine.toggle_selected_step_release(); }
+        if (e.modifiers.shift && e.text == Key.Control) { GlobalEngine.cut_selected_step_note(); }
         else if (GlobalUI.selected_column == StepColumn.params && e.text == Key.Control) { GlobalEngine.cycle_step_param_start(); }
         else if (GlobalUI.selected_column == StepColumn.params && e.modifiers.control && e.text == Key.UpArrow) { GlobalEngine.cycle_step_param(1, true); }
         else if (GlobalUI.selected_column == StepColumn.params && e.modifiers.control && e.text == Key.DownArrow) { GlobalEngine.cycle_step_param(1, false); }

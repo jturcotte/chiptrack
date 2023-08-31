@@ -422,10 +422,10 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
-    global_engine.on_toggle_selected_step(move || {
+    global_engine.on_cut_selected_step_note(move || {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().toggle_selected_step());
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().cut_selected_step_note());
     });
 
     let cloned_sound_renderer = sound_renderer.clone();

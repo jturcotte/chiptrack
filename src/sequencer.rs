@@ -400,6 +400,11 @@ impl Default for SequencerSong {
     }
 }
 
+struct NoteClipboard {
+    note: u8,
+    release: bool,
+}
+
 pub struct Sequencer {
     pub song: SequencerSong,
     active_frame: u32,
@@ -419,6 +424,7 @@ pub struct Sequencer {
     muted_instruments: BTreeSet<u8>,
     synth_instrument_ids: Vec<SharedString>,
     instrument_parameters: Vec<(i8, i8)>,
+    note_clipboard: NoteClipboard,
     main_window: WeakWindowWrapper,
 }
 
@@ -442,6 +448,7 @@ impl Sequencer {
             muted_instruments: BTreeSet::new(),
             synth_instrument_ids: vec![SharedString::new(); NUM_INSTRUMENTS],
             instrument_parameters: vec![(0, 0); NUM_INSTRUMENTS],
+            note_clipboard: NoteClipboard { note: DEFAULT_NOTE, release: true },
             main_window: main_window.clone(),
         }
     }
@@ -721,22 +728,44 @@ impl Sequencer {
     }
 
     pub fn toggle_step(&mut self, step_num: usize) {
-        let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
-        let toggled = !maybe_steps.map_or(false, |ss| ss[step_num].press());
+        // Assuming that toggle is called from a mouse press, select the step (FIXME: decouple)
+        self.select_step(step_num);
+
+        let maybe_steps = self.song.patterns[self.selected_pattern_idx()].get_steps(self.selected_instrument);
+        let pressed = maybe_steps.map_or(false, |ss| ss[step_num].press());
+        if pressed {
+            self.cut_step_note(step_num);
+        } else {
+            self.cycle_selected_step_note(None, false);
+        }
+    }
+
+    pub fn copy_step_note(&mut self, step_num: usize) {
+        let maybe_steps = self.song.patterns[self.selected_pattern_idx()].get_steps(self.selected_instrument);
+        let pressed_note_and_release = maybe_steps.and_then(|ss| ss[step_num].press_note().map(|p| (p, ss[step_num].release)));
+        if let Some((note, release)) = pressed_note_and_release {
+            self.note_clipboard = NoteClipboard { note, release };
+        }
+    }
+
+    pub fn cut_step_note(&mut self, step_num: usize) {
+        self.copy_step_note(step_num);
+
         self.set_pattern_step_events(
             step_num,
             self.active_song_pattern,
-            // FIXME: Remember the last edited/cut/toggled note and insert it here
-            Some(if toggled { Some(DEFAULT_NOTE) } else { None }),
-            Some(toggled),
+            Some(None),
+            Some(false),
             None,
         );
-
-        self.select_step(step_num);
     }
 
-    pub fn toggle_selected_step(&mut self) {
-        self.toggle_step(self.selected_step)
+    pub fn copy_selected_step_note(&mut self) {
+        self.copy_step_note(self.selected_step);
+    }
+
+    pub fn cut_selected_step_note(&mut self) {
+        self.cut_step_note(self.selected_step);
     }
 
     pub fn toggle_step_release(&mut self, step_num: usize) {
@@ -744,6 +773,7 @@ impl Sequencer {
         let toggled = !maybe_steps.map_or(false, |ss| ss[step_num].release);
         self.set_pattern_step_events(step_num, self.active_song_pattern, None, Some(toggled), None);
 
+        self.copy_step_note(step_num);
         self.select_step(step_num);
     }
 
@@ -973,7 +1003,7 @@ impl Sequencer {
         let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
         maybe_steps
             .and_then(|steps| steps[self.selected_step].press_note())
-            .unwrap_or(DEFAULT_NOTE)
+            .unwrap_or(self.note_clipboard.note)
     }
 
     pub fn selected_note_and_params(&self) -> (u8, i8, i8) {
@@ -1094,6 +1124,11 @@ impl Sequencer {
             Some((Some(p0).filter(|v| *v != 0), Some(p1).filter(|v| *v != 0))),
         );
         self.last_press_frame = Some(self.active_frame);
+
+        // It's a bit weird to keep the release part of the clipboard here,
+        // but the fact that recording affects the active step instead of selected one
+        // makes it difficult to find the right compromize.
+        self.note_clipboard.note = note;
         (p0, p1)
     }
 
@@ -1103,7 +1138,7 @@ impl Sequencer {
         self.record_key_event(KeyEvent::Release, None, None);
     }
 
-    pub fn cycle_note(&mut self, forward: Option<bool>, large_inc: bool) -> (u8, i8, i8) {
+    pub fn cycle_selected_step_note(&mut self, forward: Option<bool>, large_inc: bool) -> (u8, i8, i8) {
         // The GBA only handles frenquencies from C1 upwards.
         const LOWEST_NOTE: u8 = 24;
 
@@ -1114,7 +1149,7 @@ impl Sequencer {
                 (s.press_note(), s.param0(), s.param1())
             });
         let inc = if large_inc { 12 } else { 1 };
-        let active_note = maybe_active_note.unwrap_or(DEFAULT_NOTE);
+        let active_note = maybe_active_note.unwrap_or(self.note_clipboard.note);
         let new_note = if forward.unwrap_or(false) && active_note + inc <= 127 {
             active_note + inc
         } else if forward.map(|f| !f).unwrap_or(false) && active_note - inc >= LOWEST_NOTE {
@@ -1123,8 +1158,8 @@ impl Sequencer {
             active_note
         };
 
-        // Also set the note as released if it wasn't previously pressed.
-        let set_release = if maybe_active_note.is_none() { Some(true) } else { None };
+        // Also set the note as released according to the clipboard if it wasn't previously pressed.
+        let set_release = if maybe_active_note.is_none() { Some(self.note_clipboard.release) } else { None };
         self.set_pattern_step_events(
             self.selected_step,
             self.active_song_pattern,
@@ -1132,10 +1167,12 @@ impl Sequencer {
             set_release,
             None,
         );
+
+        let instrument = self.selected_instrument as usize;
         (
             new_note,
-            p0.unwrap_or(DEFAULT_PARAM_VAL),
-            p1.unwrap_or(DEFAULT_PARAM_VAL),
+            p0.unwrap_or(self.instrument_parameters[instrument].0),
+            p1.unwrap_or(self.instrument_parameters[instrument].1),
         )
     }
 
