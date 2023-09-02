@@ -132,12 +132,13 @@ export global GlobalEngine {
     callback cycle_instrument_param_start();
     callback cycle_instrument_param_end();
     callback cycle_instrument_param(int, bool);
-    callback cycle_step_param_start();
-    callback cycle_step_param_end();
+    callback cycle_step_param_start(int);
+    callback cycle_step_param_end(int);
     callback cycle_step_param(int, bool);
     callback cycle_song_pattern_start();
     callback cycle_song_pattern(bool);
     callback cut_selected_step_note();
+    callback cut_selected_step_param(int);
     callback toggle_mute_instrument(int);
     callback toggle_step(int);
     callback toggle_step_release(int);

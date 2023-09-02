@@ -304,6 +304,7 @@ impl Pattern {
     ) -> &'a mut [InstrumentStep; NUM_STEPS] {
         // Use the string ID to match the instrument so that reloading instruments and moving
         // instruments to different synth_indices will still match them.
+        // FIXME: Check why the string ID isn't used for get_steps
         let ii = match self.instruments.iter().position(|i| i.id == instrument_id) {
             Some(ii) => ii,
             None => {
@@ -423,7 +424,7 @@ pub struct Sequencer {
     // FIXME: Use a bitset
     muted_instruments: BTreeSet<u8>,
     synth_instrument_ids: Vec<SharedString>,
-    instrument_parameters: Vec<(i8, i8)>,
+    instrument_params: Vec<(i8, i8)>,
     note_clipboard: NoteClipboard,
     main_window: WeakWindowWrapper,
 }
@@ -447,8 +448,11 @@ impl Sequencer {
             just_recorded_over_next_step: false,
             muted_instruments: BTreeSet::new(),
             synth_instrument_ids: vec![SharedString::new(); NUM_INSTRUMENTS],
-            instrument_parameters: vec![(0, 0); NUM_INSTRUMENTS],
-            note_clipboard: NoteClipboard { note: DEFAULT_NOTE, release: true },
+            instrument_params: vec![(0, 0); NUM_INSTRUMENTS],
+            note_clipboard: NoteClipboard {
+                note: DEFAULT_NOTE,
+                release: true,
+            },
             main_window: main_window.clone(),
         }
     }
@@ -742,7 +746,8 @@ impl Sequencer {
 
     pub fn copy_step_note(&mut self, step_num: usize) {
         let maybe_steps = self.song.patterns[self.selected_pattern_idx()].get_steps(self.selected_instrument);
-        let pressed_note_and_release = maybe_steps.and_then(|ss| ss[step_num].press_note().map(|p| (p, ss[step_num].release)));
+        let pressed_note_and_release =
+            maybe_steps.and_then(|ss| ss[step_num].press_note().map(|p| (p, ss[step_num].release)));
         if let Some((note, release)) = pressed_note_and_release {
             self.note_clipboard = NoteClipboard { note, release };
         }
@@ -750,13 +755,14 @@ impl Sequencer {
 
     pub fn cut_step_note(&mut self, step_num: usize) {
         self.copy_step_note(step_num);
+        self.copy_step_params(step_num, None);
 
         self.set_pattern_step_events(
             step_num,
             self.active_song_pattern,
             Some(None),
             Some(false),
-            None,
+            Some((None, None)),
         );
     }
 
@@ -1006,19 +1012,19 @@ impl Sequencer {
             .unwrap_or(self.note_clipboard.note)
     }
 
-    pub fn selected_note_and_params(&self) -> (u8, i8, i8) {
-        let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
-        maybe_steps
-            .map(|steps| {
-                let s = steps[self.selected_step];
-                (
-                    s.note,
-                    s.param0().unwrap_or(DEFAULT_PARAM_VAL),
-                    s.param1().unwrap_or(DEFAULT_PARAM_VAL),
-                )
-            })
-            .unwrap_or((DEFAULT_NOTE, DEFAULT_PARAM_VAL, DEFAULT_PARAM_VAL))
-    }
+    // pub fn selected_note_and_params(&self) -> (u8, i8, i8) {
+    //     let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
+    //     maybe_steps
+    //         .map(|steps| {
+    //             let s = steps[self.selected_step];
+    //             (
+    //                 s.note,
+    //                 s.param0().unwrap_or(DEFAULT_PARAM_VAL),
+    //                 s.param1().unwrap_or(DEFAULT_PARAM_VAL),
+    //             )
+    //         })
+    //         .unwrap_or((DEFAULT_NOTE, DEFAULT_PARAM_VAL, DEFAULT_PARAM_VAL))
+    // }
 
     fn record_key_event(&mut self, event: KeyEvent, note: Option<u8>, params: Option<(Option<i8>, Option<i8>)>) {
         if !self.recording {
@@ -1142,14 +1148,14 @@ impl Sequencer {
         // The GBA only handles frenquencies from C1 upwards.
         const LOWEST_NOTE: u8 = 24;
 
-        let (maybe_active_note, p0, p1) = self.song.patterns[self.active_pattern_idx()]
+        let (maybe_selected_note, p0, p1) = self.song.patterns[self.selected_pattern_idx()]
             .get_steps(self.selected_instrument)
             .map_or((None, None, None), |ss| {
                 let s = ss[self.selected_step];
                 (s.press_note(), s.param0(), s.param1())
             });
         let inc = if large_inc { 12 } else { 1 };
-        let active_note = maybe_active_note.unwrap_or(self.note_clipboard.note);
+        let active_note = maybe_selected_note.unwrap_or(self.note_clipboard.note);
         let new_note = if forward.unwrap_or(false) && active_note + inc <= 127 {
             active_note + inc
         } else if forward.map(|f| !f).unwrap_or(false) && active_note - inc >= LOWEST_NOTE {
@@ -1158,36 +1164,43 @@ impl Sequencer {
             active_note
         };
 
-        // Also set the note as released according to the clipboard if it wasn't previously pressed.
-        let set_release = if maybe_active_note.is_none() { Some(self.note_clipboard.release) } else { None };
+        let instrument_params = self.instrument_params[self.selected_instrument as usize];
+        // Also set params and the note as released according to the clipboard if it wasn't previously pressed.
+        let (set_release, set_params) = if maybe_selected_note.is_none() {
+            (
+                Some(self.note_clipboard.release),
+                Some((Some(instrument_params.0), Some(instrument_params.1))),
+            )
+        } else {
+            (None, None)
+        };
         self.set_pattern_step_events(
             self.selected_step,
             self.active_song_pattern,
             Some(Some(new_note)),
             set_release,
-            None,
+            set_params,
         );
 
-        let instrument = self.selected_instrument as usize;
         (
             new_note,
-            p0.unwrap_or(self.instrument_parameters[instrument].0),
-            p1.unwrap_or(self.instrument_parameters[instrument].1),
+            p0.unwrap_or(instrument_params.0),
+            p1.unwrap_or(instrument_params.1),
         )
     }
 
     pub fn selected_instrument_params(&self) -> (i8, i8) {
         let instrument = self.selected_instrument as usize;
-        self.instrument_parameters[instrument]
+        self.instrument_params[instrument]
     }
 
     pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) -> i8 {
         let instrument = self.selected_instrument as usize;
-        let instrument_parameters = &mut self.instrument_parameters[instrument];
+        let instrument_params = &mut self.instrument_params[instrument];
         let val = if param_num == 0 {
-            &mut instrument_parameters.0
+            &mut instrument_params.0
         } else {
-            &mut instrument_parameters.1
+            &mut instrument_params.1
         };
 
         if forward && *val < 127 {
@@ -1213,32 +1226,32 @@ impl Sequencer {
         *val
     }
 
-    pub fn cycle_step_param(&mut self, param_num: u8, forward: bool) -> i8 {
-        let mut step_parameters = self.song.patterns[self.active_pattern_idx()]
+    pub fn cycle_selected_step_param(&mut self, param_num: u8, forward: Option<bool>) -> (u8, i8, i8) {
+        let (maybe_selected_note, mut step_parameters) = self.song.patterns[self.selected_pattern_idx()]
             .get_steps(self.selected_instrument)
-            .map_or((None, None), |ss| {
+            .map_or((None, (None, None)), |ss| {
                 let s = ss[self.selected_step];
-                (s.param0(), s.param1())
+                (s.press_note(), (s.param0(), s.param1()))
             });
 
+        let instrument_params = self.instrument_params[self.selected_instrument as usize];
         let val = if param_num == 0 {
             if step_parameters.0.is_none() {
-                step_parameters.0 = Some(0);
+                step_parameters.0 = Some(instrument_params.0);
             }
             &mut step_parameters.0
         } else {
             if step_parameters.1.is_none() {
-                step_parameters.1 = Some(0);
+                step_parameters.1 = Some(instrument_params.1);
             }
             &mut step_parameters.1
         };
-        if forward && val.unwrap() < 127 {
+        if forward.unwrap_or(false) && val.unwrap() < 127 {
             *val.as_mut().unwrap() += 1;
-        } else if !forward && val.unwrap() > -127 {
+        } else if forward.map(|f| !f).unwrap_or(false) && val.unwrap() > -127 {
             *val.as_mut().unwrap() -= 1;
         }
 
-        let val2 = val.unwrap();
         self.set_pattern_step_events(
             self.selected_step,
             self.active_song_pattern,
@@ -1246,7 +1259,57 @@ impl Sequencer {
             None,
             Some(step_parameters),
         );
-        val2
+
+        (
+            maybe_selected_note.unwrap_or(self.note_clipboard.note),
+            step_parameters.0.unwrap_or(instrument_params.0),
+            step_parameters.1.unwrap_or(instrument_params.1),
+        )
+    }
+
+    /// Returns all parameters
+    pub fn copy_step_params(&mut self, step_num: usize, only_param_num: Option<u8>) -> (Option<i8>, Option<i8>) {
+        let step_parameters = self.song.patterns[self.selected_pattern_idx()]
+            .get_steps(self.selected_instrument)
+            .map_or((None, None), |ss| {
+                let s = ss[step_num];
+                (s.param0(), s.param1())
+            });
+        let instrument = self.selected_instrument as usize;
+        let instrument_params = &mut self.instrument_params[instrument];
+        if only_param_num.map_or(true, |p| p == 0) {
+            if let Some(p) = step_parameters.0 {
+                // FIXME: This needs to update the instruments param model if I keep it.
+                instrument_params.0 = p;
+            }
+        }
+        if only_param_num.map_or(true, |p| p == 1) {
+            if let Some(p) = step_parameters.1 {
+                instrument_params.1 = p;
+            }
+        }
+
+        step_parameters
+    }
+
+    pub fn cut_step_param(&mut self, step_num: usize, param_num: u8) {
+        let mut cut_params = self.copy_step_params(step_num, Some(param_num));
+        if param_num == 0 {
+            cut_params.0 = None;
+        }
+        if param_num == 1 {
+            cut_params.1 = None;
+        }
+
+        self.set_pattern_step_events(step_num, self.active_song_pattern, None, None, Some(cut_params));
+    }
+
+    pub fn copy_selected_step_param(&mut self, param_num: u8) {
+        self.copy_step_params(self.selected_step, Some(param_num));
+    }
+
+    pub fn cut_selected_step_param(&mut self, param_num: u8) {
+        self.cut_step_param(self.selected_step, param_num);
     }
 
     pub fn cycle_song_pattern_start(&mut self) {

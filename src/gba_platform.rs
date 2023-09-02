@@ -10,7 +10,6 @@ use crate::GlobalEngine;
 use crate::GlobalUI;
 use crate::MainWindow;
 use crate::MidiNote;
-use crate::StepColumn;
 
 use alloc::boxed::Box;
 use alloc::rc::Rc;
@@ -93,7 +92,7 @@ pub struct MainScreen {
         Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     instruments_had_focus: RefCell<bool>,
-    selected_column_previous: RefCell<StepColumn>,
+    selected_column_previous: RefCell<i32>,
     sequencer_pattern_instruments_len_previous: RefCell<usize>,
     sequencer_song_pattern_active_previous: RefCell<usize>,
     sequencer_step_active_previous: RefCell<usize>,
@@ -233,7 +232,7 @@ impl MainScreen {
             ),
             instruments_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             instruments_had_focus: RefCell::new(false),
-            selected_column_previous: RefCell::new(StepColumn::Params),
+            selected_column_previous: RefCell::new(0),
             sequencer_pattern_instruments_len_previous: RefCell::new(0),
             sequencer_song_pattern_active_previous: RefCell::new(0),
             sequencer_step_active_previous: RefCell::new(0),
@@ -268,7 +267,8 @@ impl MainScreen {
         let global_engine = GlobalEngine::get(&handle);
         let global_ui = GlobalUI::get(&handle);
         let instruments_have_focus = handle.get_instruments_have_focus();
-        let instruments_have_focus_dirty = self.instruments_had_focus.replace(instruments_have_focus) != instruments_have_focus;
+        let instruments_have_focus_dirty =
+            self.instruments_had_focus.replace(instruments_have_focus) != instruments_have_focus;
         let selected_column = global_ui.get_selected_column();
         let selected_column_dirty = self.selected_column_previous.replace(selected_column) != selected_column;
         let sequencer_pattern_instruments_len = global_engine.get_sequencer_pattern_instruments_len() as usize;
@@ -361,17 +361,22 @@ impl MainScreen {
                 let vid_row = tsb.get_row(i + 1).unwrap();
                 let row_data = sequencer_steps.row_data(i).unwrap();
                 let selected = row_data.selected;
-                let params_bank = if selected && selected_column == StepColumn::Params {
+                let param0_bank = if selected && selected_column == 0 {
                     SELECTED_TEXT
                 } else {
                     NORMAL_TEXT
                 };
-                let press_bank = if selected && selected_column == StepColumn::Press {
+                let param1_bank = if selected && selected_column == 1 {
                     SELECTED_TEXT
                 } else {
                     NORMAL_TEXT
                 };
-                let release_bank = if selected && selected_column != StepColumn::Params {
+                let press_bank = if selected && selected_column == 2 {
+                    SELECTED_TEXT
+                } else {
+                    NORMAL_TEXT
+                };
+                let release_bank = if selected && selected_column >= 2 {
                     SELECTED_TEXT
                 } else {
                     NORMAL_TEXT
@@ -383,30 +388,30 @@ impl MainScreen {
                         vid_row,
                         PARAMS_START_X..,
                         to_hex(row_data.param0_val as u8),
-                        params_bank,
+                        param0_bank,
                     );
                 } else {
                     draw_ascii(
                         vid_row,
                         PARAMS_START_X..PARAMS_START_X + 2,
                         repeat(b'-'),
-                        params_bank | FADED_TEXT,
+                        param0_bank | FADED_TEXT,
                     );
                 }
-                draw_ascii_byte(vid_row, PARAMS_START_X + 2, b'/', params_bank | FADED_TEXT);
+                draw_ascii_byte(vid_row, PARAMS_START_X + 2, b'/', FADED_TEXT);
                 if row_data.param1_set {
                     draw_ascii(
                         vid_row,
                         PARAMS_START_X + 3..,
                         to_hex(row_data.param1_val as u8),
-                        params_bank,
+                        param1_bank,
                     );
                 } else {
                     draw_ascii(
                         vid_row,
                         PARAMS_START_X + 3..PARAMS_START_X + 5,
                         repeat(b'-'),
-                        params_bank | FADED_TEXT,
+                        param1_bank | FADED_TEXT,
                     );
                 }
 

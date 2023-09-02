@@ -341,16 +341,16 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
-    global_engine.on_cycle_step_param_start(move || {
+    global_engine.on_cycle_step_param_start(move |param_num| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.cycle_step_param_start());
+            .invoke_on_sound_engine(move |se| se.cycle_step_param_start(param_num as u8));
     });
     let cloned_sound_renderer = sound_renderer.clone();
-    global_engine.on_cycle_step_param_end(move || {
+    global_engine.on_cycle_step_param_end(move |param_num| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.cycle_step_param_end());
+            .invoke_on_sound_engine(move |se| se.cycle_step_param_end(param_num as u8));
     });
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_cycle_step_param(move |param_num, forward| {
@@ -426,6 +426,13 @@ fn run_main() {
         cloned_sound_renderer
             .borrow_mut()
             .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().cut_selected_step_note());
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cut_selected_step_param(move |param_num| {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().cut_selected_step_param(param_num as u8));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
