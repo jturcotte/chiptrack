@@ -599,7 +599,7 @@ impl Sequencer {
             forward,
             self.selected_step,
             self.selected_song_pattern,
-            &self.song.song_patterns,
+            self.num_song_patterns_including_stub(),
         );
 
         // Potentially activate the pattern first so that activate_step knows that it's current.
@@ -759,7 +759,7 @@ impl Sequencer {
 
         self.set_pattern_step_events(
             step_num,
-            self.active_song_pattern,
+            self.selected_song_pattern,
             Some(None),
             Some(false),
             Some((None, None)),
@@ -777,7 +777,7 @@ impl Sequencer {
     pub fn toggle_step_release(&mut self, step_num: usize) {
         let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
         let toggled = !maybe_steps.map_or(false, |ss| ss[step_num].release);
-        self.set_pattern_step_events(step_num, self.active_song_pattern, None, Some(toggled), None);
+        self.set_pattern_step_events(step_num, self.selected_song_pattern, None, Some(toggled), None);
 
         self.copy_step_note(step_num);
         self.select_step(step_num);
@@ -792,7 +792,7 @@ impl Sequencer {
             forward,
             self.active_step,
             self.active_song_pattern,
-            &self.song.song_patterns,
+            self.num_song_patterns(),
         );
 
         if next_song_pattern != self.active_song_pattern {
@@ -1064,7 +1064,7 @@ impl Sequencer {
                             true,
                             self.active_step,
                             self.active_song_pattern,
-                            &self.song.song_patterns,
+                            self.num_song_patterns(),
                         )
                     },
                 )
@@ -1099,7 +1099,7 @@ impl Sequencer {
                             false,
                             self.active_step,
                             self.active_song_pattern,
-                            &self.song.song_patterns,
+                            self.num_song_patterns(),
                         )
                     } else if is_end_in_prev_step || end_snaps_to_next_step {
                         // It ends between the snap frame of the previous step and the snap frame of the current step
@@ -1113,7 +1113,7 @@ impl Sequencer {
                             true,
                             self.active_step,
                             self.active_song_pattern,
-                            &self.song.song_patterns,
+                            self.num_song_patterns(),
                         )
                     },
                 )
@@ -1176,7 +1176,7 @@ impl Sequencer {
         };
         self.set_pattern_step_events(
             self.selected_step,
-            self.active_song_pattern,
+            self.selected_song_pattern,
             Some(Some(new_note)),
             set_release,
             set_params,
@@ -1254,7 +1254,7 @@ impl Sequencer {
 
         self.set_pattern_step_events(
             self.selected_step,
-            self.active_song_pattern,
+            self.selected_song_pattern,
             None,
             None,
             Some(step_parameters),
@@ -1539,18 +1539,27 @@ impl Sequencer {
         self.song.frames_per_step / 2 + 1
     }
 
+    fn num_song_patterns(&self) -> usize {
+        let len = self.song.song_patterns.len() as isize;
+        // Still count the stub if there are no non-stub song patterns
+        (len - (self.has_stub_pattern && len > 1) as isize) as usize
+    }
+    fn num_song_patterns_including_stub(&self) -> usize {
+        (self.song.song_patterns.len() as isize - self.has_stub_pattern as isize + 1) as usize
+    }
+
     fn next_step_and_pattern_and_song_pattern(
         forward: bool,
         from_step: usize,
         from_song_pattern: usize,
-        song_patterns: &Vec<usize>,
+        num_song_patterns: usize,
     ) -> (usize, usize) {
         let delta = if forward { 1_isize } else { -1 };
         let next_step = ((from_step as isize + NUM_STEPS as isize + delta) % NUM_STEPS as isize) as usize;
         let wraps = forward && next_step == 0 || !forward && from_step == 0;
         if wraps {
-            let next_song_pattern = ((from_song_pattern as isize + song_patterns.len() as isize + delta)
-                % song_patterns.len() as isize) as usize;
+            let next_song_pattern = ((from_song_pattern as isize + num_song_patterns as isize + delta)
+                % num_song_patterns as isize) as usize;
             return (next_step, next_song_pattern);
         }
         (next_step, from_song_pattern)
