@@ -62,7 +62,7 @@ impl MidiNote {
         }
     }
     pub fn base_note_name(&self) -> u8 {
-        (b'A' + (self.key_pos() as u8 + 2) % 7) as u8
+        b'A' + (self.key_pos() as u8 + 2) % 7
     }
     pub fn char_desc(&self) -> [u8; 3] {
         let note_name = self.base_note_name();
