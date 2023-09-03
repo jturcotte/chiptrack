@@ -13,8 +13,8 @@ component InstrumentButton inherits Rectangle {
     callback right_pressed();
     in property<bool> highlighted;
     in property<InstrumentData> i;
-    background: i.active ? #e0e0e0 : white;
-    border_color: highlighted ? black : #a0a0a0;
+    background: highlighted ? lightgrey : white;
+    border_color: i.active ? black : lightgrey;
     border_width: 1px;
     border_radius: self.width/16;
     VerticalLayout {
