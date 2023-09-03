@@ -1,11 +1,6 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-import {
-    Button,
-    HorizontalBox,
-    ScrollView
-} from "std-widgets.slint";
 import { InstrumentsPanel } from "instruments.slint";
 
 import {
@@ -23,8 +18,11 @@ import {
     GlobalUtils
 } from "globals.slint";
 
+import {
+    ScrollableSelection
+} from "widgets.slint";
+
 component Cursor inherits Rectangle {
-    // FIXME: Why did I need this?
     in property<length> parent_width;
     in property<length> parent_height;
     width: parent_width;
@@ -50,8 +48,8 @@ component SequencerPattern inherits Rectangle {
     Text {
         text: number != -1 ? number + 1 : "--";
         color: number != -1 ? black : #a0a0a0;
-        x: 2px;
-        width: parent.width - 4px;
+        x: parent.width * 0.1;
+        width: parent.width * 0.8;
         height: 100%;
         font_size: min(self.width, self.height) * 0.7;
         horizontal_alignment: left;
@@ -154,9 +152,9 @@ component PatternsList {
     callback clicked(int);
 
     title := Rectangle {
-        x: 0px;
+        x: scroll.scrollbar_width + self.width * 0.1;
         y: 0px;
-        height: root.height_of_cell;
+        height: height_of_cell;
 
         Text {
             x: 0px;
@@ -166,23 +164,34 @@ component PatternsList {
         }
     }
 
-    Flickable {
-        y: root.height_of_cell + layout.spacing;
-        interactive: false;
+    scroll := ScrollableSelection {
+        total_rows: GlobalEngine.sequencer_song_patterns.length;
+        cur_row: GlobalEngine.sequencer_song_pattern_selected;
+        viewport_rows: 16;
+        scrollbar_width: height_of_cell * 0.25;
+        scrolled(pos) => { GlobalEngine.select_song_pattern(pos) }
+
+        y: height_of_cell + layout.spacing;
         height: parent.height - self.y;
-        viewport_height: self.height * GlobalEngine.sequencer_song_patterns.length / 16;
+        width: 100%;
 
         layout := VerticalLayout {
             spacing: 1px;
-            for pattern[idx] in GlobalEngine.sequencer_song_patterns:
-            SequencerPattern {
-                number: pattern.number;
-                highlighted: idx == GlobalEngine.sequencer_song_pattern_active;
-                fill: pattern.selected;
-                clicked => { GlobalEngine.song_pattern_clicked(idx); }
+            for i in 16:
+            Rectangle {
+                property<int> idx: i + scroll.scroll_row;
+                if idx < GlobalEngine.sequencer_song_patterns.length:
+                SequencerPattern {
+                    property<SongPatternData> pattern: GlobalEngine.sequencer_song_patterns[idx];
+                    number: pattern.number;
+                    highlighted: idx == GlobalEngine.sequencer_song_pattern_active;
+                    fill: pattern.selected;
+                    clicked => { GlobalEngine.select_song_pattern(idx); }
+                }
             }
         }
     }
+
 
     @children
 }
@@ -202,7 +211,7 @@ export component PatternsPanel inherits HorizontalLayout {
 
     spacing: 12px;
     patterns_list := PatternsList {
-        width: self.height_of_cell * 2;
+        width: self.height_of_cell * 2.75;
         fs := PatternsFocusScope {
             root_key_pressed(e) => { root.root_key_pressed(e); }
             root_key_released(e) => { root.root_key_released(e); }

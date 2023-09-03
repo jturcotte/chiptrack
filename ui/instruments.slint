@@ -1,14 +1,18 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-import { InstrumentData, GlobalEngine } from "globals.slint";
+import {
+    InstrumentData,
+    GlobalEngine
+} from "globals.slint";
+
+import { ScrollableSelection } from "widgets.slint";
 
 component InstrumentButton inherits Rectangle {
     callback pressed();
     callback right_pressed();
     in property<bool> highlighted;
     in property<InstrumentData> i;
-    width: self.height;
     background: i.active ? #e0e0e0 : white;
     border_color: highlighted ? black : #a0a0a0;
     border_width: 1px;
@@ -23,9 +27,6 @@ component InstrumentButton inherits Rectangle {
             vertical_alignment: bottom;
             color: i.muted ? #a0a0a0 : black;
         }
-        // FIXME: It's a bit crappy to have to set it separately, maybe it could just be the last step settings set or something.
-        //        Or I could have B+arrows only set the instruments parameters, stamp them on any press (though should any A+ on other steps copy params too?),
-        //        and require A+B+arrows to tweak the steps.
         Text {
             text: i.param0 + " / " + i.param1;
             width: 100%;
@@ -50,21 +51,36 @@ component InstrumentButton inherits Rectangle {
     }
 }
 
-export component InstrumentsPanel inherits Flickable {
+export component InstrumentsPanel inherits ScrollableSelection {
     property<length> spacing: 5px;
     property<int> grid_size: 4;
     property<length> item_size: (self.width - (spacing * (grid_size - 1))) / grid_size;
-    viewport_height: item_size * (GlobalEngine.instruments.length / 4) + (GlobalEngine.instruments.length / 4 - 1) * spacing;
-    interactive: false;
+    property<int> column: mod(GlobalEngine.selected_instrument, 4);
+    scrolled(pos) => { GlobalEngine.select_instrument(pos * 4 + column) }
+    total_rows: GlobalEngine.instruments.length / 4;
+    viewport_rows: ceil(self.height / (item_size + spacing));
+    cur_row: GlobalEngine.selected_instrument / 4;
+    // The number of rows is static and a scroll bar there looks ugly.
+    // FIXME: This makes it however impossible to scroll with the mouse, so figure out something.
+    //        At least supporting wheel events once https://github.com/slint-ui/slint/issues/1280 is fixed would be nice.
+    scrollbar_width: 0px;
 
-    for instrument[idx] in GlobalEngine.instruments:
-    InstrumentButton {
-        i: instrument;
-        highlighted: idx == GlobalEngine.selected_instrument;
-        pressed => { GlobalEngine.select_instrument(idx); }
-        right_pressed => { GlobalEngine.toggle_mute_instrument(idx); }
-        x: mod(idx, 4) * (self.width + parent.spacing);
-        y: floor(idx / 4) * (self.height + parent.spacing);
-        height: parent.item_size;
+    for row in self.viewport_rows:
+    Rectangle{
+        for col in 4:
+        Rectangle {
+            property<int> idx: (row + root.scroll_row) * 4 + col;
+            x: col * (self.width + root.spacing);
+            y: row * (self.height + root.spacing);
+            width: self.height;
+            height: root.item_size;
+            if idx < GlobalEngine.instruments.length:
+            InstrumentButton {
+                i: GlobalEngine.instruments[idx];
+                highlighted: idx == GlobalEngine.selected_instrument;
+                pressed => { GlobalEngine.select_instrument(idx); }
+                right_pressed => { GlobalEngine.toggle_mute_instrument(idx); }
+            }
+        }
     }
 }

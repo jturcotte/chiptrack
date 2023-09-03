@@ -481,7 +481,7 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
-    global_engine.on_song_pattern_clicked(move |song_pattern_idx| {
+    global_engine.on_select_song_pattern(move |song_pattern_idx| {
         cloned_sound_renderer
             .borrow_mut()
             .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().select_song_pattern(song_pattern_idx as usize));
