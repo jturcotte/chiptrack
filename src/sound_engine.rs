@@ -616,10 +616,9 @@ impl SoundEngine {
     #[cfg(feature = "desktop_native")]
     pub fn reload_instruments_from_file(&mut self) {
         if let ProjectSource::File((_, path)) = &self.project_source {
-            self.script
-                .load_file(path.as_path())
-                .map_err(|e| elog!("Couldn't reload instruments from file {:?}.\n\tError: {:?}", path, e))
-                .unwrap();
+            if let Err(e) = self.script.load_file(path.as_path()) {
+                elog!("Couldn't reload instruments from file {:?}.\n\tError: {:?}", path, e);
+            }
         }
     }
 }

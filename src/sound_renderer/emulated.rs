@@ -19,6 +19,7 @@ use slint::{ComponentHandle, Global, Model, Rgba8Pixel, SharedPixelBuffer, VecMo
 use tiny_skia::*;
 
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -416,7 +417,9 @@ pub struct SoundRenderer<LazyF: FnOnce() -> Context> {
     sound_send: Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>,
     context: Rc<Lazy<Context, LazyF>>,
     #[cfg(not(target_arch = "wasm32"))]
-    _watcher: notify::RecommendedWatcher,
+    watcher: notify::RecommendedWatcher,
+    #[cfg(not(target_arch = "wasm32"))]
+    watched_path: Option<PathBuf>,
 }
 
 impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
@@ -442,26 +445,37 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
     pub fn force(&mut self) {
         Lazy::force(&*self.context);
     }
+
+    pub fn set_song_path(&mut self, path: PathBuf) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(old_path) = self.watched_path.take() {
+                self.watcher.unwatch(old_path).unwrap();
+            }
+
+            debug_assert!(path.is_file());
+            self.watcher
+                .watch(path.parent().unwrap(), RecursiveMode::NonRecursive)
+                .unwrap();
+            self.watched_path = Some(path);
+        }
+    }
 }
 
 fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) {
     #[cfg(not(target_arch = "wasm32"))]
     while let Ok(msg) = notify_recv.try_recv() {
-        let reload = if let Some(instruments_path) = engine.instruments_path() {
-            let instruments = instruments_path.file_name();
-            match msg {
-                DebouncedEvent::Write(path) if path.file_name() == instruments => true,
-                DebouncedEvent::Create(path) if path.file_name() == instruments => true,
-                DebouncedEvent::Remove(path) if path.file_name() == instruments => true,
-                DebouncedEvent::Rename(from, to)
-                    if from.file_name() == instruments || to.file_name() == instruments =>
-                {
-                    true
-                }
-                _ => false,
+        let instruments = engine.instruments_path().and_then(|ip| ip.canonicalize().ok());
+        let reload = match msg {
+            DebouncedEvent::Write(path) if path.canonicalize().ok() == instruments => true,
+            DebouncedEvent::Create(path) if path.canonicalize().ok() == instruments => true,
+            DebouncedEvent::Remove(path) if path.canonicalize().ok() == instruments => true,
+            DebouncedEvent::Rename(from, to)
+                if from.canonicalize().ok() == instruments || to.canonicalize().ok() == instruments =>
+            {
+                true
             }
-        } else {
-            false
+            _ => false,
         };
         if reload {
             engine.reload_instruments_from_file();
@@ -535,10 +549,7 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
     SOUND_SENDER.with(|s| *s.borrow_mut() = Some(cloned_sound_send));
 
     #[cfg(not(target_arch = "wasm32"))]
-    let mut watcher = notify::watcher(notify_send, Duration::from_millis(500)).unwrap();
-    #[cfg(not(target_arch = "wasm32"))]
-    // FIXME: Watch the song file's folder, and update it when saving as.
-    watcher.watch(".", RecursiveMode::NonRecursive).unwrap();
+    let watcher = notify::watcher(notify_send, Duration::from_millis(500)).unwrap();
 
     let window_weak = WeakWindowWrapper::new(window.as_weak());
     let initial_settings = window.global::<GlobalSettings>().get_settings();
@@ -643,6 +654,7 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
         sound_send,
         context,
         #[cfg(not(target_arch = "wasm32"))]
-        _watcher: watcher,
+        watcher,
+        watched_path: None,
     }
 }

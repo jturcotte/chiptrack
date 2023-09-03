@@ -158,6 +158,11 @@ fn run_main() {
     global_engine.set_synth_active_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
 
     let sound_renderer = Rc::new(RefCell::new(new_sound_renderer(&window)));
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
+    if let Some(ref file_path) = maybe_file_path {
+        // FIXME: Update it when saving as.
+        sound_renderer.borrow_mut().set_song_path(file_path.to_path_buf());
+    }
 
     #[cfg(feature = "desktop")]
     if let Some(gist_path) = maybe_gist_path {
