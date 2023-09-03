@@ -58,7 +58,7 @@ export component InstrumentsPanel inherits ScrollableSelection {
     property<int> column: mod(GlobalEngine.selected_instrument, 4);
     scrolled(pos) => { GlobalEngine.select_instrument(pos * 4 + column) }
     total_rows: GlobalEngine.instruments.length / 4;
-    viewport_rows: ceil(self.height / (item_size + spacing));
+    viewport_rows: 5;
     cur_row: GlobalEngine.selected_instrument / 4;
     // The number of rows is static and a scroll bar there looks ugly.
     // FIXME: This makes it however impossible to scroll with the mouse, so figure out something.

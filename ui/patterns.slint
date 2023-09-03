@@ -271,9 +271,9 @@ export component PatternsPanel inherits HorizontalLayout {
         }
     }
 
-    HorizontalLayout {
-        if !instruments_key_handler.has_focus:
+    Rectangle {
         pattern_instruments := HorizontalLayout {
+            visible: !instruments_key_handler.has_focus;
             spacing: 8px;
             for idx in GlobalEngine.sequencer_pattern_instruments.length:
             VerticalLayout {
@@ -310,8 +310,11 @@ export component PatternsPanel inherits HorizontalLayout {
             }
         }
 
-        if instruments_key_handler.has_focus:
-        InstrumentsPanel { }
+        InstrumentsPanel {
+            height: 100%;
+            width: 100%;
+            visible: instruments_key_handler.has_focus;
+        }
 
         instruments_key_handler := InstrumentsFocusScope {
             width: 0px;
