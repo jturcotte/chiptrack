@@ -6,6 +6,7 @@ extern crate alloc;
 use crate::elog;
 use crate::log;
 use crate::sound_renderer::SoundRenderer;
+use crate::FocusedPanel;
 use crate::GlobalEngine;
 use crate::GlobalUI;
 use crate::MainWindow;
@@ -91,7 +92,7 @@ pub struct MainScreen {
     sequencer_pattern_instruments_tracker:
         Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
-    instruments_had_focus: RefCell<bool>,
+    focused_panel_previous: RefCell<FocusedPanel>,
     selected_column_previous: RefCell<i32>,
     sequencer_pattern_instruments_len_previous: RefCell<usize>,
     sequencer_song_pattern_active_previous: RefCell<usize>,
@@ -231,7 +232,7 @@ impl MainScreen {
                 ModelChangeListenerContainer::<ModelDirtinessTracker>::default(),
             ),
             instruments_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
-            instruments_had_focus: RefCell::new(false),
+            focused_panel_previous: RefCell::new(FocusedPanel::Steps),
             selected_column_previous: RefCell::new(0),
             sequencer_pattern_instruments_len_previous: RefCell::new(0),
             sequencer_song_pattern_active_previous: RefCell::new(0),
@@ -258,17 +259,15 @@ impl MainScreen {
             .get_instruments()
             .model_tracker()
             .attach_peer(Pin::as_ref(&self.instruments_tracker).model_peer());
-        // Start dirty
-        *self.instruments_had_focus.borrow_mut() = !handle.get_instruments_have_focus();
     }
 
     pub fn draw(&self) {
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
         let global_engine = GlobalEngine::get(&handle);
         let global_ui = GlobalUI::get(&handle);
-        let instruments_have_focus = handle.get_instruments_have_focus();
-        let instruments_have_focus_dirty =
-            self.instruments_had_focus.replace(instruments_have_focus) != instruments_have_focus;
+        let focused_panel = handle.get_focused_panel();
+        let focused_panel_previous = self.focused_panel_previous.replace(focused_panel);
+        let focused_panel_dirty = focused_panel_previous != focused_panel;
         let selected_column = global_ui.get_selected_column();
         let selected_column_dirty = self.selected_column_previous.replace(selected_column) != selected_column;
         let sequencer_pattern_instruments_len = global_engine.get_sequencer_pattern_instruments_len() as usize;
@@ -288,32 +287,39 @@ impl MainScreen {
         let selected_instrument_dirty =
             self.selected_instrument_previous.replace(selected_instrument) != selected_instrument;
 
+        let sequencer_song_patterns_dirty = self.sequencer_song_patterns_tracker.take_dirtiness();
+        let sequencer_steps_dirty = self.sequencer_steps_tracker.take_dirtiness();
+        let sequencer_pattern_instruments_dirty = self.sequencer_pattern_instruments_tracker.take_dirtiness();
+        let instruments_dirty = self.instruments_tracker.take_dirtiness();
+
         let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
         const PARAMS_START_X: usize = 4;
         const STEPS_START_X: usize = 10;
         const INSTR_START_X: usize = 14;
 
         let status_vid_row = tsb.get_row(18).unwrap();
-        draw_ascii_byte(
-            status_vid_row,
-            0,
-            handle.get_patterns_have_focus() as u8 * Cga8x8Thick::BULLET,
-            NORMAL_TEXT,
-        );
-        draw_ascii_byte(
-            status_vid_row,
-            PARAMS_START_X - 1,
-            handle.get_steps_have_focus() as u8 * Cga8x8Thick::BULLET,
-            NORMAL_TEXT,
-        );
-        draw_ascii_byte(
-            status_vid_row,
-            INSTR_START_X - 1,
-            instruments_have_focus as u8 * Cga8x8Thick::BULLET,
-            NORMAL_TEXT,
-        );
+        if focused_panel_dirty {
+            draw_ascii_byte(
+                status_vid_row,
+                0,
+                (focused_panel == FocusedPanel::Patterns) as u8 * Cga8x8Thick::BULLET,
+                NORMAL_TEXT,
+            );
+            draw_ascii_byte(
+                status_vid_row,
+                PARAMS_START_X - 1,
+                (focused_panel == FocusedPanel::Steps) as u8 * Cga8x8Thick::BULLET,
+                NORMAL_TEXT,
+            );
+            draw_ascii_byte(
+                status_vid_row,
+                INSTR_START_X - 1,
+                (focused_panel == FocusedPanel::Instruments) as u8 * Cga8x8Thick::BULLET,
+                NORMAL_TEXT,
+            );
+        }
 
-        if sequencer_song_pattern_active_dirty || self.sequencer_song_patterns_tracker.take_dirtiness() {
+        if sequencer_song_pattern_active_dirty || sequencer_song_patterns_dirty {
             let pattern_model = global_engine.get_sequencer_song_patterns();
             draw_ascii_ref(tsb.get_row(0).unwrap(), 0.., b"Song", NORMAL_TEXT);
 
@@ -341,7 +347,7 @@ impl MainScreen {
             }
         }
 
-        if self.sequencer_steps_tracker.take_dirtiness() || sequencer_step_active_dirty || selected_column_dirty {
+        if sequencer_steps_dirty || sequencer_step_active_dirty || selected_column_dirty || focused_panel_dirty {
             let selected_instrument = global_engine.get_selected_instrument() as usize;
             let vid_row = tsb.get_row(0).unwrap();
             let selected_instrument_id = global_engine
@@ -360,7 +366,7 @@ impl MainScreen {
             for i in 0..sequencer_steps.row_count() {
                 let vid_row = tsb.get_row(i + 1).unwrap();
                 let row_data = sequencer_steps.row_data(i).unwrap();
-                let selected = row_data.selected;
+                let selected = row_data.selected && focused_panel == FocusedPanel::Steps;
                 let param0_bank = if selected && selected_column == 0 {
                     SELECTED_TEXT
                 } else {
@@ -442,18 +448,18 @@ impl MainScreen {
             }
         }
 
-        if instruments_have_focus_dirty {
+        let toggled_instruments = focused_panel_dirty
+            && (focused_panel == FocusedPanel::Instruments || focused_panel_previous == FocusedPanel::Instruments);
+        if toggled_instruments {
             for i in 0..17 {
                 draw_ascii(tsb.get_row(i).unwrap(), INSTR_START_X.., repeat(0), NORMAL_TEXT);
             }
-            if instruments_have_focus {
+            if focused_panel == FocusedPanel::Instruments {
                 draw_ascii_ref(tsb.get_row(0).unwrap(), INSTR_START_X.., b"Instruments", NORMAL_TEXT);
             }
         }
-        if !instruments_have_focus
-            && (instruments_have_focus_dirty
-                || sequencer_pattern_instruments_len_dirty
-                || self.sequencer_pattern_instruments_tracker.take_dirtiness())
+        if focused_panel != FocusedPanel::Instruments
+            && (toggled_instruments || sequencer_pattern_instruments_len_dirty || sequencer_pattern_instruments_dirty)
         {
             let top_vid_row = tsb.get_row(0).unwrap();
             let sequencer_pattern_instruments = global_engine.get_sequencer_pattern_instruments();
@@ -494,8 +500,8 @@ impl MainScreen {
                 }
             }
         }
-        if instruments_have_focus
-            && (instruments_have_focus_dirty || selected_instrument_dirty || self.instruments_tracker.take_dirtiness())
+        if focused_panel == FocusedPanel::Instruments
+            && (toggled_instruments || selected_instrument_dirty || instruments_dirty)
         {
             let instruments = global_engine.get_instruments();
             let scroll_pos =
@@ -625,7 +631,7 @@ impl slint::platform::Platform for GbaPlatform {
         let slint_key_left: SharedString = slint::platform::Key::LeftArrow.into();
         let slint_key_up: SharedString = slint::platform::Key::UpArrow.into();
         let slint_key_down: SharedString = slint::platform::Key::DownArrow.into();
-        let slint_key_r: SharedString = '\u{8}'.into();
+        let slint_key_r: SharedString = slint::platform::Key::Alt.into();
         let slint_key_l: SharedString = slint::platform::Key::Tab.into();
 
         let main_screen = &self.main_screen;

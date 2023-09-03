@@ -4,6 +4,7 @@
 import { InstrumentsPanel } from "instruments.slint";
 
 import {
+    FocusedPanel,
     GlobalUI,
     InstrumentsFocusScope,
     PatternsFocusScope,
@@ -192,41 +193,70 @@ component PatternsList {
         }
     }
 
-
     @children
 }
 
 export component PatternsPanel inherits HorizontalLayout {
-    out property instruments_grid_has_focus <=> instruments_key_handler.has_focus;
-    public function toggle_instruments_grid_focus() {
-        if (!instruments_key_handler.has_focus) {        
+    out property<FocusedPanel> focused_panel: steps;
+    callback root_key_pressed(KeyEvent) -> EventResult;
+    callback root_key_released(KeyEvent) -> EventResult;
+
+    public function cycle_focus_panel(forward: bool, wrap: bool) {
+        if (forward) {
+            if (focused_panel == FocusedPanel.patterns) {
+                focused_panel = FocusedPanel.steps;
+                steps_key_handler.focus();
+            } else if (focused_panel == FocusedPanel.steps){
+                focused_panel = FocusedPanel.instruments;
+                instruments_key_handler.focus();
+            } else if (wrap && focused_panel == FocusedPanel.instruments){
+                focused_panel = FocusedPanel.patterns;
+                patterns_key_handler.focus();
+            }
+        } else {
+            if (focused_panel == FocusedPanel.instruments){
+                focused_panel = FocusedPanel.steps;
+                steps_key_handler.focus();
+            } else if (focused_panel == FocusedPanel.steps) {
+                focused_panel = FocusedPanel.patterns;
+                patterns_key_handler.focus();
+            } else if (wrap && focused_panel == FocusedPanel.patterns){
+                focused_panel = FocusedPanel.instruments;
+                instruments_key_handler.focus();
+            }
+        }
+    }
+    public function toggle_instruments_grid() {
+        if (focused_panel != FocusedPanel.instruments) {
+            focused_panel = FocusedPanel.instruments;
             instruments_key_handler.focus();
         } else {
+            focused_panel = FocusedPanel.steps;
             steps_key_handler.focus();
         }
     }
-    callback root_key_pressed(KeyEvent) -> EventResult;
-    callback root_key_released(KeyEvent) -> EventResult;
+
     forward_focus: steps_key_handler;
 
     spacing: 12px;
     patterns_list := PatternsList {
         width: self.height_of_cell * 2.75;
-        fs := PatternsFocusScope {
-            root_key_pressed(e) => { root.root_key_pressed(e); }
-            root_key_released(e) => { root.root_key_released(e); }
-        }
+
         Rectangle {
             x: -5px;
             y: -5px;
             width: parent.width + 10px;
             height: parent.height + 10px;
-            border-color: fs.has_focus ? grey : transparent;
-            border-width: 1px;
-            border-radius: min(self.width, self.height) / 8;
+            border_color: focused_panel == FocusedPanel.patterns ? lightgrey : transparent;
+            border_width: 1px;
+            border_radius: patterns_list.height_of_cell / 4;
         }
-
-
+        patterns_key_handler := PatternsFocusScope {
+            enabled: focused_panel == FocusedPanel.patterns;
+            width: 0px;
+            root_key_pressed(e) => { root.root_key_pressed(e); }
+            root_key_released(e) => { root.root_key_released(e); }
+        }
     }
 
     current_pattern := Rectangle { 
@@ -248,7 +278,7 @@ export component PatternsPanel inherits HorizontalLayout {
             HorizontalLayout {
                 SequencerStep {
                     highlighted: idx == GlobalEngine.sequencer_step_active;
-                    show_selection: steps_key_handler.has_focus;
+                    show_selection: focused_panel == FocusedPanel.steps;
                     step: step;
                     name: GlobalUtils.get_midi_note_name(step.note);
                     pressed => { GlobalEngine.toggle_step(idx); }
@@ -261,11 +291,13 @@ export component PatternsPanel inherits HorizontalLayout {
             y: -5px;
             width: parent.width + 10px;
             height: parent.height + 10px;
-            border-color: steps_key_handler.has_focus ? grey : transparent;
-            border-width: 1px;
-            border-radius: min(self.width, self.height) / 8;
+            border_color: focused_panel == FocusedPanel.steps ? lightgrey : transparent;
+            border_width: 1px;
+            border_radius: patterns_list.height_of_cell / 4;
         }
         steps_key_handler := StepsFocusScope {
+            enabled: focused_panel == FocusedPanel.steps;
+            width: 0px;
             root_key_pressed(e) => { root.root_key_pressed(e); }
             root_key_released(e) => { root.root_key_released(e); }
         }
@@ -273,7 +305,7 @@ export component PatternsPanel inherits HorizontalLayout {
 
     Rectangle {
         pattern_instruments := HorizontalLayout {
-            visible: !instruments_key_handler.has_focus;
+            visible: focused_panel != FocusedPanel.instruments;
             spacing: 8px;
             for idx in GlobalEngine.sequencer_pattern_instruments.length:
             VerticalLayout {
@@ -313,13 +345,23 @@ export component PatternsPanel inherits HorizontalLayout {
         InstrumentsPanel {
             height: 100%;
             width: 100%;
-            visible: instruments_key_handler.has_focus;
-        }
+            visible: focused_panel == FocusedPanel.instruments;
 
-        instruments_key_handler := InstrumentsFocusScope {
-            width: 0px;
-            root_key_pressed(e) => { root.root_key_pressed(e); }
-            root_key_released(e) => { root.root_key_released(e); }
+            Rectangle {
+                x: -5px;
+                y: -5px;
+                width: parent.width + 10px;
+                height: parent.height + 10px;
+                border_color: focused_panel == FocusedPanel.instruments ? lightgrey : transparent;
+                border_width: 1px;
+                border_radius: patterns_list.height_of_cell / 4;
+            }
+            instruments_key_handler := InstrumentsFocusScope {
+                enabled: focused_panel == FocusedPanel.instruments;
+                width: 0px;
+                root_key_pressed(e) => { root.root_key_pressed(e); }
+                root_key_released(e) => { root.root_key_released(e); }
+            }
         }
     }
 }

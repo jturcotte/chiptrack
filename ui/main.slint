@@ -7,6 +7,7 @@ import {
 } from "std-widgets.slint";
 
 import {
+    FocusedPanel,
     GlobalUI
 } from "common.slint";
 
@@ -90,6 +91,10 @@ export component MainWindow inherits Window {
         else if (event.text == "8") { GlobalEngine.select_instrument(7); }
         else if (event.text == "9") { GlobalEngine.select_instrument(8); }
         else if (event.text == "0") { GlobalEngine.select_instrument(9); }
+        else if (event.modifiers.alt && event.text == Key.LeftArrow) { patterns.cycle_focus_panel(false, false); }
+        else if (event.modifiers.alt && event.text == Key.RightArrow) { patterns.cycle_focus_panel(true, false); }
+        else if (event.modifiers.shift && event.text == Key.Tab) { patterns.cycle_focus_panel(false, true); }
+        else if (event.text == Key.Tab) { patterns.cycle_focus_panel(true, true); }
         else if (event.text == Key.LeftArrow) { GlobalEngine.cycle_pattern_instrument(false); }
         else if (event.text == Key.RightArrow) { GlobalEngine.cycle_pattern_instrument(true); }
         else if (event.text == Key.UpArrow) { GlobalEngine.select_next_song_pattern(false); }
@@ -159,9 +164,9 @@ export component MainWindow inherits Window {
                 text: " ";
             }
             ToolbarButton {
-                text: patterns.instruments_grid_has_focus ? "▦" : "▤";
+                text: patterns.focused_panel == FocusedPanel.instruments ? "▦" : "▥";
                 clicked => {
-                    patterns.toggle_instruments_grid_focus();
+                    patterns.toggle_instruments_grid();
                 }
             }
             play_button := ToolbarButton {

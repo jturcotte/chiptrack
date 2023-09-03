@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import {
+    FocusedPanel,
     GlobalUI,
     InstrumentsFocusScope,
     PatternsFocusScope,
@@ -23,15 +24,15 @@ export {
 
 export component MainWindow inherits Window {
     in-out property<bool> playing: false;
-    out property patterns_have_focus <=> patterns_focus_scope.has_focus;
-    out property steps_have_focus <=> steps_focus_scope.has_focus;
-    out property instruments_have_focus <=> instruments_focus_scope.has_focus;
+    out property<FocusedPanel> focused_panel: steps;
 
     callback octave_increased(int);
     callback global_key_event(string, bool) -> bool;
 
     function root_key_pressed(event: KeyEvent) -> EventResult {
-        if (event.text == Key.LeftArrow) { GlobalEngine.cycle_pattern_instrument(false); }
+        if (event.modifiers.alt && event.text == Key.LeftArrow) { cycle_focus_panel(false); }
+        else if (event.modifiers.alt && event.text == Key.RightArrow) { cycle_focus_panel(true); }
+        else if (event.text == Key.LeftArrow) { GlobalEngine.cycle_pattern_instrument(false); }
         else if (event.text == Key.RightArrow) { GlobalEngine.cycle_pattern_instrument(true); }
         else if (event.text == Key.UpArrow) { GlobalEngine.select_next_song_pattern(false); }
         else if (event.text == Key.DownArrow) { GlobalEngine.select_next_song_pattern(true); }
@@ -46,16 +47,36 @@ export component MainWindow inherits Window {
         global_key_event(event.text, false) ? accept : reject
     }
 
-    patterns_focus_scope := PatternsFocusScope {
+    function cycle_focus_panel(forward: bool) {
+        if (forward) {
+            if (focused_panel == FocusedPanel.patterns) {
+                focused_panel = FocusedPanel.steps;
+                steps_key_handler.focus();
+            } else if (focused_panel == FocusedPanel.steps){
+                focused_panel = FocusedPanel.instruments;
+                instruments_key_handler.focus();
+            }
+        } else {
+            if (focused_panel == FocusedPanel.instruments){
+                focused_panel = FocusedPanel.steps;
+                steps_key_handler.focus();
+            } else if (focused_panel == FocusedPanel.steps) {
+                focused_panel = FocusedPanel.patterns;
+                patterns_key_handler.focus();
+            }
+        }
+    }
+
+    patterns_key_handler := PatternsFocusScope {
         root_key_pressed(e) => { root.root_key_pressed(e); }
         root_key_released(e) => { root.root_key_released(e); }
     }
-    forward_focus: steps_focus_scope;
-    steps_focus_scope := StepsFocusScope {
+    forward_focus: steps_key_handler;
+    steps_key_handler := StepsFocusScope {
         root_key_pressed(e) => { root.root_key_pressed(e); }
         root_key_released(e) => { root.root_key_released(e); }
     }
-    instruments_focus_scope := InstrumentsFocusScope {
+    instruments_key_handler := InstrumentsFocusScope {
         root_key_pressed(e) => { root.root_key_pressed(e); }
         root_key_released(e) => { root.root_key_released(e); }
     }
