@@ -142,12 +142,6 @@ fn run_main() {
         window.set_notes(slint::ModelRc::from(note_model.clone()));
     }
 
-    #[cfg(target_arch = "wasm32")]
-    if !web_sys::window().unwrap().location().search().unwrap().is_empty() {
-        // Show the UI directly in song mode if the URL might contain a song.
-        GlobalUI::get(&window).set_song_mode(true);
-    }
-
     let global_engine = GlobalEngine::get(&window);
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.

@@ -9,7 +9,7 @@ const set_param_fn = *const fn (param_num: u8, value: i8) callconv(.C) void;
 extern fn print([*:0]const u8) void;
 extern fn gba_set_sound_reg(addr: u32, value: u32) void;
 extern fn gba_set_wave_table(table: [*]const u8, table_len: u32) void;
-extern fn set_instrument_at_column(id: [*:0]const u8, col: i32, frames_after_release: i32, press_symbol: ?press_fn, release_symbol: ?release_fn, frame_symbol: ?frame_fn, set_param_symbol: ?set_param_fn) void;
+extern fn set_instrument_at_column(id: [*:0]const u8, col: i32, frames_after_release: i32, press: ?press_fn, release: ?release_fn, frame: ?frame_fn, set_param: ?set_param_fn) void;
 
 pub fn debug(comptime f: []const u8, args: anytype) void {
     var b: [256]u8 = undefined;

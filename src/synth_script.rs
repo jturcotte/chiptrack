@@ -229,11 +229,15 @@ impl SynthScript {
                     pressed_frame: frame_number,
                     extended_frames: None,
                 });
-                self.wasm_module_inst
-                    .as_ref()
-                    .unwrap()
-                    .call_indirect_iiii(f, Self::note_to_freq(note), note as i32, param0 as i32, param1 as i32)
-                    .unwrap();
+                if let Err(e) = self.wasm_module_inst.as_ref().unwrap().call_indirect_iiii(
+                    f,
+                    Self::note_to_freq(note),
+                    note as i32,
+                    param0 as i32,
+                    param1 as i32,
+                ) {
+                    elog!("press: {:?}", e);
+                }
             }
         }
     }
@@ -248,16 +252,14 @@ impl SynthScript {
             }) = &mut state.pressed_note
             {
                 if let Some(f) = &state.release_function {
-                    self.wasm_module_inst
-                        .as_ref()
-                        .unwrap()
-                        .call_indirect_iii(
-                            f,
-                            Self::note_to_freq(*note),
-                            *note as i32,
-                            (frame_number - *pressed_frame) as i32,
-                        )
-                        .unwrap();
+                    if let Err(e) = self.wasm_module_inst.as_ref().unwrap().call_indirect_iii(
+                        f,
+                        Self::note_to_freq(*note),
+                        *note as i32,
+                        (frame_number - *pressed_frame) as i32,
+                    ) {
+                        elog!("release: {:?}", e);
+                    }
                 }
                 // Since the release function might trigger an envelope that lasts a few
                 // frames, the frame function would need to continue running during that time.
@@ -278,11 +280,14 @@ impl SynthScript {
         let mut states = self.instrument_states.borrow_mut();
         if let Some(state) = states.get_instrument(instrument) {
             if let Some(f) = &state.set_param_function {
-                self.wasm_module_inst
-                    .as_ref()
-                    .unwrap()
-                    .call_indirect_ii(f, param_num as i32, val as i32)
-                    .unwrap();
+                if let Err(e) =
+                    self.wasm_module_inst
+                        .as_ref()
+                        .unwrap()
+                        .call_indirect_ii(f, param_num as i32, val as i32)
+                {
+                    elog!("set_param: {:?}", e);
+                }
             }
         }
     }
@@ -308,16 +313,14 @@ impl SynthScript {
                     }),
                 ) = (&state.frame_function, &mut state.pressed_note)
                 {
-                    self.wasm_module_inst
-                        .as_ref()
-                        .unwrap()
-                        .call_indirect_iii(
-                            f,
-                            Self::note_to_freq(*note),
-                            *note as i32,
-                            (frame_number - *pressed_frame) as i32,
-                        )
-                        .unwrap();
+                    if let Err(e) = self.wasm_module_inst.as_ref().unwrap().call_indirect_iii(
+                        f,
+                        Self::note_to_freq(*note),
+                        *note as i32,
+                        (frame_number - *pressed_frame) as i32,
+                    ) {
+                        elog!("frame: {:?}", e);
+                    }
                     if let Some(remaining) = extended_frames {
                         *remaining -= 1;
                         if *remaining == 0 {

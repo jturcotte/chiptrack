@@ -9,6 +9,7 @@ use alloc::alloc::realloc;
 use alloc::alloc::Layout;
 use alloc::boxed::Box;
 use alloc::ffi::CString;
+use alloc::format;
 use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::string::ToString;
@@ -244,7 +245,7 @@ impl WasmRuntime {
 
             // initialize the runtime before registering the native functions
             if !wasm_runtime_full_init(&mut init_args as *mut _) {
-                panic!("CANT INIT RUNTIME");
+                return Err(format!("CANT INIT RUNTIME"));
             }
 
             let mut native_symbols: Vec<NativeSymbol> = functions.iter_mut().map(|f| f.to_native_symbol()).collect();
@@ -255,7 +256,7 @@ impl WasmRuntime {
                 native_symbols.as_mut_ptr(),
                 native_symbols.len() as u32,
             ) {
-                panic!("wasm_runtime_register_natives failed");
+                return Err(format!("wasm_runtime_register_natives failed"));
             }
             Ok(WasmRuntime {
                 _module_name: module_name,
@@ -284,7 +285,10 @@ impl WasmModule {
                 error_buf.len() as u32,
             );
             if module.is_null() {
-                panic!("wasm_runtime_load failed: {:?}", CStr::from_ptr(error_buf.as_ptr()));
+                return Err(format!(
+                    "wasm_runtime_load failed: {:?}",
+                    CStr::from_ptr(error_buf.as_ptr())
+                ));
             }
             Ok(WasmModule {
                 module,
@@ -315,10 +319,10 @@ impl WasmModuleInst {
                 error_buf.len() as u32,
             );
             if module_inst.is_null() {
-                panic!(
+                return Err(format!(
                     "wasm_runtime_instantiate failed: {:?}",
                     CStr::from_ptr(error_buf.as_ptr())
-                );
+                ));
             }
 
             let module_inst = WasmModuleInst {
@@ -400,7 +404,7 @@ impl WasmModuleInst {
             } else {
                 // exception is thrown if call fails
                 let cstr = CStr::from_ptr(wasm_runtime_get_exception(wasm_runtime_get_module_inst(exec_env)));
-                panic!("wasm_runtime_call_wasm failed: {:?}", cstr);
+                Err(format!("wasm_runtime_call_wasm failed: {:?}", cstr))?
             }
         }
     }
@@ -423,10 +427,10 @@ impl WasmModuleInst {
             } else {
                 // exception is thrown if call fails
                 let cstr = CStr::from_ptr(wasm_runtime_get_exception(wasm_runtime_get_module_inst(exec_env)));
-                panic!(
+                Err(format!(
                     "wasm_runtime_call_indirect of table index {:?} failed: {:?}",
                     function.table_index, cstr
-                );
+                ))
             }
         }
     }

@@ -404,7 +404,7 @@ impl SoundEngine {
 
     pub fn load_default(&mut self) {
         self.sequencer.borrow_mut().load_default();
-        self.script.load_default().unwrap();
+        self.script.load_default().expect("Default instruments couldn't load");
     }
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
@@ -600,7 +600,9 @@ impl SoundEngine {
             let mut instrument_bytes = Vec::<u8>::with_capacity(instruments_len);
             gba::mem_fns::__aeabi_memcpy1(instrument_bytes.as_mut_ptr(), sram.offset(8), instruments_len);
             instrument_bytes.set_len(instruments_len);
-            self.script.load_bytes(instrument_bytes).unwrap();
+            if let Err(e) = self.script.load_bytes(instrument_bytes) {
+                elog!("load: {}", e);
+            }
             Some(())
         }
     }

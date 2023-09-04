@@ -655,6 +655,7 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
         context,
         #[cfg(not(target_arch = "wasm32"))]
         watcher,
+        #[cfg(not(target_arch = "wasm32"))]
         watched_path: None,
     }
 }
