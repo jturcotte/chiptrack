@@ -84,7 +84,7 @@ impl MidiNote {
     pub fn from_freq(freq: f64) -> (MidiNote, f32) {
         let freq_a4 = 440.0;
         let f_c4_semi_tones = 12.0 * (freq / freq_a4).log2() + 9.0;
-        let c4_semi_tones = f_c4_semi_tones as i32;
+        let c4_semi_tones = f_c4_semi_tones.round() as i32;
         // Cents, but just returned as [-0.5, 0.5].
         let cent_adj = (f_c4_semi_tones - c4_semi_tones as f64) as f32;
         (MidiNote(c4_semi_tones + 60), cent_adj)
