@@ -508,25 +508,46 @@ fn run_main() {
     });
 
     let window_weak = window.as_weak();
-    let mut previous_phasing = None;
-    global_engine.on_phase_visualization_tick(move |animation_tick| {
-        let phasing = match previous_phasing {
-            None => {
-                let window = window_weak.clone().upgrade().unwrap();
-                let synth_trace_notes = GlobalEngine::get(&window).get_synth_trace_notes();
-                if synth_trace_notes.row_count() == 0 {
-                    // Wait until the first synth_trace_notes entry to lock the phasing.
-                    0f32
-                } else {
-                    let first_synth_tick = synth_trace_notes.row_data(0).unwrap().start_tick;
-                    let phasing = first_synth_tick as f32 - animation_tick;
-                    previous_phasing = Some(phasing);
-                    phasing
-                }
+    let mut maybe_previous_phasing: Option<f32> = None;
+    global_engine.on_phase_visualization_tick(move |animation_ms| {
+        // 4194304 Hz / 70224 Hz per frame = ~59.7 frames per second
+        let animation_synth_tick = animation_ms * (4194304.0 / 70224.0) / 1000.0;
+        let window = window_weak.clone().upgrade().unwrap();
+        let last_synth_tick = GlobalEngine::get(&window).get_last_synth_tick();
+        let cur_phasing = last_synth_tick as f32 - animation_synth_tick;
+
+        // The phasing will fluctuate depending on the timing of the sound and rendering loops,
+        // which would cause non-smooth scrolling if we'd rely on it for timing, so fix the phasing.
+        // But the refresh rates are slightly different, and thus the two drift apart slowly by one
+        // frame every few minutes, so we also need to slowly bring them back together from time to
+        // time to keep the timelines in sync.
+        let phasing = match maybe_previous_phasing {
+            // If the rendering and sound synthesis diverged too much, snap them back
+            Some(previous_phasing) if (previous_phasing - cur_phasing).abs() > 60.0 => {
+                maybe_previous_phasing = Some(cur_phasing);
+                cur_phasing
             }
-            Some(phasing) => phasing,
+            // If they diverged a little, bring them back little by little
+            Some(previous_phasing) if previous_phasing - cur_phasing > 2.0 => {
+                let new_phasing = previous_phasing - 0.5;
+                maybe_previous_phasing = Some(new_phasing);
+                new_phasing
+            }
+            Some(previous_phasing) if cur_phasing - previous_phasing > 2.0 => {
+                let new_phasing = previous_phasing + 0.5;
+                maybe_previous_phasing = Some(new_phasing);
+                new_phasing
+            }
+            // If it only diverged within the fluctuation range, keep the current phasing.
+            Some(previous_phasing) => previous_phasing,
+            // First time
+            None => {
+                maybe_previous_phasing = Some(cur_phasing);
+                cur_phasing
+            }
         };
-        animation_tick + phasing
+
+        animation_synth_tick + phasing
     });
 
     let cloned_sound_renderer = sound_renderer.clone();

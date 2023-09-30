@@ -161,10 +161,7 @@ export component Visualization inherits Rectangle {
                 // necessarily start from 0 at the same time.
                 // To keep the animation smooth, the phasing will be constant once determined at the beginning,
                 // but this might diverge if frames are skipped so there should probably be some other sync points.
-                x: GlobalEngine.phase_visualization_tick(
-                    // 4194304 Hz / 70224 Hz per frame = ~59.7 frames per second
-                    animation_tick() * (4194304/70224) / 1000ms
-                    ) * trace_container.tick_width;
+                x: GlobalEngine.phase_visualization_tick(animation_tick() / 1ms) * trace_container.tick_width;
 
                 for note[idx] in GlobalEngine.synth_trace_notes:
                 Rectangle {

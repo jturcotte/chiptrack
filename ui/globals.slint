@@ -109,6 +109,7 @@ export global GlobalEngine {
     in-out property<int> selected_instrument: 0;
     pure callback phase_visualization_tick(float) -> float;
 
+    in-out property<int> last_synth_tick: 0;
     in-out property<[ChannelTraceNote]> synth_trace_notes: [
         { channel: 0, start_tick: 123, num_ticks: 1, octave: 3, key_pos: 0, is_black: false, volume: 1.0, },
         { channel: 0, start_tick: 123, num_ticks: 1, octave: 3, key_pos: 3, is_black: true, volume: 1.0, },

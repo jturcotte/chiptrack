@@ -260,11 +260,14 @@ impl Synth {
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let global = GlobalEngine::get(&handle);
+                global.set_last_synth_tick(frame_number);
+
                 let trace_model = global.get_synth_trace_notes();
                 let trace_vec_model = trace_model
                     .as_any()
                     .downcast_ref::<VecModel<ChannelTraceNote>>()
                     .unwrap();
+
                 let active_model = global.get_synth_active_notes();
                 let active_vec_model = active_model
                     .as_any()
