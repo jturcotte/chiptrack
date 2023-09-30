@@ -90,6 +90,7 @@ export component Visualization inherits Rectangle {
     property<length> note_height: self.height / (7 * visible_octaves + 2);
     // One note spacer, and the real note
     property<length> noise_area_height: note_height * 2;
+    property<length> piano_width: self.height / visible_octaves / 2;
 
     background: #f8f8f8;
     border_width: 1px;
@@ -98,7 +99,7 @@ export component Visualization inherits Rectangle {
     for i in root.visible_octaves:
     HorizontalLayout {
         OctaveIndicator {
-            width: 5%;
+            width: piano_width;
             height: root.note_height * 7;
             y: parent.height - root.noise_area_height - self.height * (i + 1);
         }
@@ -113,42 +114,14 @@ export component Visualization inherits Rectangle {
                 width: 100%;
                 height: root.note_height * 7;
                 y: parent.height - root.noise_area_height - root.note_height * 7 * (i + 1);
-            } 
+            }
         }
     }
 
-    HorizontalLayout {
-        Rectangle {
-            z: 1;
-            width: 5%;
+    Rectangle {
+        x: piano_width;
+        width: parent.width - self.x;
 
-            for note[idx] in GlobalEngine.synth_active_notes:
-            Rectangle {
-                border-radius: self.width;
-                width: self.height;
-                height: root.note_height * 3;
-                x: parent.width - self.width / 2;
-                y: parent.height
-                    - (note.trace.octave == 0 && note.trace.key_pos == 0
-                        ? root.note_height
-                        : root.noise_area_height
-                            + ((note.trace.octave - 2) * 7 + note.trace.key_pos + note.trace.cent_adj + (note.trace.is_black ? 1.5 : 1)) * root.note_height
-                        )
-                    + root.note_height / 2 - self.height / 2;
-                background: white;
-                border-color: chan_colors[note.trace.channel];
-                border-width: 2px;
-                Text {
-                    width: 100%;
-                    height: 100%;
-                    text: note.note_name;
-                    font_size: min(self.width, self.height) / 2.5;
-                    color: chan_colors[note.trace.channel];
-                    horizontal_alignment: center;
-                    vertical_alignment: center;
-                }
-            }
-        }
         trace_container := Rectangle {
             property<length> tick_width: self.width / (6 * 16 * 2);
             // The animated current_tick_number won't exactly match with the time when old traces
@@ -176,6 +149,33 @@ export component Visualization inherits Rectangle {
                     background: chan_colors[note.channel];
                     opacity: note.volume;
                 }
+            }
+        }
+
+        for note[idx] in GlobalEngine.synth_active_notes:
+        Rectangle {
+            border-radius: self.width;
+            width: self.height;
+            height: root.note_height * 3;
+            x: -self.width * 0.75;
+            y: parent.height
+                - (note.trace.octave == 0 && note.trace.key_pos == 0
+                    ? root.note_height
+                    : root.noise_area_height
+                        + ((note.trace.octave - 2) * 7 + note.trace.key_pos + note.trace.cent_adj + (note.trace.is_black ? 1.5 : 1)) * root.note_height
+                    )
+                + root.note_height / 2 - self.height / 2;
+            background: white;
+            border-color: chan_colors[note.trace.channel];
+            border-width: 2px;
+            Text {
+                width: 100%;
+                height: 100%;
+                text: note.note_name;
+                font_size: min(self.width, self.height) / 2.5;
+                color: chan_colors[note.trace.channel];
+                horizontal_alignment: center;
+                vertical_alignment: center;
             }
         }
     }
