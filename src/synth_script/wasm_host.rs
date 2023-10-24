@@ -245,7 +245,7 @@ impl WasmRuntime {
 
             // initialize the runtime before registering the native functions
             if !wasm_runtime_full_init(&mut init_args as *mut _) {
-                return Err(format!("CANT INIT RUNTIME"));
+                return Err("CAN'T INIT RUNTIME".to_owned());
             }
 
             let mut native_symbols: Vec<NativeSymbol> = functions.iter_mut().map(|f| f.to_native_symbol()).collect();
@@ -256,7 +256,7 @@ impl WasmRuntime {
                 native_symbols.as_mut_ptr(),
                 native_symbols.len() as u32,
             ) {
-                return Err(format!("wasm_runtime_register_natives failed"));
+                return Err("wasm_runtime_register_natives failed".to_owned());
             }
             Ok(WasmRuntime {
                 _module_name: module_name,

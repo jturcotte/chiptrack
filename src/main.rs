@@ -279,6 +279,11 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
+    window.on_animate_waveform(move |tick, width, height| {
+        cloned_sound_renderer.borrow_mut().update_waveform(tick, width, height)
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_select_instrument(move |instrument| {
         cloned_sound_renderer
             .borrow_mut()

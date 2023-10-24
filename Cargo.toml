@@ -41,14 +41,14 @@ optional = true
 
 [dependencies.rboy]
 git = "https://github.com/jturcotte/rboy.git"
-rev = "836b4e7a58288a29c13bf7f8b967358c7331ee41"
+rev = "99e866281d31623823f5aa340d8e4060fae238d8"
 # Use as a lib, features are used by its bin's main.rs only.
 default-features = false
 optional = true
 
 [dependencies.wamr-sys]
 git = "https://github.com/jturcotte/wamr-sys.git"
-rev = "aa1447d9a97971dd2fbccd215b7a473b3b4718a5"
+rev = "87680578832f3742d1f4c4f1228ade548bc8a0f0"
 default-features = false
 optional = true
 

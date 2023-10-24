@@ -10,18 +10,20 @@ use crate::GlobalEngine;
 use crate::GlobalSettings;
 use crate::MainWindow;
 use crate::Settings;
+use core::iter::repeat;
 
+use alloc::collections::VecDeque;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
+use rboy::VizChunk;
 use slint::{ComponentHandle, Global, Model, Rgba8Pixel, SharedPixelBuffer, VecModel};
 use tiny_skia::*;
 
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
@@ -50,7 +52,7 @@ struct SyncPulse {
 
 pub struct OutputData {
     pub buffer: Vec<f32>,
-    pub buffer_viz: Vec<f32>,
+    pub viz_chunk: Option<VizChunk>,
     pub gain: f32,
     sync_pulse: SyncPulse,
 }
@@ -119,13 +121,12 @@ impl Iterator for SyncPulse {
 }
 
 impl rboy::AudioPlayer for FakePlayer {
-    fn play(&mut self, left_channel: &[f32], right_channel: &[f32], viz_channel: &[f32]) {
+    fn play(&mut self, left_channel: &[f32], right_channel: &[f32], viz_chunk: VizChunk) {
         let left_iter = left_channel.iter();
         let mut right_iter = right_channel.iter();
         let mut state = self.state.lock().unwrap();
         let gain = state.gain;
-        state.buffer_viz.clear();
-        state.buffer_viz.extend_from_slice(viz_channel);
+        state.viz_chunk = Some(viz_chunk);
 
         state.buffer.reserve(left_channel.len() * 2);
         for left in left_iter {
@@ -161,7 +162,7 @@ impl Synth {
 
         let output_data = Arc::new(Mutex::new(OutputData {
             buffer: Vec::new(),
-            buffer_viz: Vec::new(),
+            viz_chunk: None,
             gain,
             sync_pulse: SyncPulse::new(settings.sync_enabled, sample_rate, 300, 2),
         }));
@@ -201,7 +202,7 @@ impl Synth {
             }
 
             // Generate one frame of mixed output.
-            // For 44100hz audio, this will put 44100/59.73 audio samples in self.buffer.
+            // For 44100hz audio, this will put 44100/59.73 audio samples in output_data.buffer.
             dmg.do_cycle(VBLANK_CYCLES);
         }
 
@@ -413,6 +414,7 @@ where
 }
 
 pub struct Context {
+    sample_rate: u32,
     _stream: cpal::Stream,
 }
 
@@ -423,6 +425,11 @@ pub struct SoundRenderer<LazyF: FnOnce() -> Context> {
     watcher: notify::RecommendedWatcher,
     #[cfg(not(target_arch = "wasm32"))]
     watched_path: Option<PathBuf>,
+    viz_chunks: Arc<Mutex<VecDeque<VizChunk>>>,
+    // How many samples in viz_chunks are buffered for future waveform rendering frames.
+    viz_tail_len: Arc<Mutex<usize>>,
+    // The rendering tick that was used to render the last waveform.
+    last_viz_chunk_tick: f32,
 }
 
 impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
@@ -463,6 +470,135 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
             self.watched_path = Some(path);
         }
     }
+
+    #[cfg(feature = "desktop")]
+    pub fn update_waveform(&mut self, tick: f32, width: f32, height: f32) -> slint::Image {
+        let sample_rate = match Lazy::get(&*self.context) {
+            Some(context) => context.sample_rate,
+            None => return Default::default(),
+        };
+
+        let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width as u32, height as u32);
+        let mut pixmap = PixmapMut::from_bytes(pixel_buffer.make_mut_bytes(), width as u32, height as u32).unwrap();
+
+        pixmap.fill(tiny_skia::Color::WHITE);
+        let mut paint = Paint::default();
+        paint.blend_mode = BlendMode::Source;
+        // #a0a0a0
+        paint.set_color_rgba8(160, 160, 160, 255);
+
+        let mut stroke = Stroke::default();
+        stroke.width = height / 128.0;
+        if stroke.width < 1.0 {
+            // Hairline stroking
+            stroke.width = 0.0;
+        }
+
+        let mut path = PathBuilder::new();
+        let mid_y = height / 2.0;
+        path.move_to(width, mid_y);
+
+        {
+            let viz_chunks = self.viz_chunks.lock().unwrap();
+            let viz_tail_len = *self.viz_tail_len.lock().unwrap();
+
+            let viz_len = viz_chunks.iter().map(|vc| vc.channels[0].len()).sum::<usize>();
+            // How many samples we visualize, take 2 frames when available.
+            let render_len = (viz_len - viz_tail_len).min(sample_rate as usize * 2 / 60);
+            // Find the visualization mid-point where we'll align wave starts for square and wave channels.
+            let render_mid_len = render_len / 2;
+            // The mid point is half a screen past the viz_tail_len, starting from the most recent (but buffered) sample.
+            let render_mid_offset = viz_tail_len + render_mid_len;
+
+            let find_wave_start_at_mid_offset = |viz_chunks: &VecDeque<VizChunk>, chan_num: usize| -> usize {
+                // Iterate chunks backwards, from the freshest to the oldest
+                viz_chunks
+                    .iter()
+                    .rev()
+                    // For each chunk, accumulate the offset relative to the freshest VizChunk
+                    .scan(0usize, |state, vc| {
+                        let offset = *state;
+                        *state += vc.channels[chan_num].len();
+                        Some((vc, offset))
+                    })
+                    // Skip chunks that won't contain the mid-point anyway
+                    .skip_while(|(vc, vc_o)| vc_o + vc.channels[chan_num].len() < render_mid_offset)
+                    // Add the chunk's absolute offset to each wave_start_offsets (which is relative to its chunk)
+                    .flat_map(|(vc, vc_o)| {
+                        let l = vc.channels[chan_num].len();
+                        // Also make sure to flatmap the reverse of the offsets iterator.
+                        vc.wave_start_offsets[chan_num]
+                            .iter()
+                            .map(move |o| (l - o) + vc_o)
+                            .rev()
+                    })
+                    // Look for a wave start right after our rendering mid-point, but not for more than one screen after.
+                    // TODO: I should probably base this decision on the lowest supported frequency (32hz vs sample rate)
+                    .take_while(|o| *o < render_mid_offset + render_len)
+                    // Take the first offset past the mid-point, we want to align that offset of the waveform to the screen's middle.
+                    .find(|o| *o > render_mid_offset)
+                    // If the channel is silent or that the wave start is too far before or after, don't offset the waveform.
+                    .unwrap_or(render_mid_offset)
+            };
+
+            let chan0_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 0);
+            let chan1_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 1);
+            let chan2_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 2);
+
+            let aligned_chan_samples = |chan_num: usize, chan_render_midpoint| {
+                viz_chunks
+                    .iter()
+                    .flat_map(move |vc| vc.channels[chan_num].iter().copied())
+                    .rev()
+                    .skip(chan_render_midpoint - render_mid_len)
+                    .chain(repeat(0.0))
+                    .take(render_len)
+            };
+
+            let chan0_samples = aligned_chan_samples(0, chan0_render_midpoint);
+            let chan1_samples = aligned_chan_samples(1, chan1_render_midpoint);
+            let chan2_samples = aligned_chan_samples(2, chan2_render_midpoint);
+            let chan3_samples = viz_chunks
+                .iter()
+                .flat_map(|vc| vc.channels[3].iter().copied())
+                .rev()
+                .skip(viz_tail_len)
+                .take(render_len);
+
+            let iters = chan0_samples.zip(chan1_samples).zip(chan2_samples).zip(chan3_samples);
+            for (i, (((s0, s1), s2), s3)) in iters.enumerate() {
+                // "Mix" all channels
+                let source = s0 + s1 + s2 + s3;
+
+                let x = (render_len - i) as f32 * width / render_len as f32;
+                // Input samples are in the range [-1.0, 1.0].
+                // The gameboy emulator mixer however just use a gain of 0.25
+                // per channel to avoid clipping when all channels are playing.
+                // So multiply by 2.0 to amplify the visualization of single
+                // channels a bit.
+                let y = (source * 2.0 + 1.0) * mid_y;
+                path.line_to(x, y);
+            }
+        }
+
+        if let Some(p) = path.finish() {
+            pixmap.stroke_path(&p, &paint, &stroke, Transform::identity(), None);
+        }
+
+        // The sound thread might buffer more than one frame (e.g. in WASM), so we have to advance our position
+        // within the visualization samples that it produced so that the next frame shows where we expect the sound
+        // buffer to have been sent to the speakers.
+        let offset_advance = (sample_rate as f32 / 1000.0 * (tick - self.last_viz_chunk_tick)).round() as usize;
+        let mut viz_tail_len = self.viz_tail_len.lock().unwrap();
+        *viz_tail_len = if offset_advance < *viz_tail_len {
+            *viz_tail_len - offset_advance
+        } else {
+            0
+        };
+        self.last_viz_chunk_tick = tick;
+
+        slint::Image::from_rgba8_premultiplied(pixel_buffer)
+    }
 }
 
 fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine: &mut SoundEngine) {
@@ -486,64 +622,6 @@ fn check_if_project_changed(notify_recv: &mpsc::Receiver<DebouncedEvent>, engine
     }
 }
 
-#[cfg(feature = "desktop")]
-fn update_waveform(window: &MainWindow, samples: Vec<f32>, consumed: Arc<AtomicBool>) {
-    let was_non_zero = !window.get_waveform_is_zero();
-    let res_divider = 2.;
-
-    // Already let the audio thread know that it can send us a new waveform.
-    consumed.store(true, Ordering::Relaxed);
-
-    let width = window.get_waveform_width() / res_divider;
-    let height = window.get_waveform_height() / res_divider;
-    let mut pb = PathBuilder::new();
-    let mut non_zero = false;
-    {
-        for (i, source) in samples.iter().enumerate() {
-            if *source != 0.0 {
-                non_zero = true;
-            }
-            // Input samples are in the range [-1.0, 1.0].
-            // The gameboy emulator mixer however just use a gain of 0.25
-            // per channel to avoid clipping when all channels are playing.
-            // So multiply by 2.0 to amplify the visualization of single
-            // channels a bit.
-            let x = i as f32 * width / samples.len() as f32;
-            let y = (source * 2.0 + 1.0) * height / 2.0;
-            if i == 0 {
-                pb.move_to(x, y);
-            } else {
-                pb.line_to(x, y);
-            }
-        }
-    }
-    // Painting this takes a lot of CPU since we need to paint, clone
-    // the whole pixmap buffer, and changing the image will trigger a
-    // repaint of the full viewport.
-    // So at least avoig eating CPU while no sound is being output.
-    if non_zero || was_non_zero {
-        if let Some(path) = pb.finish() {
-            let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width as u32, height as u32);
-            if let Some(mut pixmap) = PixmapMut::from_bytes(pixel_buffer.make_mut_bytes(), width as u32, height as u32)
-            {
-                pixmap.fill(tiny_skia::Color::TRANSPARENT);
-                let mut paint = Paint::default();
-                paint.blend_mode = BlendMode::Source;
-                // #a0a0a0
-                paint.set_color_rgba8(160, 160, 160, 255);
-
-                let mut stroke = Stroke::default();
-                // Use hairline stroking, faster.
-                stroke.width = 0.0;
-                pixmap.stroke_path(&path, &paint, &stroke, Transform::identity(), None);
-
-                let image = slint::Image::from_rgba8_premultiplied(pixel_buffer);
-                window.set_waveform_image(image);
-                window.set_waveform_is_zero(!non_zero);
-            }
-        }
-    }
-}
 pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() -> Context> {
     let (sound_send, sound_recv) = mpsc::channel::<Box<dyn FnOnce(&mut SoundEngine) + Send>>();
     let (notify_send, notify_recv) = mpsc::channel();
@@ -553,6 +631,10 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
 
     #[cfg(not(target_arch = "wasm32"))]
     let watcher = notify::watcher(notify_send, Duration::from_millis(500)).unwrap();
+    let viz_chunks: Arc<Mutex<VecDeque<VizChunk>>> = Arc::new(Mutex::new(VecDeque::with_capacity(32)));
+    let viz_tail_len: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
+    let viz_chunks_s = viz_chunks.clone();
+    let viz_tail_len_s = viz_tail_len.clone();
 
     let window_weak = WeakWindowWrapper::new(window.as_weak());
     let initial_settings = window.global::<GlobalSettings>().get_settings();
@@ -584,8 +666,6 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
         let mut stream_config: cpal::StreamConfig = config.into();
         stream_config.buffer_size = cpal::BufferSize::Fixed(buffer_size);
 
-        let last_waveform_consumed = Arc::new(AtomicBool::new(true));
-
         let stream = match sample_format {
             SampleFormat::F32 => device.build_output_stream(
                 &stream_config,
@@ -604,34 +684,39 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
                             closure(engine);
                         }
 
-                        let len = dest.len();
-                        let mut di = 0;
-                        while di < len {
+                        let dest_len = dest.len();
+                        let mut transfer_len = 0;
+                        while transfer_len < dest_len {
                             let synth_output_mutex = engine.synth.output_data();
                             let mut synth_output = synth_output_mutex.lock().unwrap();
-                            if synth_output.buffer.len() < (len - di) {
+                            if synth_output.buffer.len() < (dest_len - transfer_len) {
+                                // Unlock before executing instruments and rendering the sound
                                 drop(synth_output);
                                 engine.advance_frame();
+                                // Lock again to pick up the output
                                 synth_output = synth_output_mutex.lock().unwrap();
 
-                                if last_waveform_consumed.load(Ordering::Relaxed) {
-                                    let buffer_viz = std::mem::take(&mut synth_output.buffer_viz);
-                                    last_waveform_consumed.store(false, Ordering::Relaxed);
-                                    let consumed_clone = last_waveform_consumed.clone();
-                                    window_weak
-                                        .upgrade_in_event_loop(move |handle| {
-                                            update_waveform(&handle, buffer_viz, consumed_clone)
-                                        })
-                                        .unwrap();
+                                let mut viz_chunks = viz_chunks_s.lock().unwrap();
+                                if viz_chunks.len() == viz_chunks.capacity() {
+                                    viz_chunks.pop_front();
                                 }
+                                viz_chunks.push_back(synth_output.viz_chunk.take().unwrap());
                             }
 
-                            let src_len = std::cmp::min(len - di, synth_output.buffer.len());
-                            let part = synth_output.buffer.drain(..src_len);
-                            dest[di..di + src_len].copy_from_slice(part.as_slice());
+                            let frame_transfer_len = std::cmp::min(dest_len - transfer_len, synth_output.buffer.len());
+                            {
+                                let part = synth_output.buffer.drain(..frame_transfer_len);
+                                dest[transfer_len..transfer_len + frame_transfer_len].copy_from_slice(part.as_slice());
+                            }
 
-                            di += src_len;
+                            transfer_len += frame_transfer_len;
                         }
+
+                        // Position the visualization one frame ahead of the buffer filling, since from this point on
+                        // rendering will take about one frame time to reach the user's eyes.
+                        const NUM_CHANNELS: usize = 2;
+                        *viz_tail_len_s.lock().unwrap() =
+                            ((dest_len / NUM_CHANNELS) as i32 - sample_rate as i32 / 60).max(0) as usize;
                     });
                 },
                 err_fn,
@@ -650,7 +735,10 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
 
         stream.play().unwrap();
 
-        Context { _stream: stream }
+        Context {
+            sample_rate,
+            _stream: stream,
+        }
     }));
 
     SoundRenderer {
@@ -660,5 +748,8 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
         watcher,
         #[cfg(not(target_arch = "wasm32"))]
         watched_path: None,
+        viz_chunks,
+        viz_tail_len,
+        last_viz_chunk_tick: 0.0,
     }
 }
