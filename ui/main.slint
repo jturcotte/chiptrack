@@ -49,12 +49,24 @@ export component MainWindow inherits Window {
         {note_number: first_note + 6, key_pos: 3, is_black: true, active: false},
         {note_number: first_note + 8, key_pos: 4, is_black: true, active: false},
         {note_number: first_note + 10, key_pos: 5, is_black: true, active: false},
+        {note_number: first_note + 12 + 2, key_pos: 7 + 1, is_black: false, active: false},
+        {note_number: first_note + 12 + 4, key_pos: 7 + 2, is_black: false, active: false},
+        {note_number: first_note + 12 + 5, key_pos: 7 + 3, is_black: false, active: false},
+        {note_number: first_note + 12 + 7, key_pos: 7 + 4, is_black: false, active: false},
+        {note_number: first_note + 12 + 9, key_pos: 7 + 5, is_black: false, active: false},
+        {note_number: first_note + 12 + 11, key_pos: 7 + 6, is_black: false, active: false},
+        {note_number: first_note + 12 + 12, key_pos: 7 + 7, is_black: false, active: false},
+        {note_number: first_note + 12 + 1, key_pos: 7 + 0, is_black: true, active: false},
+        {note_number: first_note + 12 + 3, key_pos: 7 + 1, is_black: true, active: false},
+        {note_number: first_note + 12 + 6, key_pos: 7 + 3, is_black: true, active: false},
+        {note_number: first_note + 12 + 8, key_pos: 7 + 4, is_black: true, active: false},
+        {note_number: first_note + 12 + 10, key_pos: 7 + 5, is_black: true, active: false},
     ];
     in-out property<bool> playing: false;
 
     callback octave_increased(int);
     callback global_key_event(string, bool) -> bool;
-    pure callback animate_waveform(float, length, length) -> image;
+    pure callback animate_waveform(float, float, float) -> string;
 
     preferred_width: 800px;
     preferred_height: 480px;
@@ -113,73 +125,63 @@ export component MainWindow inherits Window {
         VerticalBox {
             horizontal-stretch: 1;
             padding: 0;
-            patterns := PatternsPanel {
-                root_key_pressed(event) => { root.root_key_pressed(event) }
-                root_key_released(event) => { root.root_key_released(event) }
+            spacing: 0;
+            HorizontalBox {
                 padding: 0;
+                patterns := PatternsPanel {
+                    root_key_pressed(event) => { root.root_key_pressed(event) }
+                    root_key_released(event) => { root.root_key_released(event) }
+                    padding: 0;
+                }
+                Visualization { }
+                VerticalBox {
+                    width: self.min_width;
+                    padding: 0;
+
+                    settings_button := ToolbarButton {
+                        text: "⚙";
+                        clicked => {
+                            root.show_settings = true;
+                        }
+                    }
+                    ToolbarButton {
+                        text: patterns.focused_panel == FocusedPanel.instruments ? "▦" : "▥";
+                        clicked => {
+                            patterns.toggle_instruments_grid();
+                        }
+                    }
+                    play_button := ToolbarButton {
+                        text: root.playing ? "■" : "▶";
+                        clicked => {
+                            GlobalEngine.play_clicked(!root.playing);
+                        }
+                    }
+                    record_button := ToolbarButton {
+                        property<bool> toggled: true;
+                        text: toggled ? "⬤" : "◯";
+                        text_color: toggled ? darkred : black;
+                        clicked => {
+                            toggled = !toggled;
+                            GlobalEngine.record_clicked(toggled);
+                        }
+                    }
+                }
+            }
+            Rectangle {
+                height: 10%;
+
+                Path {
+                    commands: root.animate_waveform(animation_tick() / 1ms, self.viewbox-width, self.viewbox-height);
+                    viewbox-width: (self.width - self.stroke-width) / 1px;
+                    viewbox-height: (self.height - self.stroke-width) / 1px;
+                    stroke: #333;
+                    stroke-width: 1px;
+                }
+
             }
             Piano {
                 height: 30%;
                 notes: root.notes;
-            }
-        }
-
-        VerticalBox {
-            horizontal-stretch: 1;
-            padding: 0;
-            Visualization { }
-            Rectangle {
-                height: 30%;
-                background: white;
-                waveform := Image {
-                    x: 0px;
-                    width: 100%;
-                    height: 100%;
-                    source: root.animate_waveform(animation_tick() / 1ms, self.width, self.height);
-                }
-                Rectangle {
-                    border_color: black;
-                    border_width: 1px;
-                    border_radius: self.height/16;
-                }
-            }
-        }
-
-        VerticalBox {
-            width: self.min_width;
-            padding: 0;
-
-            settings_button := ToolbarButton {
-                text: "⚙";
-                clicked => {
-                    root.show_settings = true;
-                }
-            }
-            // placeholder to align with the 60% split left pane.
-            ToolbarButton {
-                enabled: false;
-                text: " ";
-            }
-            ToolbarButton {
-                text: patterns.focused_panel == FocusedPanel.instruments ? "▦" : "▥";
-                clicked => {
-                    patterns.toggle_instruments_grid();
-                }
-            }
-            play_button := ToolbarButton {
-                text: root.playing ? "■" : "▶";
-                clicked => {
-                    GlobalEngine.play_clicked(!root.playing);
-                }
-            }
-            record_button := ToolbarButton {
-                property<bool> toggled: true;
-                text: toggled ? "⬤" : "◯";
-                text_color: toggled ? darkred : black;
-                clicked => {
-                    toggled = !toggled;
-                    GlobalEngine.record_clicked(toggled);
-                }
             }
         }
     }

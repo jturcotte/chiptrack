@@ -11,19 +11,19 @@ component PianoKey inherits Rectangle {
     callback released();
     background: {
         if (is_black != highlighted) {
-            black;
+            #333;
         } else {
             white;
         }
     };
-    border_color: black;
+    border_color: #333;
     border_width: 1px;
     Text {
         text: note_name;
         width: 100%;
         height: 98%;
         font_size: self.width / 3;
-        color: #505050;
+        color: #333;
         horizontal_alignment: center;
         vertical_alignment: bottom;
     }
@@ -44,18 +44,21 @@ component PianoKey inherits Rectangle {
 
 export component Piano {
     in property<[NoteData]> notes;
+    property<int> num_white_notes: Math.round(notes.length * 7 / 12);
 
     for note[idx] in notes:
     PianoKey {
         note_name: idx == 0 ? GlobalUtils.get_midi_note_name(note.note_number) : "";
         is_black: note.is_black;
         x: note.is_black
-            ? (note.key_pos + 1) * floor(parent.width / 8px) * 1px - self.width / 2
-            : note.key_pos * floor(parent.width / 8px) * 1px;
+            ? (note.key_pos + 1) * floor(parent.width / 1px / num_white_notes) * 1px - parent.width / 15 * 0.8 / 2
+            : note.key_pos * floor(parent.width / 1px / num_white_notes) * 1px;
         y: 0px;
         width: self.is_black
-            ? parent.width / 8 * 0.8
-            : floor(parent.width / 8px) * 1px + 1px;
+            ? parent.width / 15 * 0.8
+            : (note.key_pos + 1 < num_white_notes
+                ? floor(parent.width / 1px / num_white_notes) * 1px + 1px
+                : parent.width - self.x);
 
         height: self.is_black ? 60% : 100%;
         highlighted: note.active;

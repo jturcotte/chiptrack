@@ -114,34 +114,6 @@ fn run_main() {
 
     let window = MainWindow::new().unwrap();
 
-    #[cfg(feature = "desktop")]
-    {
-        let note_model = Rc::new(slint::VecModel::default());
-        let start: i32 = 60;
-        let start_octave: i32 = MidiNote(start).octave();
-        let notes: Vec<NoteData> = (start..(start + 13))
-            .map(|i| {
-                let note = MidiNote(i);
-                let pos = note.key_pos() + (note.octave() - start_octave) * 7;
-                NoteData {
-                    note_number: i,
-                    key_pos: pos,
-                    is_black: note.is_black(),
-                    active: false,
-                }
-            })
-            .collect();
-        for n in notes.iter().filter(|n| !n.is_black) {
-            note_model.push(n.clone());
-        }
-        // Push the black notes at the end of the model so that they appear on top of the white ones.
-        for n in notes.iter().filter(|n| n.is_black) {
-            note_model.push(n.clone());
-        }
-
-        window.set_notes(slint::ModelRc::from(note_model.clone()));
-    }
-
     let global_engine = GlobalEngine::get(&window);
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.

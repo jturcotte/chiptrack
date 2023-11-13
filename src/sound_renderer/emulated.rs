@@ -18,8 +18,7 @@ use cpal::{Sample, SampleFormat};
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
 use rboy::VizChunk;
-use slint::{ComponentHandle, Global, Model, Rgba8Pixel, SharedPixelBuffer, VecModel};
-use tiny_skia::*;
+use slint::{ComponentHandle, Global, Model, SharedString, VecModel};
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -472,132 +471,148 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
     }
 
     #[cfg(feature = "desktop")]
-    pub fn update_waveform(&mut self, tick: f32, width: f32, height: f32) -> slint::Image {
+    pub fn update_waveform(&mut self, tick: f32, width: f32, height: f32) -> SharedString {
         let sample_rate = match Lazy::get(&*self.context) {
             Some(context) => context.sample_rate,
             None => return Default::default(),
         };
 
-        let mut pixel_buffer = SharedPixelBuffer::<Rgba8Pixel>::new(width as u32, height as u32);
-        let mut pixmap = PixmapMut::from_bytes(pixel_buffer.make_mut_bytes(), width as u32, height as u32).unwrap();
+        let viz_chunks = self.viz_chunks.lock().unwrap();
+        let mut viz_tail_len = self.viz_tail_len.lock().unwrap();
 
-        pixmap.fill(tiny_skia::Color::WHITE);
-        let mut paint = Paint::default();
-        paint.blend_mode = BlendMode::Source;
-        // #a0a0a0
-        paint.set_color_rgba8(160, 160, 160, 255);
+        let viz_len = viz_chunks.iter().map(|vc| vc.channels[0].len()).sum::<usize>();
+        // How many samples we visualize, take 3/2 frames when available.
+        let render_len = (viz_len - *viz_tail_len).min(sample_rate as usize * 3 / 2 / 60);
+        // Find the visualization mid-point where we'll align wave starts for square and wave channels.
+        let render_mid_len = render_len / 2;
+        // The mid point is half a screen past the viz_tail_len, starting from the most recent (but buffered) sample.
+        let render_mid_offset = *viz_tail_len + render_mid_len;
 
-        let mut stroke = Stroke::default();
-        stroke.width = height / 128.0;
-        if stroke.width < 1.0 {
-            // Hairline stroking
-            stroke.width = 0.0;
-        }
-
-        let mut path = PathBuilder::new();
-        let mid_y = height / 2.0;
-        path.move_to(width, mid_y);
-
-        {
-            let viz_chunks = self.viz_chunks.lock().unwrap();
-            let viz_tail_len = *self.viz_tail_len.lock().unwrap();
-
-            let viz_len = viz_chunks.iter().map(|vc| vc.channels[0].len()).sum::<usize>();
-            // How many samples we visualize, take 2 frames when available.
-            let render_len = (viz_len - viz_tail_len).min(sample_rate as usize * 2 / 60);
-            // Find the visualization mid-point where we'll align wave starts for square and wave channels.
-            let render_mid_len = render_len / 2;
-            // The mid point is half a screen past the viz_tail_len, starting from the most recent (but buffered) sample.
-            let render_mid_offset = viz_tail_len + render_mid_len;
-
-            let find_wave_start_at_mid_offset = |viz_chunks: &VecDeque<VizChunk>, chan_num: usize| -> usize {
-                // Iterate chunks backwards, from the freshest to the oldest
-                viz_chunks
-                    .iter()
-                    .rev()
-                    // For each chunk, accumulate the offset relative to the freshest VizChunk
-                    .scan(0usize, |state, vc| {
-                        let offset = *state;
-                        *state += vc.channels[chan_num].len();
-                        Some((vc, offset))
-                    })
-                    // Skip chunks that won't contain the mid-point anyway
-                    .skip_while(|(vc, vc_o)| vc_o + vc.channels[chan_num].len() < render_mid_offset)
-                    // Add the chunk's absolute offset to each wave_start_offsets (which is relative to its chunk)
-                    .flat_map(|(vc, vc_o)| {
-                        let l = vc.channels[chan_num].len();
-                        // Also make sure to flatmap the reverse of the offsets iterator.
-                        vc.wave_start_offsets[chan_num]
-                            .iter()
-                            .map(move |o| (l - o) + vc_o)
-                            .rev()
-                    })
-                    // Look for a wave start right after our rendering mid-point, but not for more than one screen after.
-                    // TODO: I should probably base this decision on the lowest supported frequency (32hz vs sample rate)
-                    .take_while(|o| *o < render_mid_offset + render_len)
-                    // Take the first offset past the mid-point, we want to align that offset of the waveform to the screen's middle.
-                    .find(|o| *o > render_mid_offset)
-                    // If the channel is silent or that the wave start is too far before or after, don't offset the waveform.
-                    .unwrap_or(render_mid_offset)
-            };
-
-            let chan0_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 0);
-            let chan1_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 1);
-            let chan2_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 2);
-
-            let aligned_chan_samples = |chan_num: usize, chan_render_midpoint| {
-                viz_chunks
-                    .iter()
-                    .flat_map(move |vc| vc.channels[chan_num].iter().copied())
-                    .rev()
-                    .skip(chan_render_midpoint - render_mid_len)
-                    .chain(repeat(0.0))
-                    .take(render_len)
-            };
-
-            let chan0_samples = aligned_chan_samples(0, chan0_render_midpoint);
-            let chan1_samples = aligned_chan_samples(1, chan1_render_midpoint);
-            let chan2_samples = aligned_chan_samples(2, chan2_render_midpoint);
-            let chan3_samples = viz_chunks
+        let find_wave_start_at_mid_offset = |viz_chunks: &VecDeque<VizChunk>, chan_num: usize| -> usize {
+            // Iterate chunks backwards, from the freshest to the oldest
+            viz_chunks
                 .iter()
-                .flat_map(|vc| vc.channels[3].iter().copied())
                 .rev()
-                .skip(viz_tail_len)
-                .take(render_len);
+                // For each chunk, accumulate the offset relative to the freshest VizChunk
+                .scan(0usize, |state, vc| {
+                    let offset = *state;
+                    *state += vc.channels[chan_num].len();
+                    Some((vc, offset))
+                })
+                // Skip chunks that won't contain the mid-point anyway
+                .skip_while(|(vc, vc_o)| vc_o + vc.channels[chan_num].len() < render_mid_offset)
+                // Add the chunk's absolute offset to each wave_start_offsets (which is relative to its chunk)
+                .flat_map(|(vc, vc_o)| {
+                    let l = vc.channels[chan_num].len();
+                    // Also make sure to flatmap the reverse of the offsets iterator.
+                    vc.wave_start_offsets[chan_num]
+                        .iter()
+                        .map(move |o| (l - o) + vc_o)
+                        .rev()
+                })
+                // Look for a wave start right after our rendering mid-point, but not for more than one screen after.
+                // TODO: I should probably base this decision on the lowest supported frequency (32hz vs sample rate)
+                .take_while(|o| *o < render_mid_offset + render_len)
+                // Take the first offset past the mid-point, we want to align that offset of the waveform to the screen's middle.
+                .find(|o| *o > render_mid_offset)
+                // If the channel is silent or that the wave start is too far before or after, don't offset the waveform.
+                .unwrap_or(render_mid_offset)
+        };
 
-            let iters = chan0_samples.zip(chan1_samples).zip(chan2_samples).zip(chan3_samples);
-            for (i, (((s0, s1), s2), s3)) in iters.enumerate() {
-                // "Mix" all channels
-                let source = s0 + s1 + s2 + s3;
+        let chan0_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 0);
+        let chan1_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 1);
+        let chan2_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 2);
 
-                let x = (render_len - i) as f32 * width / render_len as f32;
-                // Input samples are in the range [-1.0, 1.0].
-                // The gameboy emulator mixer however just use a gain of 0.25
-                // per channel to avoid clipping when all channels are playing.
-                // So multiply by 2.0 to amplify the visualization of single
-                // channels a bit.
-                let y = (source * 2.0 + 1.0) * mid_y;
-                path.line_to(x, y);
-            }
+        let aligned_chan_samples = |chan_num: usize, chan_render_midpoint| {
+            viz_chunks
+                .iter()
+                .flat_map(move |vc| vc.channels[chan_num].iter().copied())
+                .rev()
+                .skip(chan_render_midpoint - render_mid_len)
+                .chain(repeat(0.0))
+                .take(render_len)
+        };
+
+        let chan0_samples = aligned_chan_samples(0, chan0_render_midpoint);
+        let chan1_samples = aligned_chan_samples(1, chan1_render_midpoint);
+        let chan2_samples = aligned_chan_samples(2, chan2_render_midpoint);
+        let chan3_samples = viz_chunks
+            .iter()
+            .flat_map(|vc| vc.channels[3].iter().copied())
+            .rev()
+            .skip(*viz_tail_len)
+            .take(render_len);
+
+        const INTRO_OUTRO_LEN: usize = 75;
+
+        // Unfortunately for now we can only dynamically update a Path by constructing a string SVG command list.
+        // https://github.com/slint-ui/slint/issues/754
+        // With around 3-digits integer x and y coordinates, SVG commands will be on average around 10 chars each.
+        let mut commands = String::with_capacity(INTRO_OUTRO_LEN + render_len * 8);
+        let iters = chan0_samples.zip(chan1_samples).zip(chan2_samples).zip(chan3_samples);
+        let mid_height = (height / 2.0).floor();
+        let radius = (height / 8.0).floor();
+        let wave_width = width - radius * 2.0;
+
+        use std::fmt::Write;
+        // Start on the right of the waveform, at mid-height to give room above and under for the waveform.
+        write!(
+            commands,
+            "M{right_of_wave},{mid_height}",
+            right_of_wave = width - radius
+        )
+        .unwrap();
+
+        for (i, (((s0, s1), s2), s3)) in iters.enumerate() {
+            // "Mix" all channels
+            let source = s0 + s1 + s2 + s3;
+
+            // Start from the right
+            let normalized_pos = (render_len - 1 - i) as f32 / render_len as f32;
+            let x = (radius + normalized_pos * wave_width) as u32;
+
+            let side_factor = if normalized_pos < 0.05 {
+                normalized_pos / 0.05
+            } else if normalized_pos > 0.95 {
+                (1.0 - normalized_pos) / 0.05
+            } else {
+                1.0
+            };
+            // Input samples are in the range [-1.0, 1.0].
+            // The gameboy emulator mixer however just use a gain of 0.25
+            // per channel to avoid clipping when all channels are playing.
+            // So multiply by 1.5 to amplify the visualization of single
+            // channels a bit.
+            let y = ((source * 1.5 * side_factor + 1.0) * mid_height) as u32;
+            write!(commands, "H{x}V{y}").unwrap();
         }
-
-        if let Some(p) = path.finish() {
-            pixmap.stroke_path(&p, &paint, &stroke, Transform::identity(), None);
-        }
+        // - Line to the left of the waveform (in case there were no samples)
+        // - Left rounded corner
+        write!(
+            commands,
+            " L{left_of_wave},{mid_height} A{radius},{radius} 0 0 0 0,{under_rounded_corner}",
+            left_of_wave = radius,
+            under_rounded_corner = mid_height + radius
+        )
+        .unwrap();
+        // - Line down by mid-height past the bottom by an extra radius to avoid gaps
+        // - Line up to the start of the right rounded corner
+        // - Right rounded corner
+        // - Close the counter-clockwise waveform shape (but we don't fill it anyway)
+        write!(
+            commands,
+            " v{mid_height} H{width} v-{mid_height} a{radius},{radius} 0 0 0 -{radius},-{radius} z"
+        )
+        .unwrap();
 
         // The sound thread might buffer more than one frame (e.g. in WASM), so we have to advance our position
         // within the visualization samples that it produced so that the next frame shows where we expect the sound
         // buffer to have been sent to the speakers.
         let offset_advance = (sample_rate as f32 / 1000.0 * (tick - self.last_viz_chunk_tick)).round() as usize;
-        let mut viz_tail_len = self.viz_tail_len.lock().unwrap();
-        *viz_tail_len = if offset_advance < *viz_tail_len {
-            *viz_tail_len - offset_advance
-        } else {
-            0
-        };
+        *viz_tail_len = viz_tail_len.saturating_sub(offset_advance);
         self.last_viz_chunk_tick = tick;
 
-        slint::Image::from_rgba8_premultiplied(pixel_buffer)
+        commands.into()
     }
 }
 
@@ -684,12 +699,15 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
                             closure(engine);
                         }
 
+                        const NUM_CHANNELS: usize = 2;
+
                         let dest_len = dest.len();
                         let mut transfer_len = 0;
+                        let synth_output_mutex = engine.synth.output_data();
+                        let mut synth_output = synth_output_mutex.lock().unwrap();
                         while transfer_len < dest_len {
-                            let synth_output_mutex = engine.synth.output_data();
-                            let mut synth_output = synth_output_mutex.lock().unwrap();
                             if synth_output.buffer.len() < (dest_len - transfer_len) {
+                                let internal_buf_len_before = synth_output.buffer.len();
                                 // Unlock before executing instruments and rendering the sound
                                 drop(synth_output);
                                 engine.advance_frame();
@@ -700,7 +718,12 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
                                 if viz_chunks.len() == viz_chunks.capacity() {
                                     viz_chunks.pop_front();
                                 }
-                                viz_chunks.push_back(synth_output.viz_chunk.take().unwrap());
+                                let viz_chunk = synth_output.viz_chunk.take().unwrap();
+                                debug_assert!(
+                                    viz_chunk.channels[0].len()
+                                        == (synth_output.buffer.len() - internal_buf_len_before) / 2
+                                );
+                                viz_chunks.push_back(viz_chunk);
                             }
 
                             let frame_transfer_len = std::cmp::min(dest_len - transfer_len, synth_output.buffer.len());
@@ -712,11 +735,9 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
                             transfer_len += frame_transfer_len;
                         }
 
-                        // Position the visualization one frame ahead of the buffer filling, since from this point on
-                        // rendering will take about one frame time to reach the user's eyes.
-                        const NUM_CHANNELS: usize = 2;
-                        *viz_tail_len_s.lock().unwrap() =
-                            ((dest_len / NUM_CHANNELS) as i32 - sample_rate as i32 / 60).max(0) as usize;
+                        // Position the visualization where the sound buffer was before this callback.
+                        // The rendering will then advance it frame by frame until the next callback.
+                        *viz_tail_len_s.lock().unwrap() = (dest_len + synth_output.buffer.len()) / NUM_CHANNELS;
                     });
                 },
                 err_fn,
