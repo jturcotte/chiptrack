@@ -7,6 +7,7 @@ use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
 use alloc::alloc::realloc;
 use alloc::alloc::Layout;
+use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::ffi::CString;
 use alloc::format;

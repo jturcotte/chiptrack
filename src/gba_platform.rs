@@ -119,18 +119,18 @@ impl ModelDirtinessTracker {
 }
 
 impl i_slint_core::model::ModelChangeListener for ModelDirtinessTracker {
-    fn row_changed(&self, _row: usize) {
+    fn row_changed(self: Pin<&Self>, _row: usize) {
         *self.is_dirty.borrow_mut() = true;
     }
 
-    fn row_added(&self, _index: usize, _count: usize) {
+    fn row_added(self: Pin<&Self>, _index: usize, _count: usize) {
         *self.is_dirty.borrow_mut() = true;
     }
 
-    fn row_removed(&self, _index: usize, _count: usize) {
+    fn row_removed(self: Pin<&Self>, _index: usize, _count: usize) {
         *self.is_dirty.borrow_mut() = true;
     }
-    fn reset(&self) {
+    fn reset(self: Pin<&Self>) {
         *self.is_dirty.borrow_mut() = true;
     }
 }

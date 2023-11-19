@@ -3,10 +3,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "gba", no_main)]
-#![cfg_attr(
-    feature = "gba",
-    feature(error_in_core, alloc_error_handler, start, core_intrinsics, lang_items, link_cfg)
-)]
+#![cfg_attr(feature = "gba", feature(alloc_error_handler))]
 
 extern crate alloc;
 
@@ -31,6 +28,7 @@ use crate::sound_engine::NUM_STEPS;
 use crate::sound_renderer::new_sound_renderer;
 use crate::utils::MidiNote;
 
+#[cfg(feature = "desktop")]
 use slint::Model;
 use slint::{Timer, TimerMode};
 #[cfg(feature = "desktop")]
@@ -250,6 +248,7 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
+    #[cfg(feature = "desktop")]
     window.on_animate_waveform(move |tick, width, height| {
         cloned_sound_renderer.borrow_mut().update_waveform(tick, width, height)
     });
@@ -485,6 +484,7 @@ fn run_main() {
 
     let window_weak = window.as_weak();
     let mut maybe_previous_phasing: Option<f32> = None;
+    #[cfg(feature = "desktop")]
     global_engine.on_phase_visualization_tick(move |animation_ms| {
         // 4194304 Hz / 70224 Hz per frame = ~59.7 frames per second
         let animation_synth_tick = animation_ms * (4194304.0 / 70224.0) / 1000.0;
