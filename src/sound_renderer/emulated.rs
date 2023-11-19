@@ -14,7 +14,7 @@ use core::iter::repeat;
 
 use alloc::collections::VecDeque;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Sample, SampleFormat};
+use cpal::SampleFormat;
 use notify::{DebouncedEvent, RecursiveMode, Watcher};
 use once_cell::unsync::Lazy;
 use rboy::VizChunk;
@@ -741,18 +741,11 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
                     });
                 },
                 err_fn,
+                None,
             ),
-            // FIXME
-            SampleFormat::I16 => device.build_output_stream(&stream_config, write_silence::<i16>, err_fn),
-            SampleFormat::U16 => device.build_output_stream(&stream_config, write_silence::<u16>, err_fn),
+            _ => todo!(),
         }
         .unwrap();
-
-        fn write_silence<T: Sample>(data: &mut [T], _: &cpal::OutputCallbackInfo) {
-            for sample in data.iter_mut() {
-                *sample = Sample::from(&0.0);
-            }
-        }
 
         stream.play().unwrap();
 
