@@ -211,7 +211,6 @@ fn run_main() {
         let model = window.get_notes();
         for row in 0..model.row_count() {
             let mut row_data = model.row_data(row).unwrap();
-            row_data.note_number += octave_delta * 12;
             // The note_number changed and thus the sequencer release events
             // won't see that note anymore, so release it already while we're here here.
             row_data.active = false;
