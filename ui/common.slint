@@ -10,7 +10,7 @@ export global GlobalUI {
     // param0, param1, press, release
     in-out property<int> selected_column: 2;
 
-    function cycle_step_colum(forward: bool) {
+    public function cycle_step_colum(forward: bool) {
         if (forward && GlobalUI.selected_column < 3) {
             GlobalUI.selected_column += 1;
         } else if (!forward && GlobalUI.selected_column > 0){
