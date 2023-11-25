@@ -1,6 +1,8 @@
 #[cfg(not(feature = "gba"))]
 fn main() {
-    slint_build::compile("ui/main.slint").unwrap();
+    let config = slint_build::CompilerConfiguration::new()
+        .with_style("fluent-light".to_owned());
+    slint_build::compile_with_config("ui/main.slint", config).unwrap();
 }
 
 #[cfg(feature = "gba")]
