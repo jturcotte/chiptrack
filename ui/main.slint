@@ -65,7 +65,6 @@ export component MainWindow inherits Window {
     in-out property<bool> playing: false;
 
     callback octave_increased(int);
-    callback global_key_event(string, bool) -> bool;
     pure callback animate_waveform(float, float, float) -> string;
 
     preferred_width: 800px;
@@ -74,31 +73,34 @@ export component MainWindow inherits Window {
     default_font_family: "BigBlue TerminalPlus";
 
     function root_key_pressed(event: KeyEvent) -> EventResult {
-        if (event.modifiers.control && event.text == "s") { GlobalEngine.save_project(); }
-        else if (event.modifiers.control && event.text == "g") { GlobalEngine.export_project_as_gba_sav(); }
-        else if (event.text == "a") { GlobalEngine.note_key_pressed(first_note); }
-        else if (event.text == "s") { GlobalEngine.note_key_pressed(first_note + 2); }
-        else if (event.text == "d") { GlobalEngine.note_key_pressed(first_note + 4); }
-        else if (event.text == "f") { GlobalEngine.note_key_pressed(first_note + 5); }
-        else if (event.text == "g") { GlobalEngine.note_key_pressed(first_note + 7); }
-        else if (event.text == "h") { GlobalEngine.note_key_pressed(first_note + 9); }
-        else if (event.text == "j") { GlobalEngine.note_key_pressed(first_note + 11); }
-        else if (event.text == "k") { GlobalEngine.note_key_pressed(first_note + 12); }
-        else if (event.text == "w") { GlobalEngine.note_key_pressed(first_note + 1); }
-        else if (event.text == "e") { GlobalEngine.note_key_pressed(first_note + 3); }
-        else if (event.text == "t") { GlobalEngine.note_key_pressed(first_note + 6); }
-        else if (event.text == "y") { GlobalEngine.note_key_pressed(first_note + 8); }
-        else if (event.text == "u") { GlobalEngine.note_key_pressed(first_note + 10); }
-        else if (event.text == "1") { GlobalEngine.select_instrument(0); }
-        else if (event.text == "2") { GlobalEngine.select_instrument(1); }
-        else if (event.text == "3") { GlobalEngine.select_instrument(2); }
-        else if (event.text == "4") { GlobalEngine.select_instrument(3); }
-        else if (event.text == "5") { GlobalEngine.select_instrument(4); }
-        else if (event.text == "6") { GlobalEngine.select_instrument(5); }
-        else if (event.text == "7") { GlobalEngine.select_instrument(6); }
-        else if (event.text == "8") { GlobalEngine.select_instrument(7); }
-        else if (event.text == "9") { GlobalEngine.select_instrument(8); }
-        else if (event.text == "0") { GlobalEngine.select_instrument(9); }
+        if (event.modifiers.control && event.text == "s") { if (!event.repeat) { GlobalEngine.save_project(); } }
+        else if (event.modifiers.control && event.text == "g") { if (!event.repeat) { GlobalEngine.export_project_as_gba_sav(); } }
+        else if (event.text == "a") { if (!event.repeat) { GlobalEngine.note_pressed(first_note); } }
+        else if (event.text == "s") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 2); } }
+        else if (event.text == "d") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 4); } }
+        else if (event.text == "f") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 5); } }
+        else if (event.text == "g") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 7); } }
+        else if (event.text == "h") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 9); } }
+        else if (event.text == "j") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 11); } }
+        else if (event.text == "k") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 12); } }
+        else if (event.text == "w") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 1); } }
+        else if (event.text == "e") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 3); } }
+        else if (event.text == "t") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 6); } }
+        else if (event.text == "y") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 8); } }
+        else if (event.text == "u") { if (!event.repeat) { GlobalEngine.note_pressed(first_note + 10); } }
+        else if (event.text == "1") { if (!event.repeat) { GlobalEngine.select_instrument(0); } }
+        else if (event.text == "2") { if (!event.repeat) { GlobalEngine.select_instrument(1); } }
+        else if (event.text == "3") { if (!event.repeat) { GlobalEngine.select_instrument(2); } }
+        else if (event.text == "4") { if (!event.repeat) { GlobalEngine.select_instrument(3); } }
+        else if (event.text == "5") { if (!event.repeat) { GlobalEngine.select_instrument(4); } }
+        else if (event.text == "6") { if (!event.repeat) { GlobalEngine.select_instrument(5); } }
+        else if (event.text == "7") { if (!event.repeat) { GlobalEngine.select_instrument(6); } }
+        else if (event.text == "8") { if (!event.repeat) { GlobalEngine.select_instrument(7); } }
+        else if (event.text == "9") { if (!event.repeat) { GlobalEngine.select_instrument(8); } }
+        else if (event.text == "0") { if (!event.repeat) { GlobalEngine.select_instrument(9); } }
+        else if (event.text == Key.Backspace) { if (!event.repeat) { GlobalEngine.set_erasing(true); } }
+        else if (event.text == Key.Return) { if (!event.repeat) { GlobalEngine.play_clicked(!root.playing); } }
+        else if (event.text == Key.Escape) { if (!event.repeat) { GlobalEngine.mute_instruments(); } }
         else if (event.modifiers.alt && event.text == Key.LeftArrow) { patterns.cycle_focus_panel(false, false); }
         else if (event.modifiers.alt && event.text == Key.RightArrow) { patterns.cycle_focus_panel(true, false); }
         else if (event.modifiers.shift && event.text == Key.Tab) { patterns.cycle_focus_panel(false, true); }
@@ -109,15 +111,30 @@ export component MainWindow inherits Window {
         else if (event.text == Key.DownArrow) { GlobalEngine.select_next_song_pattern(true); }
         else if (event.text == Key.PageDown) { root.octave_increased(-1); }
         else if (event.text == Key.PageUp) { root.octave_increased(1); }
-        else if (event.text == Key.Return) { GlobalEngine.play_clicked(!root.playing); }
-        else if (event.text == Key.Escape) { GlobalEngine.mute_instruments(); }
         else {
-            return global_key_event(event.text, true) ? accept : reject;
+            return reject;
         }
         accept
     }
     function root_key_released(event: KeyEvent) -> EventResult {
-        global_key_event(event.text, false) ? accept : reject
+        if (event.text == "a") { GlobalEngine.note_released(first_note); }
+        else if (event.text == "s") { GlobalEngine.note_released(first_note + 2); }
+        else if (event.text == "d") { GlobalEngine.note_released(first_note + 4); }
+        else if (event.text == "f") { GlobalEngine.note_released(first_note + 5); }
+        else if (event.text == "g") { GlobalEngine.note_released(first_note + 7); }
+        else if (event.text == "h") { GlobalEngine.note_released(first_note + 9); }
+        else if (event.text == "j") { GlobalEngine.note_released(first_note + 11); }
+        else if (event.text == "k") { GlobalEngine.note_released(first_note + 12); }
+        else if (event.text == "w") { GlobalEngine.note_released(first_note + 1); }
+        else if (event.text == "e") { GlobalEngine.note_released(first_note + 3); }
+        else if (event.text == "t") { GlobalEngine.note_released(first_note + 6); }
+        else if (event.text == "y") { GlobalEngine.note_released(first_note + 8); }
+        else if (event.text == "u") { GlobalEngine.note_released(first_note + 10); }
+        else if (event.text == Key.Backspace) { GlobalEngine.set_erasing(false); }
+        else {
+            return reject;
+        }
+        accept
     }
 
     forward_focus: patterns;

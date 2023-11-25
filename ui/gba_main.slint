@@ -27,7 +27,6 @@ export component MainWindow inherits Window {
     out property<FocusedPanel> focused_panel: steps;
 
     callback octave_increased(int);
-    callback global_key_event(string, bool) -> bool;
 
     function root_key_pressed(event: KeyEvent) -> EventResult {
         if (event.modifiers.alt && event.text == Key.LeftArrow) { cycle_focus_panel(false); }
@@ -39,12 +38,9 @@ export component MainWindow inherits Window {
         else if (event.text == Key.Return) { GlobalEngine.play_clicked(!root.playing); }
         else if (event.text == Key.Escape) { GlobalEngine.mute_instruments(); }
         else {
-            return global_key_event(event.text, true) ? accept : reject;
+            return reject;
         }
         accept
-    }
-    function root_key_released(event: KeyEvent) -> EventResult {
-        global_key_event(event.text, false) ? accept : reject
     }
 
     function cycle_focus_panel(forward: bool) {

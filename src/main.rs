@@ -30,7 +30,6 @@ use crate::utils::MidiNote;
 
 #[cfg(feature = "desktop")]
 use slint::Model;
-use slint::{Timer, TimerMode};
 #[cfg(feature = "desktop")]
 use url::Url;
 
@@ -38,9 +37,7 @@ use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec;
-use alloc::vec::Vec;
 use core::cell::RefCell;
-use core::time::Duration;
 #[cfg(feature = "desktop")]
 use std::env;
 #[cfg(feature = "desktop")]
@@ -216,37 +213,6 @@ fn run_main() {
         }
     });
 
-    // KeyEvent doesn't expose yet whether a press event is due to auto-repeat.
-    // Do the deduplication natively until such an API exists.
-    let mut already_pressed = Vec::new();
-    let cloned_sound_renderer = sound_renderer.clone();
-    window.on_global_key_event(move |text, pressed| {
-        if let Some(code) = text.as_str().chars().next() {
-            if pressed {
-                if !already_pressed.contains(&code) {
-                    already_pressed.push(code.to_owned());
-                    if code == '\u{8}' {
-                        cloned_sound_renderer
-                            .borrow_mut()
-                            .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().set_erasing(true));
-                        return true;
-                    }
-                }
-            } else {
-                if let Some(index) = already_pressed.iter().position(|x| *x == code) {
-                    already_pressed.swap_remove(index);
-                }
-                if code == '\u{8}' {
-                    cloned_sound_renderer
-                        .borrow_mut()
-                        .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().set_erasing(false));
-                    return true;
-                };
-            }
-        }
-        false
-    });
-
     let cloned_sound_renderer = sound_renderer.clone();
     #[cfg(feature = "desktop")]
     window.on_animate_waveform(move |tick, width, height| {
@@ -368,24 +334,10 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
-    let key_release_timer: Timer = Default::default();
-    global_engine.on_note_key_pressed(move |note| {
-        let cloned_sound_renderer2 = cloned_sound_renderer.clone();
+    global_engine.on_set_erasing(move |v| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.press_note(note as u8));
-
-        // We have only one timer for direct interactions, and we don't handle
-        // keys being held or even multiple keys at time yet, so just visually release all notes.
-        key_release_timer.start(
-            TimerMode::SingleShot,
-            Duration::from_millis(15 * 6),
-            Box::new(move || {
-                cloned_sound_renderer2
-                    .borrow_mut()
-                    .invoke_on_sound_engine(move |se| se.release_note(note as u8));
-            }),
-        );
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().set_erasing(v));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
