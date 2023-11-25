@@ -1,3 +1,8 @@
+[patch.crates-io]
+slint = { path = "../slint/api/rs/slint" }
+slint-build = { path = "../slint/api/rs/build" }
+i-slint-core = { path = "../slint/internal/core" }
+
 [target.thumbv4t-none-eabi]
 runner = "mgba -l 15 -2"
 rustflags = [

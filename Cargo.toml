@@ -28,13 +28,13 @@ desktop_web = ["desktop", "slint/renderer-winit-femtovg"]
 gba = ["dep:gba", "voladdress", "wamr-sys", "libm", "slint/unsafe-single-threaded", "i-slint-core/unsafe-single-threaded", "slint/libm", "embedded-alloc", "critical-section/restore-state-bool"]
 
 [build-dependencies.slint-build]
-version = "1.3.0"
+version = "1.3.1"
 [dependencies.slint]
-version = "1.3.0"
+version = "1.3.1"
 default-features = false
 features = ["compat-1-0"]
 [dependencies.i-slint-core]
-version = "=1.3.0"
+version = "=1.3.1"
 default-features = false
 optional = true
 

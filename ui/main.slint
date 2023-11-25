@@ -74,21 +74,26 @@ export component MainWindow inherits Window {
     default_font_family: "BigBlue TerminalPlus";
 
     function root_key_pressed(event: KeyEvent) -> EventResult {
+        debug("p", event);
+        if (event.repeat) {
+            // This eats every repeated key press, even those not handled here.
+            return accept;
+        }
         if (event.modifiers.control && event.text == "s") { GlobalEngine.save_project(); }
         else if (event.modifiers.control && event.text == "g") { GlobalEngine.export_project_as_gba_sav(); }
-        else if (event.text == "a") { GlobalEngine.note_key_pressed(first_note); }
-        else if (event.text == "s") { GlobalEngine.note_key_pressed(first_note + 2); }
-        else if (event.text == "d") { GlobalEngine.note_key_pressed(first_note + 4); }
-        else if (event.text == "f") { GlobalEngine.note_key_pressed(first_note + 5); }
-        else if (event.text == "g") { GlobalEngine.note_key_pressed(first_note + 7); }
-        else if (event.text == "h") { GlobalEngine.note_key_pressed(first_note + 9); }
-        else if (event.text == "j") { GlobalEngine.note_key_pressed(first_note + 11); }
-        else if (event.text == "k") { GlobalEngine.note_key_pressed(first_note + 12); }
-        else if (event.text == "w") { GlobalEngine.note_key_pressed(first_note + 1); }
-        else if (event.text == "e") { GlobalEngine.note_key_pressed(first_note + 3); }
-        else if (event.text == "t") { GlobalEngine.note_key_pressed(first_note + 6); }
-        else if (event.text == "y") { GlobalEngine.note_key_pressed(first_note + 8); }
-        else if (event.text == "u") { GlobalEngine.note_key_pressed(first_note + 10); }
+        else if (event.text == "a") { GlobalEngine.note_pressed(first_note); }
+        else if (event.text == "s") { GlobalEngine.note_pressed(first_note + 2); }
+        else if (event.text == "d") { GlobalEngine.note_pressed(first_note + 4); }
+        else if (event.text == "f") { GlobalEngine.note_pressed(first_note + 5); }
+        else if (event.text == "g") { GlobalEngine.note_pressed(first_note + 7); }
+        else if (event.text == "h") { GlobalEngine.note_pressed(first_note + 9); }
+        else if (event.text == "j") { GlobalEngine.note_pressed(first_note + 11); }
+        else if (event.text == "k") { GlobalEngine.note_pressed(first_note + 12); }
+        else if (event.text == "w") { GlobalEngine.note_pressed(first_note + 1); }
+        else if (event.text == "e") { GlobalEngine.note_pressed(first_note + 3); }
+        else if (event.text == "t") { GlobalEngine.note_pressed(first_note + 6); }
+        else if (event.text == "y") { GlobalEngine.note_pressed(first_note + 8); }
+        else if (event.text == "u") { GlobalEngine.note_pressed(first_note + 10); }
         else if (event.text == "1") { GlobalEngine.select_instrument(0); }
         else if (event.text == "2") { GlobalEngine.select_instrument(1); }
         else if (event.text == "3") { GlobalEngine.select_instrument(2); }
@@ -117,7 +122,24 @@ export component MainWindow inherits Window {
         accept
     }
     function root_key_released(event: KeyEvent) -> EventResult {
-        global_key_event(event.text, false) ? accept : reject
+        debug("r", event);
+        if (event.text == "a") { GlobalEngine.note_released(first_note); }
+        else if (event.text == "s") { GlobalEngine.note_released(first_note + 2); }
+        else if (event.text == "d") { GlobalEngine.note_released(first_note + 4); }
+        else if (event.text == "f") { GlobalEngine.note_released(first_note + 5); }
+        else if (event.text == "g") { GlobalEngine.note_released(first_note + 7); }
+        else if (event.text == "h") { GlobalEngine.note_released(first_note + 9); }
+        else if (event.text == "j") { GlobalEngine.note_released(first_note + 11); }
+        else if (event.text == "k") { GlobalEngine.note_released(first_note + 12); }
+        else if (event.text == "w") { GlobalEngine.note_released(first_note + 1); }
+        else if (event.text == "e") { GlobalEngine.note_released(first_note + 3); }
+        else if (event.text == "t") { GlobalEngine.note_released(first_note + 6); }
+        else if (event.text == "y") { GlobalEngine.note_released(first_note + 8); }
+        else if (event.text == "u") { GlobalEngine.note_released(first_note + 10); }
+        else {
+            return global_key_event(event.text, false) ? accept : reject;
+        }
+        accept
     }
 
     forward_focus: patterns;

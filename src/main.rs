@@ -30,7 +30,6 @@ use crate::utils::MidiNote;
 
 #[cfg(feature = "desktop")]
 use slint::Model;
-use slint::{Timer, TimerMode};
 #[cfg(feature = "desktop")]
 use url::Url;
 
@@ -40,7 +39,6 @@ use alloc::rc::Rc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefCell;
-use core::time::Duration;
 #[cfg(feature = "desktop")]
 use std::env;
 #[cfg(feature = "desktop")]
@@ -218,6 +216,7 @@ fn run_main() {
 
     // KeyEvent doesn't expose yet whether a press event is due to auto-repeat.
     // Do the deduplication natively until such an API exists.
+    // FIXME: Remove
     let mut already_pressed = Vec::new();
     let cloned_sound_renderer = sound_renderer.clone();
     window.on_global_key_event(move |text, pressed| {
@@ -365,27 +364,6 @@ fn run_main() {
         cloned_sound_renderer
             .borrow_mut()
             .invoke_on_sound_engine(move |se| se.release_note(note as u8));
-    });
-
-    let cloned_sound_renderer = sound_renderer.clone();
-    let key_release_timer: Timer = Default::default();
-    global_engine.on_note_key_pressed(move |note| {
-        let cloned_sound_renderer2 = cloned_sound_renderer.clone();
-        cloned_sound_renderer
-            .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.press_note(note as u8));
-
-        // We have only one timer for direct interactions, and we don't handle
-        // keys being held or even multiple keys at time yet, so just visually release all notes.
-        key_release_timer.start(
-            TimerMode::SingleShot,
-            Duration::from_millis(15 * 6),
-            Box::new(move || {
-                cloned_sound_renderer2
-                    .borrow_mut()
-                    .invoke_on_sound_engine(move |se| se.release_note(note as u8));
-            }),
-        );
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
