@@ -32,7 +32,7 @@ export component PatternsFocusScope inherits FocusScope {
         else {
             return root_key_pressed(e);
         }
-        accept
+        return accept;
     }
     key_released(e) => { root.root_key_released(e); }
 
@@ -63,7 +63,7 @@ export component StepsFocusScope inherits FocusScope {
         else {
             return root_key_pressed(e);
         }
-        accept
+        return accept;
     }
     key_released(e) => { 
         if (GlobalUI.selected_column < 2 /*params*/ && e.text == Key.Control) { GlobalEngine.cycle_step_param_end(GlobalUI.selected_column); }
@@ -71,7 +71,7 @@ export component StepsFocusScope inherits FocusScope {
         else {
             return root_key_released(e);
         }
-        accept
+        return accept;
     }
 }
 
@@ -92,13 +92,13 @@ export component InstrumentsFocusScope inherits FocusScope {
         else {
             return root_key_pressed(e);
         }
-        accept
+        return accept;
     }
     key_released(e) => { 
         if (e.text == Key.Control) { GlobalEngine.cycle_instrument_param_end(); }
         else {
             return root_key_released(e);
         }
-        accept
+        return accept;
     }
 }

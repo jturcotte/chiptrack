@@ -252,7 +252,6 @@ export component PatternsPanel inherits HorizontalLayout {
             border_radius: patterns_list.height_of_cell / 4;
         }
         patterns_key_handler := PatternsFocusScope {
-            enabled: focused_panel == FocusedPanel.patterns;
             width: 0px;
             root_key_pressed(e) => { root.root_key_pressed(e); }
             root_key_released(e) => { root.root_key_released(e); }
@@ -296,7 +295,6 @@ export component PatternsPanel inherits HorizontalLayout {
             border_radius: patterns_list.height_of_cell / 4;
         }
         steps_key_handler := StepsFocusScope {
-            enabled: focused_panel == FocusedPanel.steps;
             width: 0px;
             root_key_pressed(e) => { root.root_key_pressed(e); }
             root_key_released(e) => { root.root_key_released(e); }
@@ -357,7 +355,6 @@ export component PatternsPanel inherits HorizontalLayout {
                 border_radius: patterns_list.height_of_cell / 4;
             }
             instruments_key_handler := InstrumentsFocusScope {
-                enabled: focused_panel == FocusedPanel.instruments;
                 width: 0px;
                 root_key_pressed(e) => { root.root_key_pressed(e); }
                 root_key_released(e) => { root.root_key_released(e); }

@@ -40,7 +40,7 @@ export component MainWindow inherits Window {
         else {
             return reject;
         }
-        accept
+        return accept;
     }
 
     function cycle_focus_panel(forward: bool) {
@@ -63,17 +63,14 @@ export component MainWindow inherits Window {
         }
     }
 
+    forward_focus: steps_key_handler;
     patterns_key_handler := PatternsFocusScope {
         root_key_pressed(e) => { root.root_key_pressed(e); }
-        root_key_released(e) => { root.root_key_released(e); }
     }
-    forward_focus: steps_key_handler;
     steps_key_handler := StepsFocusScope {
         root_key_pressed(e) => { root.root_key_pressed(e); }
-        root_key_released(e) => { root.root_key_released(e); }
     }
     instruments_key_handler := InstrumentsFocusScope {
         root_key_pressed(e) => { root.root_key_pressed(e); }
-        root_key_released(e) => { root.root_key_released(e); }
     }
 }

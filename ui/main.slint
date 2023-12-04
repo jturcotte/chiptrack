@@ -114,7 +114,7 @@ export component MainWindow inherits Window {
         else {
             return reject;
         }
-        accept
+        return accept;
     }
     function root_key_released(event: KeyEvent) -> EventResult {
         if (event.text == "a") { GlobalEngine.note_released(first_note); }
@@ -134,7 +134,7 @@ export component MainWindow inherits Window {
         else {
             return reject;
         }
-        accept
+        return accept;
     }
 
     forward_focus: patterns;
