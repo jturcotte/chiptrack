@@ -411,7 +411,10 @@ impl SoundEngine {
     pub fn load_file(&mut self, song_path: &Path) {
         match self.load_file_internal(song_path) {
             Ok(instruments_path) => self.project_source = ProjectSource::File((song_path.to_owned(), instruments_path)),
-            Err(err) => elog!("Error extracting project from file [{:?}]: {}", song_path, err),
+            Err(err) => {
+                elog!("Error extracting project from file [{:?}]: {}", song_path, err);
+                self.load_default();
+            }
         }
     }
 
@@ -419,7 +422,10 @@ impl SoundEngine {
     pub fn load_gist(&mut self, json: serde_json::Value) {
         match self.load_gist_internal(json) {
             Ok(_) => self.project_source = ProjectSource::Gist,
-            Err(err) => elog!("Error extracting project from gist: {}", err),
+            Err(err) => {
+                elog!("Error extracting project from gist: {}", err);
+                self.load_default();
+            }
         }
     }
 
