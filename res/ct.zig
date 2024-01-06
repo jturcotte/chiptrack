@@ -205,10 +205,10 @@ pub const gba = struct {
             return copy;
         }
         pub fn squareFreqToFreq(freq: u32) u11 {
-            return @truncate(2048 - ((131072 * 1024) / freq));
+            return @truncate(2048 - ((131072 * 256) / freq));
         }
         pub fn waveFreqToFreq(freq: u32) u11 {
-            return @truncate(2048 - ((65536 * 1024) / freq));
+            return @truncate(2048 - ((65536 * 256) / freq));
         }
         pub fn withSquareFreq(self: CtrlFreq, freq: u32) CtrlFreq {
             return self.withFreq(squareFreqToFreq(freq));
