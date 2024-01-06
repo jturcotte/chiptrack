@@ -67,9 +67,14 @@ const KEY_L: u16 = 0b10_00000000;
 const KEYS_ALL: u16 = 0b11_11111111;
 const KEYS_REPEATABLE: u16 = 0b00_11110000;
 
+// Default palette
 const NORMAL_TEXT: u16 = 0;
+// Those types can be ORed into mixed palettes
 const FADED_TEXT: u16 = 0b001;
-const SELECTED_TEXT: u16 = 0b010;
+const ALT_COL_TEXT: u16 = 0b10;
+// Selected eats any mixed-in type
+const SELECTED_TEXT: u16 = 0b111;
+// Must not be mixed
 const ERROR_TEXT: u16 = 0b101;
 
 // This is a type alias for the enabled `restore-state-*` feature.
@@ -214,14 +219,15 @@ impl MainScreen {
                 .for_each(|(i, c)| i.write(c));
         }
         set_palette(NORMAL_TEXT, [Color::WHITE, Color::BLACK]);
+        set_palette(ALT_COL_TEXT, [Color(0b0_11100_11100_11100), Color::BLACK]);
         set_palette(FADED_TEXT, [Color::WHITE, Color(0b0_11010_11010_11010)]);
         set_palette(
             SELECTED_TEXT,
             [Color(0b0_11000_11000_11000), Color(0b0_11110_10010_00100)],
         );
         set_palette(
-            FADED_TEXT | SELECTED_TEXT,
-            [Color(0b0_11000_11000_11000), Color(0b0_11110_10010_00100)],
+            FADED_TEXT | ALT_COL_TEXT,
+            [Color(0b0_11100_11100_11100), Color(0b0_11010_11010_11010)],
         );
         set_palette(ERROR_TEXT, [Color::WHITE, Color::RED]);
 
@@ -463,16 +469,20 @@ impl MainScreen {
         {
             let top_vid_row = tsb.get_row(0).unwrap();
             let sequencer_pattern_instruments = global_engine.get_sequencer_pattern_instruments();
-            for i in 0..4 {
+            for i in 0..5 {
                 let x = i * 3 + INSTR_START_X;
+                let col_bank = if i % 2 == 0 { ALT_COL_TEXT } else { NORMAL_TEXT };
+                let normal_bank = col_bank | NORMAL_TEXT;
+                let faded_bank = col_bank | FADED_TEXT;
+
                 if i < sequencer_pattern_instruments_len {
                     let row_data = sequencer_pattern_instruments.row_data(i).unwrap();
 
                     draw_ascii_chars(
                         top_vid_row,
-                        x..x + 2,
+                        x..x + 3,
                         row_data.id.chars().chain(repeat(' ')),
-                        NORMAL_TEXT,
+                        normal_bank,
                     );
 
                     let notes = row_data.notes;
@@ -482,20 +492,19 @@ impl MainScreen {
 
                         if note != -1 {
                             let midi_note = MidiNote(note);
-                            draw_ascii_byte(vid_row, x, midi_note.base_note_name(), NORMAL_TEXT);
                             if midi_note.is_black() {
-                                draw_ascii_byte(vid_row, x + 1, b'#', NORMAL_TEXT);
+                                draw_ascii(vid_row, x.., midi_note.char_desc(), normal_bank);
                             } else {
-                                draw_ascii_byte(vid_row, x + 1, b'-', FADED_TEXT);
+                                draw_ascii(vid_row, x.., midi_note.short_char_desc(), normal_bank);
+                                draw_ascii_byte(vid_row, x + 2, b' ', faded_bank);
                             }
                         } else {
-                            draw_ascii(vid_row, x..x + 2, repeat(b'-'), FADED_TEXT);
+                            draw_ascii_ref(vid_row, x.., b"-- ", faded_bank);
                         }
                     }
                 } else {
-                    draw_ascii_ref(top_vid_row, x.., b"-- ", FADED_TEXT);
-                    for j in 1..17 {
-                        draw_ascii(tsb.get_row(j).unwrap(), x..x + 2, repeat(b'-'), FADED_TEXT);
+                    for j in 0..17 {
+                        draw_ascii_ref(tsb.get_row(j).unwrap(), x.., b"-- ", faded_bank);
                     }
                 }
             }

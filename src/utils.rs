@@ -64,12 +64,20 @@ impl MidiNote {
     pub fn base_note_name(&self) -> u8 {
         b'A' + (self.key_pos() as u8 + 2) % 7
     }
+
     pub fn char_desc(&self) -> [u8; 3] {
         let note_name = self.base_note_name();
         let sharp_char = if self.is_black() { '#' } else { '-' } as u8;
         let octave_char = b'0' + self.octave() as u8;
         [note_name, sharp_char, octave_char]
     }
+    #[cfg(feature = "gba")]
+    pub fn short_char_desc(&self) -> [u8; 2] {
+        let note_name = self.base_note_name();
+        let octave_char = b'0' + self.octave() as u8;
+        [note_name, octave_char]
+    }
+
     pub fn name(&self) -> String {
         let desc = self.char_desc();
         format!("{}{}{}", desc[0] as char, desc[1] as char, desc[2] as char)
