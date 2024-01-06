@@ -46,6 +46,7 @@ pub const gba = struct {
     pub const nr33_34 = 0x4000074;
     pub const nr41_42 = 0x4000078;
     pub const nr43_44 = 0x400007C;
+    pub const nr50_51 = 0x4000080;
 
     pub const Channel = enum {
         square1,
@@ -360,6 +361,50 @@ pub const gba = struct {
                 else => unreachable,
             };
             gba_set_sound_reg(address, @as(u16, @bitCast(self)));
+        }
+    };
+
+    /// (NR50, NR51) - Channel L/R Volume/Enable (R/W)
+    pub const SoundCtrl = packed struct {
+        ///  Bit        Expl.
+        ///  0-2   R/W  Sound 1-4 Master Volume RIGHT (0-7)
+        master_r: u3 = 0,
+        ///  3     -    Not used
+        _: u1 = 0,
+        ///  4-6   R/W  Sound 1-4 Master Volume LEFT (0-7)
+        master_l: u3 = 0,
+        ///  7     -    Not used
+        _2: u1 = 0,
+        ///  8-11  R/W  Sound 1-4 Enable Flags RIGHT (each Bit 8-11, 0=Disable, 1=Enable)
+        chan_r: u4 = 0,
+        ///  12-15 R/W  Sound 1-4 Enable Flags LEFT (each Bit 12-15, 0=Disable, 1=Enable)
+        chan_l: u4 = 0,
+
+        pub fn init() SoundCtrl {
+            return SoundCtrl{};
+        }
+        pub fn withMasterR(self: SoundCtrl, v: u1) SoundCtrl {
+            var copy = self;
+            copy.master_r = v;
+            return copy;
+        }
+        pub fn withMasterL(self: SoundCtrl, v: u1) SoundCtrl {
+            var copy = self;
+            copy.master_l = v;
+            return copy;
+        }
+        pub fn withChanR(self: SoundCtrl, v: u1) SoundCtrl {
+            var copy = self;
+            copy.chan_r = v;
+            return copy;
+        }
+        pub fn withChanL(self: SoundCtrl, v: u1) SoundCtrl {
+            var copy = self;
+            copy.chan_l = v;
+            return copy;
+        }
+        pub fn write(self: SoundCtrl) void {
+            gba_set_sound_reg(nr50_51, @as(u16, @bitCast(self)));
         }
     };
 };

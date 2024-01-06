@@ -393,6 +393,7 @@ impl Synth {
             0x4000074 => (Some(0xFF1D), Some(0xFF1E)), // NR33, NR34
             0x4000078 => (Some(0xFF20), Some(0xFF21)), // NR41, NR42
             0x400007C => (Some(0xFF22), Some(0xFF23)), // NR43, NR44
+            0x4000080 => (Some(0xFF24), Some(0xFF25)), // NR50, NR51
             _ => (None, None),
         }
     }
