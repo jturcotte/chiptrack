@@ -95,34 +95,42 @@ impl SynthScript {
                   frame: Option<WasmIndirectFunction>,
                   set_param: Option<WasmIndirectFunction>| {
                 let id = cid.to_str().unwrap();
-                assert!(
-                    !id.is_empty(),
-                    "set_instrument_at_column: id must not be empty, got {:?}",
-                    id
-                );
-                assert!(
-                    !instrument_ids_clone.borrow().is_empty(),
-                    "set_instrument_at_column: can only be called during start/main"
-                );
-                assert!(
-                    !instrument_ids_clone.borrow().iter().any(|i| i == id),
-                    "set_instrument_at_column: id {} must be unique, but was already set",
-                    id
-                );
-                assert!(
-                    col >= 0 && col <= NUM_INSTRUMENT_COLS as i32,
-                    "set_instrument_at_column: column must be 0 <= col <= {}, got {}",
-                    NUM_INSTRUMENT_COLS,
-                    col
-                );
+                if id.is_empty() {
+                    elog!(
+                        "set_instrument_at_column: id must not be empty, got {:?}. Ignoring instrument.",
+                        id
+                    );
+                    return;
+                }
+                if instrument_ids_clone.borrow().is_empty() {
+                    elog!("set_instrument_at_column: can only be called during start/main. Ignoring instrument.");
+                    return;
+                }
+                if instrument_ids_clone.borrow().iter().any(|i| i == id) {
+                    elog!(
+                        "set_instrument_at_column: id {} must be unique, but was already set. Ignoring instrument.",
+                        id
+                    );
+                    return;
+                }
+                if !(col >= 0 && col < NUM_INSTRUMENT_COLS as i32) {
+                    elog!(
+                        "set_instrument_at_column: column must be 0 <= col < {}, got {}. Ignoring instrument.",
+                        NUM_INSTRUMENT_COLS,
+                        col
+                    );
+                    return;
+                }
+
                 let mut state_cols = instrument_states_clone.borrow_mut();
                 let (state, index) = {
                     let state_col = &mut state_cols[col as usize];
                     if state_col.len() >= 16 {
                         elog!(
-                            "set_instrument_at_column: column {} already contains 16 instruments",
+                            "set_instrument_at_column: column {} already contains 16 instruments. Ignoring instrument.",
                             col
                         );
+                        return;
                     }
                     state_col.push(Default::default());
                     // Column index is in the two lsb
@@ -223,12 +231,12 @@ impl SynthScript {
     pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u8, note: u8, param0: i8, param1: i8) {
         let mut states = self.instrument_states.borrow_mut();
         if let Some(state) = states.get_instrument(instrument) {
+            state.pressed_note = Some(PressedNote {
+                note,
+                pressed_frame: frame_number,
+                extended_frames: None,
+            });
             if let Some(f) = &state.press_function {
-                state.pressed_note = Some(PressedNote {
-                    note,
-                    pressed_frame: frame_number,
-                    extended_frames: None,
-                });
                 if let Err(e) = self.wasm_module_inst.as_ref().unwrap().call_indirect_iiii(
                     f,
                     Self::note_to_freq(note),

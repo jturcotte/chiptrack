@@ -26,6 +26,7 @@ impl Synth {
     }
 
     pub fn set_sound_reg_callback(&self) -> impl Fn(i32, i32) {
+        // FIXME: Check the address allowed bounds
         move |addr: i32, value: i32| {
             // log!("{:#x}: {:#04x} ({:#010b})", addr, value, value);
             unsafe {
