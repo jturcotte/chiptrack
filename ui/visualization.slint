@@ -86,7 +86,7 @@ export component Visualization inherits Rectangle {
         Colors.rgb(64, 0, 192),
         Colors.rgb(0, 64, 192)
         ];
-    property<int> visible_octaves: 4;
+    property<int> visible_octaves: 6;
     property<length> note_height: self.height / (7 * visible_octaves + 2);
     // One note spacer, and the real note
     property<length> noise_area_height: note_height * 2;
@@ -144,7 +144,7 @@ export component Visualization inherits Rectangle {
                     y: parent.height
                         - (note.octave == 0 && note.key_pos == 0
                             ? root.note_height
-                            : root.noise_area_height + ((note.octave - 2) * 7 + note.key_pos + note.cent_adj + (note.is_black ? 1.5 : 1) - 0.1) * root.note_height
+                            : root.noise_area_height + ((note.octave - 1) * 7 + note.key_pos + note.cent_adj + (note.is_black ? 1.5 : 1) - 0.1) * root.note_height
                             );
                     background: chan_colors[note.channel];
                     opacity: note.volume;
@@ -162,7 +162,7 @@ export component Visualization inherits Rectangle {
                 - (note.trace.octave == 0 && note.trace.key_pos == 0
                     ? root.note_height
                     : root.noise_area_height
-                        + ((note.trace.octave - 2) * 7 + note.trace.key_pos + note.trace.cent_adj + (note.trace.is_black ? 1.5 : 1)) * root.note_height
+                        + ((note.trace.octave - 1) * 7 + note.trace.key_pos + note.trace.cent_adj + (note.trace.is_black ? 1.5 : 1)) * root.note_height
                     )
                 + root.note_height / 2 - self.height / 2;
             background: white;
