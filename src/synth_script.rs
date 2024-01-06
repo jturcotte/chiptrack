@@ -300,6 +300,13 @@ impl SynthScript {
         }
     }
 
+    pub fn instrument_has_set_param_fn(&mut self, instrument: u8) -> bool {
+        let mut states = self.instrument_states.borrow_mut();
+        states
+            .get_instrument(instrument)
+            .map_or(false, |s| s.set_param_function.is_some())
+    }
+
     pub fn release_instruments(&mut self) {
         for state_col in &mut *self.instrument_states.borrow_mut() {
             for state in state_col {

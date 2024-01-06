@@ -289,16 +289,22 @@ impl SoundEngine {
         }
     }
     pub fn cycle_step_param(&mut self, param_num: u8, forward: bool) {
-        let (_, p0, p1) = self
+        let (note, p0, p1) = self
             .sequencer
             .borrow_mut()
             .cycle_selected_step_param(param_num, Some(forward));
         if !self.sequencer.borrow().playing() {
-            self.script.set_instrument_param(
-                self.sequencer.borrow().selected_instrument,
-                param_num,
-                if param_num == 0 { p0 } else { p1 },
-            )
+            let instrument = self.sequencer.borrow().selected_instrument;
+
+            if self.script.instrument_has_set_param_fn(instrument) {
+                // The instrument will get the new value without a press.
+                self.script
+                    .set_instrument_param(instrument, param_num, if param_num == 0 { p0 } else { p1 })
+            } else {
+                // There is no set param function set by the instrument, trigger a press as feedback like we do in cycle_note.
+                self.script
+                    .press_instrument_note(self.frame_number, instrument, note, p0, p1);
+            }
         }
     }
 
