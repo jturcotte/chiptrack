@@ -74,11 +74,27 @@ pub const gba = struct {
     pub const nr43_44 = 0x400007C;
     pub const nr50_51 = 0x4000080;
 
+    pub fn encodeSquareFreq(freq: u32) u11 {
+        return @truncate(2048 - ((131072 * 256) / freq));
+    }
+    pub fn encodeWaveFreq(freq: u32) u11 {
+        return @truncate(2048 - ((65536 * 256) / freq));
+    }
+
     pub const Channel = enum {
         square1,
         square2,
         wave,
         noise,
+
+        pub fn encodeFreq(channel: Channel, freq: u32) u11 {
+            return switch (channel) {
+                Channel.square1 => encodeSquareFreq(freq),
+                Channel.square2 => encodeSquareFreq(freq),
+                Channel.noise => encodeWaveFreq(freq),
+                else => unreachable,
+            };
+        }
     };
     pub const square1 = Channel.square1;
     pub const square2 = Channel.square2;
@@ -139,12 +155,14 @@ pub const gba = struct {
             copy.time = v;
             return copy;
         }
-        pub fn write(self: Sweep, channel: Channel) void {
-            const address: u32 = switch (channel) {
+        pub fn address(channel: Channel) u32 {
+            return switch (channel) {
                 Channel.square1 => nr10,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
+        }
+        pub fn writeTo(self: Sweep, channel: Channel) void {
+            gba_set_sound_reg(address(channel), @as(u16, @bitCast(self)));
         }
     };
 
@@ -190,14 +208,16 @@ pub const gba = struct {
             copy.length = v;
             return copy;
         }
-        pub fn write(self: EnvDutyLen, channel: Channel) void {
-            const address: u32 = switch (channel) {
+        pub fn address(channel: Channel) u32 {
+            return switch (channel) {
                 Channel.square1 => nr11_12,
                 Channel.square2 => nr21_22,
                 Channel.noise => nr41_42,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
+        }
+        pub fn writeTo(self: EnvDutyLen, channel: Channel) void {
+            gba_set_sound_reg(address(channel), @as(u16, @bitCast(self)));
         }
     };
 
@@ -226,32 +246,31 @@ pub const gba = struct {
             copy.length_enabled = v;
             return copy;
         }
+        /// Sets an 11 bits native GBA freq value
         pub fn withFreq(self: CtrlFreq, v: u11) CtrlFreq {
             var copy = self;
             copy.freq = v;
             return copy;
         }
-        pub fn squareFreqToFreq(freq: u32) u11 {
-            return @truncate(2048 - ((131072 * 256) / freq));
-        }
-        pub fn waveFreqToFreq(freq: u32) u11 {
-            return @truncate(2048 - ((65536 * 256) / freq));
-        }
+        /// Sets an 8 bits fixed point frequency, will be converted to a square native freq and set.
         pub fn withSquareFreq(self: CtrlFreq, freq: u32) CtrlFreq {
-            return self.withFreq(squareFreqToFreq(freq));
+            return self.withFreq(encodeSquareFreq(freq));
         }
+        /// Sets an 8 bits fixed point frequency, will be converted to a wave native freq and set.
         pub fn withWaveFreq(self: CtrlFreq, freq: u32) CtrlFreq {
-            return self.withFreq(waveFreqToFreq(freq));
+            return self.withFreq(encodeWaveFreq(freq));
         }
 
-        pub fn write(self: CtrlFreq, channel: Channel) void {
-            const address: u32 = switch (channel) {
+        pub fn address(channel: Channel) u32 {
+            return switch (channel) {
                 Channel.square1 => nr13_14,
                 Channel.square2 => nr23_24,
                 Channel.wave => nr33_34,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
+        }
+        pub fn writeTo(self: CtrlFreq, channel: Channel) void {
+            gba_set_sound_reg(address(channel), @as(u16, @bitCast(self)));
         }
     };
 
@@ -286,19 +305,21 @@ pub const gba = struct {
             return copy;
         }
 
-        pub fn write(self: WaveRam, comptime channel: Channel) void {
-            const address: u32 = switch (channel) {
+        pub fn address(channel: Channel) u32 {
+            return switch (channel) {
                 Channel.wave => nr30,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
+        }
+        pub fn writeTo(self: WaveRam, channel: Channel) void {
+            gba_set_sound_reg(address(channel), @as(u16, @bitCast(self)));
         }
         pub fn setTable(table: *const WavTable) void {
             // Write to the unselected bank
             gba_set_wave_table(&table.v, table.v.len);
             // Then select it
             current_bank ^= 1;
-            (WaveRam{ .playing = 1, .bank = current_bank }).write(wave);
+            (WaveRam{ .playing = 1, .bank = current_bank }).writeTo(wave);
         }
     };
 
@@ -327,24 +348,26 @@ pub const gba = struct {
             return copy;
         }
 
-        pub fn write(self: WaveVolLen, comptime channel: Channel) void {
-            const address: u32 = switch (channel) {
+        pub fn address(channel: Channel) u32 {
+            return switch (channel) {
                 Channel.wave => nr31_32,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
+        }
+        pub fn writeTo(self: WaveVolLen, channel: Channel) void {
+            gba_set_sound_reg(address(channel), @as(u16, @bitCast(self)));
         }
     };
 
     /// (NR43, NR44) - Channel 4 Frequency/Control (R/W)
     pub const NoiseCtrlFreq = packed struct {
         ///  Bit        Expl.
-        ///  0-2   R/W  Dividing Ratio of Frequencies (r)
-        r: u3 = 0,
+        ///  0-2   R/W  Dividing Ratio of Frequencies
+        freq_div: u3 = 0,
         ///  3     R/W  Counter Step/Width (0=15 bits, 1=7 bits)
         width: u1 = 0,
-        ///  4-7   R/W  Shift Clock Frequency (s)
-        s: u4 = 0,
+        ///  4-7   R/W  Shift Clock Frequency
+        freq: u4 = 0,
         ///  8-13  -    Not used
         _: u6 = 0,
         ///  14    R/W  Length Flag  (1=Stop output when length in NR41 expires)
@@ -365,9 +388,9 @@ pub const gba = struct {
             copy.length_enabled = v;
             return copy;
         }
-        pub fn withClockShift(self: NoiseCtrlFreq, v: u4) NoiseCtrlFreq {
+        pub fn withFreq(self: NoiseCtrlFreq, v: u4) NoiseCtrlFreq {
             var copy = self;
-            copy.s = v;
+            copy.freq = v;
             return copy;
         }
         pub fn withCounterWidth(self: NoiseCtrlFreq, v: u1) NoiseCtrlFreq {
@@ -375,18 +398,20 @@ pub const gba = struct {
             copy.width = v;
             return copy;
         }
-        pub fn withClockDivisor(self: NoiseCtrlFreq, v: u3) NoiseCtrlFreq {
+        pub fn withFreqDiv(self: NoiseCtrlFreq, v: u3) NoiseCtrlFreq {
             var copy = self;
-            copy.r = v;
+            copy.freq_div = v;
             return copy;
         }
 
-        pub fn write(self: NoiseCtrlFreq, comptime channel: Channel) void {
-            const address: u32 = switch (channel) {
+        pub fn address(channel: Channel) u32 {
+            return switch (channel) {
                 Channel.noise => nr43_44,
                 else => unreachable,
             };
-            gba_set_sound_reg(address, @as(u16, @bitCast(self)));
+        }
+        pub fn writeTo(self: NoiseCtrlFreq, channel: Channel) void {
+            gba_set_sound_reg(address(channel), @as(u16, @bitCast(self)));
         }
     };
 

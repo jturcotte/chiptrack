@@ -79,11 +79,11 @@ const square1_1 = struct {
     };
 
     pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
-        base_env_duty.write(gba.square1);
+        base_env_duty.writeTo(gba.square1);
         gba.CtrlFreq.init()
-                .withTrigger(1)
-                .withSquareFreq(freq)
-            .write(gba.square1);
+            .withTrigger(1)
+            .withSquareFreq(freq)
+            .writeTo(gba.square1);
         square1_released_at = null;
     }
     pub fn release(_: u32, _: u8, t: u32) callconv(.C) void {
@@ -92,7 +92,7 @@ const square1_1 = struct {
     pub fn frame(_: u32, _: u8, t: u32) callconv(.C) void {
         if (square1_released_at) |decay_frame| {
             if (t - decay_frame < explicit_env_dec_frames.len)
-                explicit_env_dec_frames[t - decay_frame].write(gba.square1);
+                explicit_env_dec_frames[t - decay_frame].writeTo(gba.square1);
         }
     }
 };
@@ -106,8 +106,8 @@ const square1_2 = struct {
     fn set_duty(val: i8) void {
         duty = @intCast(val);
         base_env_duty_1_4
-        .withDuty(duty)
-            .write(gba.square1);
+            .withDuty(duty)
+            .writeTo(gba.square1);
     }
     fn set_p(val: i8) void {
         p = @max(1, @as(u16, @intCast(val)));
@@ -119,7 +119,7 @@ const square1_2 = struct {
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
             .withTrigger(1)
-            .write(gba.square1);
+            .writeTo(gba.square1);
         square1_released_at = null;
     }
     pub fn release(_: u32, _: u8, t: u32) callconv(.C) void {
@@ -131,10 +131,10 @@ const square1_2 = struct {
         if (t > delay)
             gba.CtrlFreq.init()
                 .withSquareFreq(vibrato(delay, p, freq, t))
-                .write(gba.square1);
+                .writeTo(gba.square1);
         if (square1_released_at) |decay_frame| {
             if (t - decay_frame < explicit_env_dec_1_4_frames.len)
-                explicit_env_dec_1_4_frames[t - decay_frame].withDuty(duty).write(gba.square1);
+                explicit_env_dec_1_4_frames[t - decay_frame].withDuty(duty).writeTo(gba.square1);
         }
     }
     pub fn set_param(param_num: u8, val: i8) callconv(.C) void {
@@ -156,20 +156,20 @@ const square1_3 = struct {
             .withEnvDir(gba.env_dec)
             .withEnvStart(0xa)
             .withEnvInterval(1)
-            .write(gba.square1);
+            .writeTo(gba.square1);
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
             .withTrigger(1)
-            .write(gba.square1);
+            .writeTo(gba.square1);
     }
     pub fn frame(freq: u32, _: u8, t: u32) callconv(.C) void {
         if (t == 2) {
             gba.EnvDutyLen.init()
-                .write(gba.square1);
+                .writeTo(gba.square1);
             gba.CtrlFreq.init()
                 .withSquareFreq(freq)
                 .withTrigger(1)
-                .write(gba.square1);
+                .writeTo(gba.square1);
         }
     }
 };
@@ -179,11 +179,11 @@ const square1_4 = struct {
     pub const frames_after_release: u32 = 8;
 
     pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
-        base_env_duty_1_4.write(gba.square1);
+        base_env_duty_1_4.writeTo(gba.square1);
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
             .withTrigger(1)
-            .write(gba.square1);
+            .writeTo(gba.square1);
         square1_released_at = null;
     }
     pub fn release(_: u32, _: u8, t: u32) callconv(.C) void {
@@ -207,7 +207,7 @@ const square1_4 = struct {
                 v = explicit_env_dec_1_4_frames[t - decay_frame];
         }
         v.withDuty(duties[t % duties.len])
-            .write(gba.square1);
+            .writeTo(gba.square1);
     }
 };
 
@@ -219,16 +219,16 @@ const noise_1 = struct {
             .withEnvStart(0xf)
             .withEnvDir(gba.env_dec)
             .withEnvInterval(1)
-            .write(gba.noise);
+            .writeTo(gba.noise);
         // Use the frequency as input for now just so that different
         // keys produce different sounds.
-        const gb_freq = gba.CtrlFreq.squareFreqToFreq(freq);
+        const gb_freq = gba.encodeSquareFreq(freq);
         gba.NoiseCtrlFreq.init()
-            .withClockShift(@truncate(gb_freq >> 4))
+            .withFreq(@truncate(gb_freq >> 4))
             .withCounterWidth(gba.wid_15)
-            .withClockDivisor(@truncate(gb_freq))
+            .withFreqDiv(@truncate(gb_freq))
             .withTrigger(1)
-            .write(gba.noise);
+            .writeTo(gba.noise);
     }
 };
 
@@ -241,10 +241,10 @@ const noise_2 = struct {
     pub fn frame(_: u32, _: u8, t: u32) callconv(.C) void {
         if (t < env_frames.len)
             if (env_frames[t]) |reg|
-                reg.write(gba.noise);
+                reg.writeTo(gba.noise);
         if (t < ctrl_frames.len)
             if (ctrl_frames[t]) |reg|
-                reg.write(gba.noise);
+                reg.writeTo(gba.noise);
     }
     pub fn press(_: u32, note: u8, _: i8, _: i8) callconv(.C) void {
         switch (note % 12) {
@@ -254,7 +254,7 @@ const noise_2 = struct {
                         .{.env_start = 7, .env_dir = gba.env_dec, .env_interval = 1},
                     };
                     const ctrl = .{
-                        .{.s = 1, .width = gba.wid_15, .r = gba.div_8, .trigger = 1},
+                        .{.freq = 1, .width = gba.wid_15, .freq_div = gba.div_8, .trigger = 1},
                     };
                 };
                 env_frames = &Static.env;
@@ -266,10 +266,10 @@ const noise_2 = struct {
                         .{.env_start = 10, .env_dir = gba.env_dec, .env_interval = 1},
                     };
                     const ctrl = .{
-                        .{.s = 7, .width = gba.wid_7, .r = gba.div_16, .trigger = 1},
-                        .{.s = 6, .width = gba.wid_7, .r = gba.div_16},
-                        .{.s = 5, .width = gba.wid_7, .r = gba.div_16},
-                        .{.s = 5, .width = gba.wid_15, .r = gba.div_16},
+                        .{.freq = 7, .width = gba.wid_7, .freq_div = gba.div_16, .trigger = 1},
+                        .{.freq = 6, .width = gba.wid_7, .freq_div = gba.div_16},
+                        .{.freq = 5, .width = gba.wid_7, .freq_div = gba.div_16},
+                        .{.freq = 5, .width = gba.wid_15, .freq_div = gba.div_16},
                     };
                 };
                 env_frames = &Static.env;
@@ -281,11 +281,11 @@ const noise_2 = struct {
                         .{.env_start = 7, .env_dir = gba.env_dec, .env_interval = 2},
                     };
                     const ctrl = .{
-                        .{.s = 1, .width = gba.wid_15, .r = gba.div_16, .trigger = 1},
-                        .{.s = 1, .width = gba.wid_15, .r = gba.div_32},
-                        .{.s = 1, .width = gba.wid_15, .r = gba.div_48},
-                        .{.s = 1, .width = gba.wid_15, .r = gba.div_64},
-                        .{.s = 1, .width = gba.wid_15, .r = gba.div_80},
+                        .{.freq = 1, .width = gba.wid_15, .freq_div = gba.div_16, .trigger = 1},
+                        .{.freq = 1, .width = gba.wid_15, .freq_div = gba.div_32},
+                        .{.freq = 1, .width = gba.wid_15, .freq_div = gba.div_48},
+                        .{.freq = 1, .width = gba.wid_15, .freq_div = gba.div_64},
+                        .{.freq = 1, .width = gba.wid_15, .freq_div = gba.div_80},
                     };
                 };
                 env_frames = &Static.env;
@@ -297,12 +297,12 @@ const noise_2 = struct {
                         .{.env_start = 10, .env_dir = gba.env_dec, .env_interval = 1},
                     };
                     const ctrl = .{
-                        .{.s = 5, .width = gba.wid_7, .r = gba.div_16, .trigger = 1},
-                        .{.s = 5, .width = gba.wid_7, .r = gba.div_48},
-                        .{.s = 5, .width = gba.wid_7, .r = gba.div_48},
-                        .{.s = 5, .width = gba.wid_7, .r = gba.div_80},
-                        .{.s = 5, .width = gba.wid_7, .r = gba.div_112},
-                        .{.s = 6, .width = gba.wid_15, .r = gba.div_8},
+                        .{.freq = 5, .width = gba.wid_7, .freq_div = gba.div_16, .trigger = 1},
+                        .{.freq = 5, .width = gba.wid_7, .freq_div = gba.div_48},
+                        .{.freq = 5, .width = gba.wid_7, .freq_div = gba.div_48},
+                        .{.freq = 5, .width = gba.wid_7, .freq_div = gba.div_80},
+                        .{.freq = 5, .width = gba.wid_7, .freq_div = gba.div_112},
+                        .{.freq = 6, .width = gba.wid_15, .freq_div = gba.div_8},
                     };
                 };
                 env_frames = &Static.env;
@@ -314,14 +314,14 @@ const noise_2 = struct {
                         .{.env_start = 10, .env_dir = gba.env_dec, .env_interval = 2},
                     };
                     const ctrl = .{
-                        .{.s = 5, .width = gba.wid_7, .r = gba.div_16, .trigger = 1},
-                        .{.s = 7, .width = gba.wid_7, .r = gba.div_16},
-                        .{.s = 6, .width = gba.wid_7, .r = gba.div_16},
-                        .{.s = 5, .width = gba.wid_15, .r = gba.div_8},
-                        .{.s = 5, .width = gba.wid_15, .r = gba.div_8},
-                        .{.s = 5, .width = gba.wid_15, .r = gba.div_16},
-                        .{.s = 4, .width = gba.wid_15, .r = gba.div_16},
-                        .{.s = 5, .width = gba.wid_15, .r = gba.div_16},
+                        .{.freq = 5, .width = gba.wid_7, .freq_div = gba.div_16, .trigger = 1},
+                        .{.freq = 7, .width = gba.wid_7, .freq_div = gba.div_16},
+                        .{.freq = 6, .width = gba.wid_7, .freq_div = gba.div_16},
+                        .{.freq = 5, .width = gba.wid_15, .freq_div = gba.div_8},
+                        .{.freq = 5, .width = gba.wid_15, .freq_div = gba.div_8},
+                        .{.freq = 5, .width = gba.wid_15, .freq_div = gba.div_16},
+                        .{.freq = 4, .width = gba.wid_15, .freq_div = gba.div_16},
+                        .{.freq = 5, .width = gba.wid_15, .freq_div = gba.div_16},
                     };
                 };
                 env_frames = &Static.env;
@@ -343,17 +343,17 @@ const noise_2 = struct {
                         .{.env_start = 0, .env_dir = gba.env_dec, .env_interval = 3},
                     };
                     const ctrl = .{
-                        .{.s = 0, .width = gba.wid_15, .r = 4, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 2, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 6, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 3, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 4, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 2, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 6, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 3, .trigger = 1},
                         null,
                         null,
                         null,
-                        .{.s = 0, .width = gba.wid_15, .r = 4, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 2, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 1, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 1, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 4, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 2, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
                     };
                 };
                 env_frames = &Static.env;
@@ -375,17 +375,17 @@ const noise_2 = struct {
                         .{.env_start = 0, .env_dir = gba.env_dec, .env_interval = 3},
                     };
                     const ctrl = .{
-                        .{.s = 0, .width = gba.wid_15, .r = 2, .trigger = 1},
-                        .{.s = 5, .width = gba.wid_15, .r = 1, .trigger = 1},
-                        .{.s = 6, .width = gba.wid_15, .r = 1, .trigger = 1},
-                        .{.s = 7, .width = gba.wid_15, .r = 1, .trigger = 1},
-                        .{.s = 9, .width = gba.wid_15, .r = 1, .trigger = 1},
-                        .{.s = 7, .width = gba.wid_15, .r = 1, .trigger = 1},
-                        .{.s = 6, .width = gba.wid_15, .r = 0, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 4, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 2, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 1, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 1, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 2, .trigger = 1},
+                        .{.freq = 5, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
+                        .{.freq = 6, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
+                        .{.freq = 7, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
+                        .{.freq = 9, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
+                        .{.freq = 7, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
+                        .{.freq = 6, .width = gba.wid_15, .freq_div = 0, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 4, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 2, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
                     };
                 };
                 env_frames = &Static.env;
@@ -407,17 +407,17 @@ const noise_2 = struct {
                         .{.env_start = 0, .env_dir = gba.env_dec, .env_interval = 3},
                     };
                     const ctrl = .{
-                        .{.s = 6, .width = gba.wid_15, .r = 0, .trigger = 1},
-                        .{.s = 5, .width = gba.wid_15, .r = 2, .trigger = 1},
-                        .{.s = 4, .width = gba.wid_15, .r = 2, .trigger = 1},
-                        .{.s = 4, .width = gba.wid_15, .r = 1, .trigger = 1},
-                        .{.s = 2, .width = gba.wid_15, .r = 2, .trigger = 1},
-                        .{.s = 1, .width = gba.wid_15, .r = 1, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 4, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 4, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 2, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 1, .trigger = 1},
-                        .{.s = 0, .width = gba.wid_15, .r = 1, .trigger = 1},
+                        .{.freq = 6, .width = gba.wid_15, .freq_div = 0, .trigger = 1},
+                        .{.freq = 5, .width = gba.wid_15, .freq_div = 2, .trigger = 1},
+                        .{.freq = 4, .width = gba.wid_15, .freq_div = 2, .trigger = 1},
+                        .{.freq = 4, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
+                        .{.freq = 2, .width = gba.wid_15, .freq_div = 2, .trigger = 1},
+                        .{.freq = 1, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 4, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 4, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 2, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
+                        .{.freq = 0, .width = gba.wid_15, .freq_div = 1, .trigger = 1},
                     };
                 };
                 env_frames = &Static.env;
@@ -440,17 +440,17 @@ const square1_5 = struct {
             .withTime(2)
             .withDir(gba.swe_dec)
             .withShift(2)
-            .write(gba.square1);
+            .writeTo(gba.square1);
         gba.EnvDutyLen.init()
             .withDuty(gba.dut_2_4)
             .withEnvStart(0xd)
             .withEnvDir(gba.env_dec)
             .withEnvInterval(2)
-            .write(gba.square1);
+            .writeTo(gba.square1);
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
             .withTrigger(1)
-            .write(gba.square1);
+            .writeTo(gba.square1);
     }
 };
 
@@ -465,11 +465,11 @@ fn wave_p(freq: u32, table: *const gba.WavTable) void {
     gba.WaveRam.setTable(table);
     gba.WaveVolLen.init()
         .withVolume(gba.vol_100)
-        .write(gba.wave);
+        .writeTo(gba.wave);
     gba.CtrlFreq.init()
         .withWaveFreq(freq)
         .withTrigger(1)
-        .write(gba.wave);
+        .writeTo(gba.wave);
     wave_decay_at = null;
 }
 fn wave_env_r(_: u32, _: u8, t: u32) callconv(.C) void {
@@ -478,7 +478,7 @@ fn wave_env_r(_: u32, _: u8, t: u32) callconv(.C) void {
 fn wave_env_f(_: u32, _: u8, t: u32) callconv(.C) void {
     if (wave_decay_at) |decay_frame| {
         if (t - decay_frame < wave_env_frames.len)
-            wave_env_frames[t - decay_frame].write(gba.wave);
+            wave_env_frames[t - decay_frame].writeTo(gba.wave);
     }
 }
 
@@ -521,10 +521,10 @@ const wave_3 = struct {
         };
         gba.CtrlFreq.init()
             .withWaveFreq(arpeggio(freq, t, &Static.semitones))
-            .write(gba.wave);
+            .writeTo(gba.wave);
         if (wave_decay_at) |decay_frame| {
             if (t - decay_frame < wave_env_frames.len)
-                wave_env_frames[t - decay_frame].write(gba.wave);
+                wave_env_frames[t - decay_frame].writeTo(gba.wave);
         }
     }
     pub const release = wave_env_r;
@@ -552,21 +552,21 @@ const wave_5 = struct {
         gba.WaveRam.setTable(&table);
         gba.WaveVolLen.init()
             .withVolume(gba.vol_100)
-            .write(gba.wave);
+            .writeTo(gba.wave);
         gba.CtrlFreq.init()
             .withWaveFreq(freq)
             .withTrigger(1)
-            .write(gba.wave);
+            .writeTo(gba.wave);
         wave_decay_at = 12;
         current_step_freq = freq;
     }
     pub fn frame(_: u32, _: u8, t: u32) callconv(.C) void {
         gba.CtrlFreq.init()
             .withWaveFreq(semitones_steps(3, &current_step_freq))
-            .write(gba.wave);
+            .writeTo(gba.wave);
         if (wave_decay_at) |decay_frame| {
             if (t - decay_frame < wave_env_frames.len)
-                wave_env_frames[t - decay_frame].write(gba.wave);
+                wave_env_frames[t - decay_frame].writeTo(gba.wave);
         }
     }
 };
