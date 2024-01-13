@@ -350,6 +350,12 @@ impl Pattern {
                 .iter()
                 .position(|s| instrument.id.as_str() == s.as_str());
             instrument.synth_index = index.map(|p| p as u8);
+            if instrument.synth_index.is_none() {
+                elog!(
+                    "Some song pattern refers to instrument id [{}], but the instruments didn't register it, ignoring.",
+                    instrument.id
+                );
+            }
         }
     }
 }
@@ -898,7 +904,7 @@ impl Sequencer {
             let i = match instrument.synth_index {
                 Some(i) => i,
                 None => {
-                    // elog!("The song is attempting to press instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
+                    // instruments don't define it, ignore
                     continue;
                 }
             };
@@ -945,7 +951,7 @@ impl Sequencer {
             let i = match instrument.synth_index {
                 Some(i) => i,
                 None => {
-                    // elog!("The song is attempting to release instrument id [{}], but the instruments don't define it, ignoring.", instrument.id);
+                    // instruments don't define it, ignore
                     continue;
                 }
             };

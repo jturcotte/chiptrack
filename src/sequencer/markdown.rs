@@ -254,8 +254,14 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
             }
         }
         non_empty.sort_by(|a, b| {
-            let mut ai = p.instruments[*a].synth_index.unwrap() as u32;
-            let mut bi = p.instruments[*b].synth_index.unwrap() as u32;
+            let mai = p.instruments[*a].synth_index;
+            let mbi = p.instruments[*b].synth_index;
+            if mai.is_none() || mbi.is_none() {
+                // Keep unknown instruments at the end
+                return mai.is_none().partial_cmp(&mbi.is_none()).unwrap();
+            }
+            let mut ai = mai.unwrap() as u32;
+            let mut bi = mbi.unwrap() as u32;
             // Instrument are indiced by UI pages and have sequenced by row,
             // but we want to sort by column first, so change the order by moving
             // the 2 column bits from being least significant to being most significant.
