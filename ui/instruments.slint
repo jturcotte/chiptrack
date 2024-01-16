@@ -58,7 +58,11 @@ export component InstrumentsPanel inherits ScrollableSelection {
     property<int> column: mod(GlobalEngine.selected_instrument, 4);
     scrolled(pos) => { GlobalEngine.select_instrument(pos * 4 + column) }
     scroll-event(e) => {
-        GlobalEngine.cycle_instrument(0, e.delta_y < 0 ? 1 : -1);
+        // FIXME: This doesn't work well with high precision wheel events,
+        //        but better keep it simple for now.
+        GlobalEngine.cycle_instrument(
+            e.delta_x == 0 ? 0 : e.delta_x < 0 ? 1 : -1,
+            e.delta_y == 0 ? 0 : e.delta_y < 0 ? 1 : -1);
         return accept;
     }
 
