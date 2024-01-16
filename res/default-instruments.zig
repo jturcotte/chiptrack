@@ -35,17 +35,17 @@ fn semitones_steps(comptime semitones: u32, accum: *u32) u32 {
     return freq;
 }
 
-fn arpeggio(freq: u32, frame: u32, semitones: []const u8) u32 {
-    const r = semitone_ratios[semitones[frame % semitones.len]];
+fn arpeggio(freq: u32, t: u32, semitones: []const u8) u32 {
+    const r = semitone_ratios[semitones[t % semitones.len]];
     return r.apply(freq);
 }
 
-fn vibrato(delay: u32, p: u16, freq: u32, frame: u32) u32 {
+fn vibrato(delay: u32, p: u16, freq: u32, t: u32) u32 {
     // Use almost half a semitone (0.475) amplitude for the delta triangle wave.
     // This fixed ratio is smaller than one so use the inverse ratio to avoid floating points.
     const inv_ratio = comptime @as(u32, @intFromFloat(math.round(1 / (math.pow(f32, 1.0594630943592953, 0.475) - 1))));
     const a = freq / inv_ratio;
-    const delta = 1 + 4 * a / p * math.absCast(@mod((@mod(@as(i32, @intCast(frame - delay)) - p / 4, p) + p), p) - p / 2) - a;
+    const delta = 1 + 4 * a / p * math.absCast(@mod((@mod(@as(i32, @intCast(t - delay)) - p / 4, p) + p), p) - p / 2) - a;
     return freq + delta;
 }
 
@@ -63,6 +63,9 @@ const explicit_env_dec_1_4_frames = [_]gba.EnvDutyLen{
 var square1_released_at: ?u32 = null;
 
 const square1_1 = struct {
+    pub const id: [*:0]const u8 = "□";
+    pub const frames_after_release: u32 = 8;
+
     const base_env_duty = gba.EnvDutyLen.init().withEnvStart(0xf).withDuty(gba.dut_2_4);
     const explicit_env_dec_frames = [_]gba.EnvDutyLen{
         base_env_duty.withEnvStart(0xd),
@@ -75,7 +78,7 @@ const square1_1 = struct {
         base_env_duty.withEnvStart(0x0),
     };
 
-    fn square1_1p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         base_env_duty.write(gba.square1);
         gba.CtrlFreq.init()
                 .withTrigger(1)
@@ -83,27 +86,20 @@ const square1_1 = struct {
             .write(gba.square1);
         square1_released_at = null;
     }
-    fn square1_1r(_: u32, _: u8, frame: u32) callconv(.C) void {
-        square1_released_at = frame;
+    pub fn release(_: u32, _: u8, t: u32) callconv(.C) void {
+        square1_released_at = t;
     }
-    fn square1_1f(_: u32, _: u8, frame: u32) callconv(.C) void {
+    pub fn frame(_: u32, _: u8, t: u32) callconv(.C) void {
         if (square1_released_at) |decay_frame| {
-            if (frame - decay_frame < explicit_env_dec_frames.len)
-                explicit_env_dec_frames[frame - decay_frame].write(gba.square1);
+            if (t - decay_frame < explicit_env_dec_frames.len)
+                explicit_env_dec_frames[t - decay_frame].write(gba.square1);
         }
-    }
-
-    fn register() void {
-        ct.setInstrument("□", 0, .{
-            .press = square1_1p,
-            .release = square1_1r,
-            .frame = square1_1f,
-            .frames_after_release = 8,
-            });
     }
 };
 
 const square1_2 = struct {
+    pub const id: [*:0]const u8 = "◰";
+    pub const frames_after_release: u32 = 8;
 
     var p: u16 = 8;
     var duty: u2 = 0;
@@ -117,7 +113,7 @@ const square1_2 = struct {
         p = @max(1, @as(u16, @intCast(val)));
     }
 
-    fn square1_2p(freq: u32, _: u8, duty_val: i8, p_val: i8) callconv(.C) void {
+    pub fn press(freq: u32, _: u8, duty_val: i8, p_val: i8) callconv(.C) void {
         set_p(p_val);
         set_duty(duty_val);
         gba.CtrlFreq.init()
@@ -126,42 +122,34 @@ const square1_2 = struct {
             .write(gba.square1);
         square1_released_at = null;
     }
-    fn square1_2r(_: u32, _: u8, frame: u32) callconv(.C) void {
-        square1_released_at = frame;
+    pub fn release(_: u32, _: u8, t: u32) callconv(.C) void {
+        square1_released_at = t;
     }
 
-    fn square1_2f(freq: u32, _: u8, frame: u32) callconv(.C) void {
+    pub fn frame(freq: u32, _: u8, t: u32) callconv(.C) void {
         const delay = 36;
-        if (frame > delay)
+        if (t > delay)
             gba.CtrlFreq.init()
-                .withSquareFreq(vibrato(delay, p, freq, frame))
+                .withSquareFreq(vibrato(delay, p, freq, t))
                 .write(gba.square1);
         if (square1_released_at) |decay_frame| {
-            if (frame - decay_frame < explicit_env_dec_1_4_frames.len)
-                explicit_env_dec_1_4_frames[frame - decay_frame].withDuty(duty).write(gba.square1);
+            if (t - decay_frame < explicit_env_dec_1_4_frames.len)
+                explicit_env_dec_1_4_frames[t - decay_frame].withDuty(duty).write(gba.square1);
         }
     }
-    fn square1_2a(param_num: u8, val: i8) callconv(.C) void {
+    pub fn set_param(param_num: u8, val: i8) callconv(.C) void {
         if (param_num == 0)
             set_duty(val)
         else
             set_p(val);
     }
-
-    fn register() void {
-        ct.setInstrument("◰", 0, .{
-            .press = square1_2p,
-            .release = square1_2r,
-            .frame = square1_2f,
-            .set_param = square1_2a,
-            .frames_after_release = 8,
-            });
-    }
 };
 
 
 const square1_3 = struct {
-    fn square1_3p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub const id: [*:0]const u8 = "🞍";
+
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         // 2:bipp e:a:d:1 f:0:d:2 g
         gba.EnvDutyLen.init()
             .withDuty(gba.dut_1_8)
@@ -174,8 +162,8 @@ const square1_3 = struct {
             .withTrigger(1)
             .write(gba.square1);
     }
-    fn square1_3f(freq: u32, _: u8, frame: u32) callconv(.C) void {
-        if (frame == 2) {
+    pub fn frame(freq: u32, _: u8, t: u32) callconv(.C) void {
+        if (t == 2) {
             gba.EnvDutyLen.init()
                 .write(gba.square1);
             gba.CtrlFreq.init()
@@ -184,17 +172,13 @@ const square1_3 = struct {
                 .write(gba.square1);
         }
     }
-
-    fn register() void {
-        ct.setInstrument("🞍", 0, .{
-            .press = square1_3p,
-            .frame = square1_3f,
-            });
-    }
 };
 
 const square1_4 = struct {
-    fn square1_4p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub const id: [*:0]const u8 = "▦";
+    pub const frames_after_release: u32 = 8;
+
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         base_env_duty_1_4.write(gba.square1);
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
@@ -202,10 +186,10 @@ const square1_4 = struct {
             .write(gba.square1);
         square1_released_at = null;
     }
-    fn square1_4r(_: u32, _: u8, frame: u32) callconv(.C) void {
-        square1_released_at = frame;
+    pub fn release(_: u32, _: u8, t: u32) callconv(.C) void {
+        square1_released_at = t;
     }
-    fn square1_4f(_: u32, _: u8, frame: u32) callconv(.C) void {
+    pub fn frame(_: u32, _: u8, t: u32) callconv(.C) void {
         const duties = [_]u2{
             gba.dut_1_4,
             gba.dut_3_4,
@@ -219,25 +203,18 @@ const square1_4 = struct {
 
         var v = base_env_duty_1_4;
         if (square1_released_at) |decay_frame| {
-            if (frame - decay_frame < explicit_env_dec_1_4_frames.len)
-                v = explicit_env_dec_1_4_frames[frame - decay_frame];
+            if (t - decay_frame < explicit_env_dec_1_4_frames.len)
+                v = explicit_env_dec_1_4_frames[t - decay_frame];
         }
-        v.withDuty(duties[frame % duties.len])
+        v.withDuty(duties[t % duties.len])
             .write(gba.square1);
-    }
-
-    fn register() void {
-        ct.setInstrument("▦", 0, .{
-            .press = square1_4p,
-            .release = square1_4r,
-            .frame = square1_4f,
-            .frames_after_release = 8,
-            });
     }
 };
 
 const noise_1 = struct {
-    fn noise_1p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub const id: [*:0]const u8 = "🟕";
+
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         gba.EnvDutyLen.init()
             .withEnvStart(0xf)
             .withEnvDir(gba.env_dec)
@@ -253,24 +230,23 @@ const noise_1 = struct {
             .withTrigger(1)
             .write(gba.noise);
     }
-
-    fn register() void {
-        ct.setInstrument("🟕", 1, .{ .press = noise_1p });
-    }
 };
 
 const noise_2 = struct {
+    pub const id: [*:0]const u8 = "🟗";
+    pub const frames_after_release: u32 = 15;
+
     var env_frames: []const ?gba.EnvDutyLen = &.{};
     var ctrl_frames: []const ?gba.NoiseCtrlFreq = &.{};
-    fn noise_2f(_: u32, _: u8, frame: u32) callconv(.C) void {
-        if (frame < env_frames.len)
-            if (env_frames[frame]) |reg|
+    pub fn frame(_: u32, _: u8, t: u32) callconv(.C) void {
+        if (t < env_frames.len)
+            if (env_frames[t]) |reg|
                 reg.write(gba.noise);
-        if (frame < ctrl_frames.len)
-            if (ctrl_frames[frame]) |reg|
+        if (t < ctrl_frames.len)
+            if (ctrl_frames[t]) |reg|
                 reg.write(gba.noise);
     }
-    fn noise_2p(_: u32, note: u8, _: i8, _: i8) callconv(.C) void {
+    pub fn press(_: u32, note: u8, _: i8, _: i8) callconv(.C) void {
         switch (note % 12) {
             0 => {
                 const Static = struct {
@@ -453,18 +429,12 @@ const noise_2 = struct {
             },
         }
     }
-
-    fn register() void {
-        ct.setInstrument("🟗", 1, .{
-            .press = noise_2p,
-            .frame = noise_2f,
-            .frames_after_release = 15,
-            });
-    }
 };
 
 const square1_5 = struct {
-    fn square1_5p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub const id: [*:0]const u8 = "◎";
+
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         // 1:superdrum e:d:d:2 f:2:d:2 g e
         gba.Sweep.init()
             .withTime(2)
@@ -481,10 +451,6 @@ const square1_5 = struct {
             .withSquareFreq(freq)
             .withTrigger(1)
             .write(gba.square1);
-    }
-
-    fn register() void {
-        ct.setInstrument("◎", 1, .{ .press = square1_5p });
     }
 };
 
@@ -506,96 +472,83 @@ fn wave_p(freq: u32, table: *const gba.WavTable) void {
         .write(gba.wave);
     wave_decay_at = null;
 }
-fn wave_env_r(_: u32, _: u8, frame: u32) callconv(.C) void {
-    wave_decay_at = frame;
+fn wave_env_r(_: u32, _: u8, t: u32) callconv(.C) void {
+    wave_decay_at = t;
 }
-fn wave_env_f(_: u32, _: u8, frame: u32) callconv(.C) void {
+fn wave_env_f(_: u32, _: u8, t: u32) callconv(.C) void {
     if (wave_decay_at) |decay_frame| {
-        if (frame - decay_frame < wave_env_frames.len)
-            wave_env_frames[frame - decay_frame].write(gba.wave);
+        if (t - decay_frame < wave_env_frames.len)
+            wave_env_frames[t - decay_frame].write(gba.wave);
     }
 }
 
 const wave_1 = struct {
+    pub const id: [*:0]const u8 = "🛆";
+
     const table = gba.wav(0x0123456789abcdeffedcba9876543210);
-    fn wave_1p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         wave_p(freq, &table);
     }
-
-    fn register() void {
-        ct.setInstrument("🛆", 2, .{
-            .press = wave_1p,
-            .release = wave_env_r,
-            .frame = wave_env_f,
-            .frames_after_release = 4,
-            });
-    }
+    pub const release = wave_env_r;
+    pub const frame = wave_env_f;
+    pub const frames_after_release: u32 = 4;
 };
 
 const wave_2 = struct {
+    pub const id: [*:0]const u8 = "◉";
+
     const table = gba.wav(0x11235678999876679adffec985421131);
-    fn wave_2p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         wave_p(freq, &table);
     }
 
-    fn register() void {
-        ct.setInstrument("◉", 2, .{
-            .press = wave_2p,
-            .release = wave_env_r,
-            .frame = wave_env_f,
-            .frames_after_release = 4,
-            });
-    }
+    pub const release = wave_env_r;
+    pub const frame = wave_env_f;
+    pub const frames_after_release: u32 = 4;
 };
 
 const wave_3 = struct {
+    pub const id: [*:0]const u8 = "▻";
+    pub const frames_after_release: u32 = 4;
+
     const table = gba.wav(0xdedcba98765432100000000011111111);
-    fn wave_3p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         wave_p(freq, &table);
     }
-    fn wave_3f(freq: u32, _: u8, frame: u32) callconv(.C) void {
+    pub fn frame(freq: u32, _: u8, t: u32) callconv(.C) void {
         const Static = struct {
             const semitones =  [_]u8{0, 3, 5, 12};
         };
         gba.CtrlFreq.init()
-            .withWaveFreq(arpeggio(freq, frame, &Static.semitones))
+            .withWaveFreq(arpeggio(freq, t, &Static.semitones))
             .write(gba.wave);
         if (wave_decay_at) |decay_frame| {
-            if (frame - decay_frame < wave_env_frames.len)
-                wave_env_frames[frame - decay_frame].write(gba.wave);
+            if (t - decay_frame < wave_env_frames.len)
+                wave_env_frames[t - decay_frame].write(gba.wave);
         }
     }
-
-    fn register() void {
-        ct.setInstrument("▻", 2, .{
-            .press = wave_3p,
-            .release = wave_env_r,
-            .frame = wave_3f,
-            .frames_after_release = 4,
-            });
-    }
+    pub const release = wave_env_r;
 };
 
 const wave_4 = struct {
+    pub const id: [*:0]const u8 = "🞠";
+
     const table = gba.wav(0xf0f0f0f0f0f0f0f0ff00ff00ff00ff00);
-    fn wave_4p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         wave_p(freq, &table);
     }
-
-    fn register() void {
-        ct.setInstrument("🞠", 2, .{
-            .press = wave_4p,
-            .release = wave_env_r,
-            .frame = wave_env_f,
-            .frames_after_release = 4,
-            });
-    }
+    pub const release = wave_env_r;
+    pub const frame = wave_env_f;
+    pub const frames_after_release: u32 = 4;
 };
 
 const wave_5 = struct {
+    pub const id: [*:0]const u8 = "◺";
+    pub const frames_after_release: u32 = 16;
+
     const table = gba.wav(0x0234679acdffffeeeeffffdca9764310);
     var current_step_freq: u32 = 0;
-    fn wave_5p(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         gba.WaveRam.setTable(&table);
         gba.WaveVolLen.init()
             .withVolume(gba.vol_100)
@@ -607,37 +560,29 @@ const wave_5 = struct {
         wave_decay_at = 12;
         current_step_freq = freq;
     }
-    fn wave_5f(_: u32, _: u8, frame: u32) callconv(.C) void {
+    pub fn frame(_: u32, _: u8, t: u32) callconv(.C) void {
         gba.CtrlFreq.init()
             .withWaveFreq(semitones_steps(3, &current_step_freq))
             .write(gba.wave);
         if (wave_decay_at) |decay_frame| {
-            if (frame - decay_frame < wave_env_frames.len)
-                wave_env_frames[frame - decay_frame].write(gba.wave);
+            if (t - decay_frame < wave_env_frames.len)
+                wave_env_frames[t - decay_frame].write(gba.wave);
         }
-    }
-
-    fn register() void {
-        ct.setInstrument("◺", 3, .{
-            .press = wave_5p,
-            .frame = wave_5f,
-            .frames_after_release = 16,
-            });
     }
 };
 
 pub fn main() void {
-    square1_1.register();
-    square1_2.register();
-    square1_3.register();
-    square1_4.register();
-    noise_1.register();
-    noise_2.register();
-    square1_5.register();
-    wave_1.register();
-    wave_2.register();
-    wave_3.register();
-    wave_4.register();
-    wave_5.register();
+    ct.registerInstrument(square1_1, 0);
+    ct.registerInstrument(square1_2, 0);
+    ct.registerInstrument(square1_3, 0);
+    ct.registerInstrument(square1_4, 0);
+    ct.registerInstrument(noise_1, 1);
+    ct.registerInstrument(noise_2, 1);
+    ct.registerInstrument(square1_5, 1);
+    ct.registerInstrument(wave_1, 2);
+    ct.registerInstrument(wave_2, 2);
+    ct.registerInstrument(wave_3, 2);
+    ct.registerInstrument(wave_4, 2);
+    ct.registerInstrument(wave_5, 3);
 }
 

@@ -95,6 +95,16 @@ impl SynthScript {
                   frame: Option<WasmIndirectFunction>,
                   set_param: Option<WasmIndirectFunction>| {
                 let id = cid.to_str().unwrap();
+                log!(
+                    "Setting instrument [{}] with press: {}, release: {}, frame: {}, set_param: {}, f_a_r: {}",
+                    id,
+                    press.is_some(),
+                    release.is_some(),
+                    frame.is_some(),
+                    set_param.is_some(),
+                    frames_after_release
+                );
+
                 if id.is_empty() {
                     elog!(
                         "set_instrument_at_column: id must not be empty, got {:?}. Ignoring instrument.",

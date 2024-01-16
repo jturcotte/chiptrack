@@ -1,15 +1,15 @@
 const std = @import("std");
 const fmt = std.fmt;
 
-const press_fn = *const fn (freq: u32, note: u8, param0: i8, param1: i8) callconv(.C) void;
-const release_fn = *const fn (freq: u32, note: u8, frame: u32) callconv(.C) void;
-const frame_fn = *const fn (freq: u32, note: u8, frame: u32) callconv(.C) void;
-const set_param_fn = *const fn (param_num: u8, value: i8) callconv(.C) void;
+pub const press_fn = *const fn (freq: u32, note: u8, param0: i8, param1: i8) callconv(.C) void;
+pub const release_fn = *const fn (freq: u32, note: u8, t: u32) callconv(.C) void;
+pub const frame_fn = *const fn (freq: u32, note: u8, t: u32) callconv(.C) void;
+pub const set_param_fn = *const fn (param_num: u8, value: i8) callconv(.C) void;
 
 extern fn print([*:0]const u8) void;
 extern fn gba_set_sound_reg(addr: u32, value: u32) void;
 extern fn gba_set_wave_table(table: [*]const u8, table_len: u32) void;
-extern fn set_instrument_at_column(id: [*:0]const u8, col: i32, frames_after_release: i32, press: ?press_fn, release: ?release_fn, frame: ?frame_fn, set_param: ?set_param_fn) void;
+extern fn set_instrument_at_column(id: [*:0]const u8, col: u32, frames_after_release: u32, press: ?press_fn, release: ?release_fn, frame: ?frame_fn, set_param: ?set_param_fn) void;
 
 pub fn debug(comptime f: []const u8, args: anytype) void {
     var b: [256]u8 = undefined;
@@ -23,16 +23,42 @@ const Instrument = struct {
     release: ?release_fn = null,
     frame: ?frame_fn = null,
     set_param: ?set_param_fn = null,
-    frames_after_release: i32 = 0,
+    frames_after_release: u32 = 0,
 };
-pub fn setInstrument(id: [*:0]const u8, col: i32, instrument: Instrument) void {
-    return set_instrument_at_column(
+
+/// Registers an instrument using parameters and function pointers provided through an Instrument struct instance.
+pub fn setInstrument(id: [*:0]const u8, col: u32, instrument: Instrument) void {
+    set_instrument_at_column(
         id, col,
         instrument.frames_after_release,
         instrument.press,
         instrument.release,
         instrument.frame,
         instrument.set_param);
+}
+
+/// Registers an instrument struct that has the following mandatory public static declaration (not field):
+/// - id: A null-terminated string identifying the instrument in the song's pattern definitions
+/// And the following optional public static declarations (not fields):
+/// - press: a function called at the start of each sequencer press step
+/// - release: a function called at the end of each sequencer release step
+/// - frame: a function called on every frame between press and release
+/// - set_param: a function called on every step between press and release (exclusively) where the instrument parameters are changed
+/// - frames_after_release: a u32 that can extend the number of frames for which the frame function is called after the release step
+/// If any optional declaration is mis-spelled or non-public, it will be silently ignored.
+pub fn registerInstrument(comptime instrument: anytype, col: u32) void {
+    const press: ?press_fn = if (@hasDecl(instrument, "press")) instrument.press else null;
+    const release: ?release_fn = if (@hasDecl(instrument, "release")) instrument.release else null;
+    const frame: ?frame_fn = if (@hasDecl(instrument, "frame")) instrument.frame else null;
+    const set_param: ?set_param_fn = if (@hasDecl(instrument, "set_param")) instrument.set_param else null;
+    const far: u32 = if (@hasDecl(instrument, "frames_after_release")) instrument.frames_after_release else 0;
+    set_instrument_at_column(
+        instrument.id, col,
+        far,
+        press,
+        release,
+        frame,
+        set_param);
 }
 
 pub const gba = struct {
