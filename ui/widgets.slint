@@ -26,7 +26,7 @@ export component ToolbarButton inherits Rectangle {
     }
 }
 
-export component ScrollableSelection {
+export component ScrollableSelection inherits TouchArea {
     callback scrolled(int);
     in property<int> cur_row;
     in property<int> viewport_rows;

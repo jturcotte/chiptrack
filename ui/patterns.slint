@@ -171,6 +171,11 @@ component PatternsList {
         viewport_rows: 16;
         scrollbar_width: height_of_cell * 0.25;
         scrolled(pos) => { GlobalEngine.select_song_pattern(pos) }
+        scroll-event(e) => {
+            GlobalEngine.select_next_song_pattern(e.delta_y < 0);
+            return accept;
+        }
+
 
         y: height_of_cell + layout.spacing;
         height: parent.height - self.y;

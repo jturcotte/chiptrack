@@ -57,12 +57,16 @@ export component InstrumentsPanel inherits ScrollableSelection {
     property<length> item_size: (self.width - (spacing * (grid_size - 1))) / grid_size;
     property<int> column: mod(GlobalEngine.selected_instrument, 4);
     scrolled(pos) => { GlobalEngine.select_instrument(pos * 4 + column) }
+    scroll-event(e) => {
+        GlobalEngine.cycle_instrument(0, e.delta_y < 0 ? 1 : -1);
+        return accept;
+    }
+
     total_rows: GlobalEngine.instruments.length / 4;
     viewport_rows: 5;
     cur_row: GlobalEngine.selected_instrument / 4;
     // The number of rows is static and a scroll bar there looks ugly.
-    // FIXME: This makes it however impossible to scroll with the mouse, so figure out something.
-    //        At least supporting wheel events once https://github.com/slint-ui/slint/issues/1280 is fixed would be nice.
+    // To scroll with the mouse, the wheel must be used here.
     scrollbar_width: 0px;
 
     for row in self.viewport_rows:
