@@ -1014,11 +1014,8 @@ impl Sequencer {
         }
     }
 
-    pub fn selected_note(&self) -> u8 {
-        let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
-        maybe_steps
-            .and_then(|steps| steps[self.selected_step].press_note())
-            .unwrap_or(self.note_clipboard.note)
+    pub fn clipboard_note(&self) -> u8 {
+        self.note_clipboard.note
     }
 
     // pub fn selected_note_and_params(&self) -> (u8, i8, i8) {
