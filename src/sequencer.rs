@@ -534,6 +534,8 @@ impl Sequencer {
         } else {
             self.pin_selection_to_active = true;
             self.activate_song_pattern(song_pattern);
+            // Move back to the first step so that playback can start again with the full pattern.
+            self.select_step(0);
         }
 
         // update_steps relies on both the active and selected song pattern to be set to be able
