@@ -8,6 +8,8 @@ export struct SongPatternData {
 }
 export struct PatternInstrumentData {
     id: string,
+    // Internal sequencer name to avoid ambiguity, but same as instrument:u8 elsewhere.
+    synth_index: int,
     notes: [int],
 }
 export struct StepData {

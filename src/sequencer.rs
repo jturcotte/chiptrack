@@ -731,6 +731,7 @@ impl Sequencer {
                         });
 
                         instrument_data.id = (&mi.id).into();
+                        instrument_data.synth_index = mi.synth_index.map_or(-1, |i| i as i32);
                         model2.set_row_data(idx, instrument_data);
                     });
             })
