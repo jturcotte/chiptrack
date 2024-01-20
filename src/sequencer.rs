@@ -1200,7 +1200,7 @@ impl Sequencer {
         self.instrument_params[instrument]
     }
 
-    pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) -> i8 {
+    pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) -> (i8, i8) {
         let instrument = self.selected_instrument as usize;
         let instrument_params = &mut self.instrument_params[instrument];
         let val = if param_num == 0 {
@@ -1229,7 +1229,7 @@ impl Sequencer {
             })
             .unwrap();
 
-        *val
+        *instrument_params
     }
 
     pub fn cycle_selected_step_param(&mut self, param_num: u8, forward: Option<bool>) -> (u8, i8, i8) {
