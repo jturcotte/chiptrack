@@ -4,7 +4,7 @@
 #[cfg(feature = "desktop")]
 pub mod emulated;
 #[cfg(feature = "desktop")]
-pub use emulated::{new_sound_renderer, SoundRenderer, Synth};
+pub use emulated::{new_sound_renderer, Synth};
 
 #[cfg(feature = "gba")]
 pub mod gba_sound;
