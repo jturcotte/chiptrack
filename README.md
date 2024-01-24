@@ -16,10 +16,8 @@ It uses:
 ## Install using Cargo
 
 ```bash
-# On Linux you might need CPAL local dependencies:
-# sudo apt install libasound2-dev
-# OR
-# sudo yum install alsa-lib-devel
+# On Linux you might need WAMR and CPAL local dependencies, for example on Ubuntu:
+# sudo apt install build-essential cmake pkg-config libasound2-dev libxft-dev
 
 cargo install --git https://github.com/jturcotte/chiptrack
 ```
