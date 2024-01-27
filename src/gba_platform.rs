@@ -195,9 +195,19 @@ fn draw_ascii_chars<RB, U, const C: usize>(
     draw_ascii(vid_row, range, chars.map(|c| c as u8), palbank)
 }
 
+pub fn clear_status_text() {
+    let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
+    draw_ascii_chars(tsb.get_row(19).unwrap(), 0.., repeat(' '), NORMAL_TEXT);
+}
+
+pub fn draw_status_text(t: &str) {
+    let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
+    draw_ascii_chars(tsb.get_row(19).unwrap(), 0.., t.chars().chain(repeat(' ')), NORMAL_TEXT);
+}
+
 pub fn draw_error_text(t: &str) {
     let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
-    draw_ascii_chars(tsb.get_row(19).unwrap(), 0.., t.chars(), ERROR_TEXT);
+    draw_ascii_chars(tsb.get_row(19).unwrap(), 0.., t.chars().chain(repeat(' ')), ERROR_TEXT);
 }
 
 impl MainScreen {

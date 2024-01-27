@@ -21,7 +21,6 @@ use serde::ser::{SerializeStruct, Serializer};
 use markdown::{parse_markdown_song, save_markdown_song};
 #[cfg(feature = "gba")]
 use postcard::from_bytes;
-#[cfg(feature = "desktop")]
 use postcard::to_allocvec;
 use serde::Deserialize;
 use serde::Serialize;
@@ -1511,9 +1510,9 @@ impl Sequencer {
         save_markdown_song(&self.song, song_path)
     }
 
-    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-    pub fn serialize_to_postcard(&self) -> Result<Vec<u8>, Box<dyn Error>> {
-        Ok(to_allocvec(&self.song)?)
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn serialize_to_postcard(&self) -> Result<alloc::vec::Vec<u8>, postcard::Error> {
+        to_allocvec(&self.song)
     }
 
     #[cfg(feature = "gba")]

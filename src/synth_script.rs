@@ -72,7 +72,7 @@ pub struct SynthScript {
 }
 
 impl SynthScript {
-    const DEFAULT_INSTRUMENTS: &'static [u8] = include_bytes!("../res/default-instruments.wasm");
+    pub const DEFAULT_INSTRUMENTS: &'static [u8] = include_bytes!("../res/default-instruments.wasm");
 
     pub fn new<F, G, H>(synth_set_sound_reg: F, synth_set_wave_table: G, apply_instrument_ids: H) -> SynthScript
     where

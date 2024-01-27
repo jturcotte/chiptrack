@@ -1,6 +1,8 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+#[cfg(feature = "gba")]
+use crate::gba_platform;
 use crate::log;
 use crate::sequencer::Sequencer;
 use crate::sequencer::StepEvent;
@@ -591,8 +593,47 @@ impl SoundEngine {
     }
 
     #[cfg(feature = "gba")]
+    pub fn save_song_to_gba_sram(&mut self) {
+        unsafe {
+            let mut buf = [0u8; 4];
+            let sram = 0x0E00_0000 as *mut u8;
+            gba::mem_fns::__aeabi_memcpy1(buf.as_mut_ptr(), sram, 4);
+            let mut instruments_len = u32::from_le_bytes(buf) as usize;
+            if instruments_len == 0xffffffff {
+                // SRAM is empty, copy the default instruments from ROM.
+                instruments_len = SynthScript::DEFAULT_INSTRUMENTS.len();
+                buf = (instruments_len as u32).to_le_bytes();
+                gba::mem_fns::__aeabi_memcpy1(sram, buf.as_ptr(), 4);
+                gba::mem_fns::__aeabi_memcpy1(
+                    sram.offset(8),
+                    SynthScript::DEFAULT_INSTRUMENTS.as_ptr(),
+                    instruments_len,
+                );
+            }
+            match self.sequencer.borrow().serialize_to_postcard() {
+                Ok(song_bytes) => {
+                    buf = (song_bytes.len() as u32).to_le_bytes();
+                    gba::mem_fns::__aeabi_memcpy1(sram.offset(4), buf.as_ptr(), 4);
+                    gba::mem_fns::__aeabi_memcpy1(
+                        sram.offset(8 + instruments_len as isize),
+                        song_bytes.as_ptr(),
+                        song_bytes.len(),
+                    );
+                    let song_len = u32::from_le_bytes(buf) as usize;
+                    gba_platform::draw_status_text(&alloc::format!("Saved {}B song to SRAM.", song_len));
+                }
+                Err(e) => elog!("save error: {}", e),
+            }
+        }
+    }
+
+    #[cfg(feature = "gba")]
     pub fn load_gba_sram(&mut self) -> Option<()> {
         unsafe {
+            // 4 bytes: instruments_len
+            // 4 bytes: song_len
+            // instruments_len bytes: instruments
+            // song_len bytes: song
             let mut buf = [0u8; 4];
             let sram = 0x0E00_0000 as *mut u8;
             gba::mem_fns::__aeabi_memcpy1(buf.as_mut_ptr(), sram, 4);
@@ -624,7 +665,7 @@ impl SoundEngine {
             gba::mem_fns::__aeabi_memcpy1(instrument_bytes.as_mut_ptr(), sram.offset(8), instruments_len);
             instrument_bytes.set_len(instruments_len);
             if let Err(e) = self.script.load_bytes(instrument_bytes) {
-                elog!("load: {}", e);
+                elog!("load error: {}", e);
             }
             Some(())
         }

@@ -33,6 +33,7 @@ use slint::Model;
 #[cfg(feature = "desktop")]
 use url::Url;
 
+#[cfg(feature = "desktop")]
 use alloc::borrow::ToOwned;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
@@ -194,6 +195,19 @@ fn run_main() {
         Some(Midi::new(press, release))
     };
 
+    #[cfg(feature = "gba")]
+    {
+        let cloned_sound_renderer = sound_renderer.clone();
+        window.on_save_to_sram(move || {
+            cloned_sound_renderer
+                .borrow_mut()
+                .invoke_on_sound_engine(move |se| se.save_song_to_gba_sram());
+        });
+
+        window.on_clear_status_text(move || {
+            gba_platform::clear_status_text();
+        });
+    }
     let _window_weak = window.as_weak();
     #[cfg(feature = "desktop")]
     window.on_octave_increased(move |octave_delta| {
