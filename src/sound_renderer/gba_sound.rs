@@ -18,12 +18,7 @@ use std::sync::mpsc::Sender;
 pub struct Synth {}
 
 impl Synth {
-    pub fn advance_frame(&mut self, _frame_number: usize, _step_change: Option<u32>) {
-        // Just enable all channels for now
-        unsafe {
-            *(0x4000080 as *mut u16) = 0xffff;
-        }
-    }
+    pub fn advance_frame(&mut self, _frame_number: usize, _step_change: Option<u32>) {}
 
     pub fn set_sound_reg_callback(&self) -> impl Fn(i32, i32) {
         // FIXME: Check the address allowed bounds
@@ -62,8 +57,27 @@ pub struct SoundRenderer {
 }
 
 pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer {
-    // Already power it on.
+    // Already power it on
     SOUND_ENABLED.write(SoundEnable::new().with_enabled(true));
+
+    // Enable all channels
+    LEFT_RIGHT_VOLUME.write(
+        LeftRightVolume::new()
+            .with_left_volume(7)
+            .with_right_volume(7)
+            .with_tone1_right(true)
+            .with_tone2_right(true)
+            .with_wave_right(true)
+            .with_noise_right(true)
+            .with_tone1_left(true)
+            .with_tone2_left(true)
+            .with_wave_left(true)
+            .with_noise_left(true),
+    );
+
+    // 100% volume for the PSG, 0% for the DMA channels
+    SOUND_MIX.write(SoundMix::new().with_psg(PsgMix::_100));
+
     // 6bit / 262.144kHz  (Best for PSG channels 1-4, we don't use DMA channels anyway)
     SOUNDBIAS.write(
         SoundBias::new()

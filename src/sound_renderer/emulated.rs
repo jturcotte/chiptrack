@@ -173,6 +173,9 @@ impl Synth {
         let mut dmg = rboy::Sound::new(player);
         // Already power it on.
         dmg.wb(0xff26, 0x80);
+        // And enable all channels
+        dmg.wb(0xff24, 0xff);
+        dmg.wb(0xff25, 0xff);
 
         Synth {
             dmg: Rc::new(RefCell::new(dmg)),
@@ -187,9 +190,6 @@ impl Synth {
     pub fn advance_frame(&mut self, frame_number: usize, step_change: Option<u32>) {
         {
             let dmg = &mut self.dmg.borrow_mut();
-            // Just enable all channels for now
-            dmg.wb(0xff24, 0xff);
-            dmg.wb(0xff25, 0xff);
 
             // The sequencer step changed, check if we need to send a pulse to sync downstream devices.
             if let Some(next_step) = step_change {

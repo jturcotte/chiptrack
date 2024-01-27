@@ -28,13 +28,7 @@ const Instrument = struct {
 
 /// Registers an instrument using parameters and function pointers provided through an Instrument struct instance.
 pub fn setInstrument(id: [*:0]const u8, col: u32, instrument: Instrument) void {
-    set_instrument_at_column(
-        id, col,
-        instrument.frames_after_release,
-        instrument.press,
-        instrument.release,
-        instrument.frame,
-        instrument.set_param);
+    set_instrument_at_column(id, col, instrument.frames_after_release, instrument.press, instrument.release, instrument.frame, instrument.set_param);
 }
 
 /// Registers an instrument struct that has the following mandatory public static declaration (not field):
@@ -52,13 +46,7 @@ pub fn registerInstrument(comptime instrument: anytype, col: u32) void {
     const frame: ?frame_fn = if (@hasDecl(instrument, "frame")) instrument.frame else null;
     const set_param: ?set_param_fn = if (@hasDecl(instrument, "set_param")) instrument.set_param else null;
     const far: u32 = if (@hasDecl(instrument, "frames_after_release")) instrument.frames_after_release else 0;
-    set_instrument_at_column(
-        instrument.id, col,
-        far,
-        press,
-        release,
-        frame,
-        set_param);
+    set_instrument_at_column(instrument.id, col, far, press, release, frame, set_param);
 }
 
 pub const gba = struct {
@@ -419,37 +407,73 @@ pub const gba = struct {
     pub const SoundCtrl = packed struct {
         ///  Bit        Expl.
         ///  0-2   R/W  Sound 1-4 Master Volume RIGHT (0-7)
-        master_r: u3 = 0,
+        master_r: u3 = 7,
         ///  3     -    Not used
-        _: u1 = 0,
+        _: u1 = 1,
         ///  4-6   R/W  Sound 1-4 Master Volume LEFT (0-7)
-        master_l: u3 = 0,
+        master_l: u3 = 7,
         ///  7     -    Not used
-        _2: u1 = 0,
+        _2: u1 = 1,
         ///  8-11  R/W  Sound 1-4 Enable Flags RIGHT (each Bit 8-11, 0=Disable, 1=Enable)
-        chan_r: u4 = 0,
+        square1_r: u1 = 1,
+        square2_r: u1 = 1,
+        wave_r: u1 = 1,
+        noise_r: u1 = 1,
         ///  12-15 R/W  Sound 1-4 Enable Flags LEFT (each Bit 12-15, 0=Disable, 1=Enable)
-        chan_l: u4 = 0,
+        square1_l: u1 = 1,
+        square2_l: u1 = 1,
+        wave_l: u1 = 1,
+        noise_l: u1 = 1,
 
         pub fn init() SoundCtrl {
             return SoundCtrl{};
         }
-        pub fn withMasterR(self: SoundCtrl, v: u1) SoundCtrl {
+        pub fn withMasterR(self: SoundCtrl, v: u3) SoundCtrl {
             var copy = self;
             copy.master_r = v;
             return copy;
         }
-        pub fn withMasterL(self: SoundCtrl, v: u1) SoundCtrl {
+        pub fn withMasterL(self: SoundCtrl, v: u3) SoundCtrl {
             var copy = self;
             copy.master_l = v;
             return copy;
         }
-        pub fn withChanR(self: SoundCtrl, v: u1) SoundCtrl {
+        pub fn withSquare1R(self: SoundCtrl, v: u1) SoundCtrl {
             var copy = self;
-            copy.chan_r = v;
+            copy.square1_r = v;
             return copy;
         }
-        pub fn withChanL(self: SoundCtrl, v: u1) SoundCtrl {
+        pub fn withSquare2R(self: SoundCtrl, v: u1) SoundCtrl {
+            var copy = self;
+            copy.square2_r = v;
+            return copy;
+        }
+        pub fn withWaveR(self: SoundCtrl, v: u1) SoundCtrl {
+            var copy = self;
+            copy.wave_r = v;
+            return copy;
+        }
+        pub fn withNoiseR(self: SoundCtrl, v: u1) SoundCtrl {
+            var copy = self;
+            copy.noise_r = v;
+            return copy;
+        }
+        pub fn withSquare1L(self: SoundCtrl, v: u1) SoundCtrl {
+            var copy = self;
+            copy.square1_l = v;
+            return copy;
+        }
+        pub fn withSquare2L(self: SoundCtrl, v: u1) SoundCtrl {
+            var copy = self;
+            copy.square2_l = v;
+            return copy;
+        }
+        pub fn withWaveL(self: SoundCtrl, v: u1) SoundCtrl {
+            var copy = self;
+            copy.wave_l = v;
+            return copy;
+        }
+        pub fn withNoiseL(self: SoundCtrl, v: u1) SoundCtrl {
             var copy = self;
             copy.chan_l = v;
             return copy;
