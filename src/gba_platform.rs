@@ -732,7 +732,7 @@ impl slint::platform::Platform for GbaPlatform {
                                 window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
                                 if key_mask & KEYS_REPEATABLE != 0 {
                                     repeating_key_mask = key_mask;
-                                    frames_until_repeat = Some(8);
+                                    frames_until_repeat = Some(10);
                                 }
                             } else {
                                 log!("RELEASE {}", out_key.chars().next().unwrap() as u8);
