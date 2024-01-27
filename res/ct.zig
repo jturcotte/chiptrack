@@ -119,7 +119,7 @@ pub const gba = struct {
         // 0-2   R/W  Number of sweep shift      (n=0-7)
         shift: u3 = 0,
         // 3     R/W  Sweep Frequency Direction  (0=Increase, 1=Decrease)
-        dir: u1 = 0,
+        dir: u1 = 1,
         // 4-6   R/W  Sweep Time; units of 7.8ms (0-7, min=7.8ms, max=54.7ms)
         time: u3 = 0,
         // 7-15  -    Not used
