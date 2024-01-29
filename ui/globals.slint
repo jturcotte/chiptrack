@@ -139,6 +139,7 @@ export global GlobalEngine {
     callback cycle_step_param_end(int);
     callback cycle_step_param(int, bool);
     callback cycle_song_pattern_start();
+    callback cycle_song_pattern_start_with_new();
     callback cycle_song_pattern(bool);
     callback cut_selected_step_note();
     callback cut_selected_step_param(int);
@@ -152,6 +153,7 @@ export global GlobalEngine {
     callback select_next_song_pattern(bool);
     callback select_song_pattern(int);
     callback remove_last_song_pattern();
+    callback clone_selected_song_pattern();
     callback save_project();
     callback export_project_as_gba_sav();
     callback mute_instruments();

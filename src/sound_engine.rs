@@ -50,6 +50,9 @@ enum ProjectSource {
     Gist,
 }
 
+/// This component connects the sequencer, synth and synth scripting together.
+/// It sits on the sound thread, and thus also handles some of the UI logic from
+/// received messages.
 pub struct SoundEngine {
     pub sequencer: Rc<RefCell<Sequencer>>,
     pub synth: Synth,

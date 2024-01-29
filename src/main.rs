@@ -314,6 +314,12 @@ fn run_main() {
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_song_pattern_start_with_new(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().cycle_song_pattern_start_with_new());
+    });
+    let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_cycle_song_pattern_start(move || {
         cloned_sound_renderer
             .borrow_mut()
@@ -432,6 +438,13 @@ fn run_main() {
         cloned_sound_renderer
             .borrow_mut()
             .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().remove_last_song_pattern());
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_clone_selected_song_pattern(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(|se| se.sequencer.borrow_mut().clone_selected_song_pattern());
     });
 
     let cloned_sound_renderer = sound_renderer.clone();

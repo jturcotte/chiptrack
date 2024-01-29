@@ -424,6 +424,7 @@ pub struct Sequencer {
     recording: bool,
     erasing: bool,
     has_stub_pattern: bool,
+    next_cycle_song_pattern_start_can_have_new: bool,
     last_press_frame: Option<u32>,
     just_recorded_over_next_step: bool,
     // FIXME: Use a bitset
@@ -431,6 +432,7 @@ pub struct Sequencer {
     synth_instrument_ids: Vec<SharedString>,
     instrument_params: Vec<(i8, i8)>,
     note_clipboard: NoteClipboard,
+    song_pattern_clipboard: usize,
     main_window: WeakWindowWrapper,
 }
 
@@ -449,6 +451,7 @@ impl Sequencer {
             recording: true,
             erasing: false,
             has_stub_pattern: false,
+            next_cycle_song_pattern_start_can_have_new: false,
             last_press_frame: None,
             just_recorded_over_next_step: false,
             muted_instruments: BTreeSet::new(),
@@ -458,18 +461,22 @@ impl Sequencer {
                 note: DEFAULT_NOTE,
                 release: true,
             },
+            song_pattern_clipboard: 0,
             main_window: main_window.clone(),
         }
     }
 
+    // Pattern number in a given `song_pattern_idx`.
     fn pattern_idx(&self, song_pattern_idx: usize) -> usize {
         self.song.song_patterns[song_pattern_idx]
     }
 
+    /// The pattern number of the active song pattern.
     fn active_pattern_idx(&self) -> usize {
         self.pattern_idx(self.active_song_pattern)
     }
 
+    /// The pattern number of the selected song pattern.
     fn selected_pattern_idx(&self) -> usize {
         self.pattern_idx(self.selected_song_pattern)
     }
@@ -818,7 +825,8 @@ impl Sequencer {
         set_release: Option<bool>,
         set_params: Option<(Option<i8>, Option<i8>)>,
     ) {
-        if song_pattern == self.song.song_patterns.len() - 1 {
+        // If editing the stub pattern, commit it to a real pattern now.
+        if self.has_stub_pattern {
             self.commit_stub_song_pattern();
         }
 
@@ -1016,20 +1024,6 @@ impl Sequencer {
     pub fn clipboard_note(&self) -> u8 {
         self.note_clipboard.note
     }
-
-    // pub fn selected_note_and_params(&self) -> (u8, i8, i8) {
-    //     let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.selected_instrument);
-    //     maybe_steps
-    //         .map(|steps| {
-    //             let s = steps[self.selected_step];
-    //             (
-    //                 s.note,
-    //                 s.param0().unwrap_or(DEFAULT_PARAM_VAL),
-    //                 s.param1().unwrap_or(DEFAULT_PARAM_VAL),
-    //             )
-    //         })
-    //         .unwrap_or((DEFAULT_NOTE, DEFAULT_PARAM_VAL, DEFAULT_PARAM_VAL))
-    // }
 
     fn record_key_event(&mut self, event: KeyEvent, note: Option<u8>, params: Option<(Option<i8>, Option<i8>)>) {
         if !self.recording {
@@ -1317,28 +1311,57 @@ impl Sequencer {
         self.cut_step_param(self.selected_step, param_num);
     }
 
-    pub fn cycle_song_pattern_start(&mut self) {
-        if self.selected_song_pattern == self.song.song_patterns.len() - 1 {
-            self.commit_stub_song_pattern();
-        }
+    /// Return the number of the first pattern that is not referenced by the song and that is still empty,
+    /// or None if there is no empty pattern left.
+    pub fn find_first_unused_pattern_idx(&self) -> Option<usize> {
+        let pattern_after_max_song_reference = self.song.song_patterns.iter().max().map_or(0, |m| m + 1);
+        self.song
+            .patterns
+            .iter()
+            .skip(pattern_after_max_song_reference)
+            .position(Pattern::is_empty)
+            // Re-add the skipped amount
+            .map(|p| p + pattern_after_max_song_reference)
     }
 
-    pub fn cycle_song_pattern(&mut self, forward: bool) {
-        let song_pattern_idx = self.selected_song_pattern;
-        let pattern = &mut self.song.song_patterns[song_pattern_idx];
-        if forward && *pattern < NUM_PATTERNS - 1 {
-            *pattern += 1;
-        } else if !forward && *pattern > 0 {
-            *pattern -= 1;
+    pub fn cycle_song_pattern_start_with_new(&mut self) {
+        if self.next_cycle_song_pattern_start_can_have_new {
+            if let Some(sp) = self.find_first_unused_pattern_idx() {
+                self.write_selected_song_pattern(sp);
+            } else {
+                elog!("Max pattern reached");
+            }
+        }
+        self.cycle_song_pattern_start()
+    }
+
+    pub fn cycle_song_pattern_start(&mut self) {
+        // Double-press to use new pattern is only allowed after an insert,
+        // so make sure to reset this state to prevent accidental new pattern writes.
+        self.next_cycle_song_pattern_start_can_have_new = false;
+
+        // Check if the stub inserted during selection needs to be committed.
+        if self.has_stub_pattern {
+            // This is the
+            self.song.song_patterns[self.selected_song_pattern] = self.song_pattern_clipboard;
+            self.commit_stub_song_pattern();
+            self.update_steps();
         }
 
-        let new_pattern = *pattern as i32;
+        // Update the clipboard, whether it's after a touch or appending a new song pattern.
+        self.song_pattern_clipboard = self.selected_pattern_idx();
+    }
+
+    fn write_selected_song_pattern(&mut self, new_pattern: usize) {
+        let song_pattern_idx = self.selected_song_pattern;
+        self.song.song_patterns[song_pattern_idx] = new_pattern;
+
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
 
                 let mut row_data = model.row_data(song_pattern_idx).unwrap();
-                row_data.number = new_pattern;
+                row_data.number = new_pattern as i32;
                 model.set_row_data(song_pattern_idx, row_data);
             })
             .unwrap();
@@ -1346,18 +1369,28 @@ impl Sequencer {
         self.update_steps();
     }
 
+    pub fn cycle_song_pattern(&mut self, forward: bool) {
+        let mut pattern = self.selected_pattern_idx();
+        if forward && pattern < NUM_PATTERNS - 1 {
+            pattern += 1;
+        } else if !forward && pattern > 0 {
+            pattern -= 1;
+        }
+
+        // Write the cycled value to the clipboard.
+        self.song_pattern_clipboard = pattern;
+
+        self.write_selected_song_pattern(pattern);
+    }
+
     fn append_stub_song_pattern(&mut self) {
         // The last song_pattern entry is a stub one to allow editing without an explicit append operation.
         // To prevent having to check everywhere whether the selected song pattern is real or not, append
         // a stub pattern only when the user select that slot, and commit it if any edit of an explicit pattern cycle was made.
-        let patterns_to_skip = self.song.song_patterns.iter().max().map_or(0, |m| m + 1);
+        // Start with an empty pattern so that the user can move back to the pattern panel and edit it from scratch.
         self.song.song_patterns.push(
-            self.song
-                .patterns
-                .iter()
-                .skip(patterns_to_skip)
-                .position(Pattern::is_empty)
-                .map_or(0, |p| p + patterns_to_skip),
+            self.find_first_unused_pattern_idx()
+                .unwrap_or(self.song_pattern_clipboard),
         );
         self.has_stub_pattern = true;
     }
@@ -1376,12 +1409,14 @@ impl Sequencer {
     }
 
     fn commit_stub_song_pattern(&mut self) {
-        if !self.has_stub_pattern {
-            return;
-        }
+        assert!(self.has_stub_pattern);
         let committed_song_pattern = self.song.song_patterns.len() - 1;
         let committed_pattern = self.song.song_patterns[committed_song_pattern] as i32;
         self.has_stub_pattern = false;
+
+        // After the user committed the stub song pattern, allow replacing the automatically
+        // inserted clipboard value with the next empty pattern number on a second press.
+        self.next_cycle_song_pattern_start_can_have_new = true;
 
         self.main_window
             .upgrade_in_event_loop(move |handle| {
@@ -1407,7 +1442,14 @@ impl Sequencer {
         // but for now we only allow appending at the end and removing the last non-stub song pattern,
         // requiring the user to select exactly that one.
         if !self.has_stub_pattern && self.selected_song_pattern + 1 == self.song.song_patterns.len() {
-            self.song.song_patterns.remove(self.selected_song_pattern);
+            let removed = self.song.song_patterns.remove(self.selected_song_pattern);
+
+            // Make sure that doing Z,X,X doesn't allow picking a new pattern after the removing one
+            // since it ends with X,X and the flag might still be set.
+            self.next_cycle_song_pattern_start_can_have_new = false;
+
+            // Cut the removed value into the clipboard.
+            self.song_pattern_clipboard = removed;
 
             self.main_window
                 .upgrade_in_event_loop(move |handle| {
@@ -1429,6 +1471,16 @@ impl Sequencer {
             }
             self.select_song_pattern_internal(next_selection);
             self.update_steps();
+        }
+    }
+
+    pub fn clone_selected_song_pattern(&mut self) {
+        if let Some(new_pattern_idx) = self.find_first_unused_pattern_idx() {
+            let selected_pattern = self.selected_pattern_idx();
+            self.song.patterns[new_pattern_idx] = self.song.patterns[selected_pattern].clone();
+            self.write_selected_song_pattern(new_pattern_idx);
+        } else {
+            elog!("Max pattern reached");
         }
     }
 

@@ -11,6 +11,7 @@ export global GlobalUI {
     in-out property<int> selected_column: 2;
     in-out property<bool> x_pressed: false;
     in-out property<bool> z_pressed: false;
+    in-out property<KeyEvent> last_pressed_key;
 
     public function cycle_step_colum(forward: bool) {
         if (forward && GlobalUI.selected_column < 3) {
@@ -27,25 +28,32 @@ export component PatternsFocusScope inherits FocusScope {
     callback root_key_released(KeyEvent) -> EventResult;
 
     key_pressed(e) => {
-        if (e.text == "x" && !e.repeat) {
+        if ((e.text == "x" || e.text == "X") && !e.repeat) {
             GlobalUI.x_pressed = true;
-        } else if (e.text == "z" && !e.repeat) {
+        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
             GlobalUI.z_pressed = true;
         }
 
-        if (GlobalUI.z_pressed && e.text == "x") { if (!e.repeat) { GlobalEngine.remove_last_song_pattern(); } }
+        if (e.text == "X" && e.modifiers.shift &&
+                GlobalUI.last_pressed_key.text == "Z" && GlobalUI.last_pressed_key.modifiers.shift) {
+            if (!e.repeat) { GlobalEngine.clone_selected_song_pattern(); }
+        }
+        else if (GlobalUI.z_pressed && e.text == "x") { if (!e.repeat) { GlobalEngine.remove_last_song_pattern(); } }
+        else if (e.text == "x" && GlobalUI.last_pressed_key.text == "x") { if (!e.repeat) { GlobalEngine.cycle_song_pattern_start_with_new(); } }
         else if (e.text == "x") { if (!e.repeat) { GlobalEngine.cycle_song_pattern_start(); } }
         else if (GlobalUI.x_pressed && e.text == Key.LeftArrow) { GlobalEngine.cycle_song_pattern(false); }
         else if (GlobalUI.x_pressed && e.text == Key.RightArrow) { GlobalEngine.cycle_song_pattern(true); }
         else {
+            GlobalUI.last_pressed_key = e;
             return root_key_pressed(e);
         }
+        GlobalUI.last_pressed_key = e;
         return accept;
     }
     key_released(e) => {
-        if (e.text == "x" && !e.repeat) {
+        if ((e.text == "x" || e.text == "X") && !e.repeat) {
             GlobalUI.x_pressed = false;
-        } else if (e.text == "z" && !e.repeat) {
+        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
             GlobalUI.z_pressed = false;
         }
 
@@ -59,9 +67,9 @@ export component StepsFocusScope inherits FocusScope {
     callback root_key_released(KeyEvent) -> EventResult;
 
     key_pressed(e) => {
-        if (e.text == "x" && !e.repeat) {
+        if ((e.text == "x" || e.text == "X") && !e.repeat) {
             GlobalUI.x_pressed = true;
-        } else if (e.text == "z" && !e.repeat) {
+        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
             GlobalUI.z_pressed = true;
         }
 
@@ -88,9 +96,9 @@ export component StepsFocusScope inherits FocusScope {
         return accept;
     }
     key_released(e) => { 
-        if (e.text == "x" && !e.repeat) {
+        if ((e.text == "x" || e.text == "X") && !e.repeat) {
             GlobalUI.x_pressed = false;
-        } else if (e.text == "z" && !e.repeat) {
+        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
             GlobalUI.z_pressed = false;
         }
 
@@ -108,9 +116,9 @@ export component InstrumentsFocusScope inherits FocusScope {
     callback root_key_released(KeyEvent) -> EventResult;
 
     key_pressed(e) => {
-        if (e.text == "x" && !e.repeat) {
+        if ((e.text == "x" || e.text == "X") && !e.repeat) {
             GlobalUI.x_pressed = true;
-        } else if (e.text == "z" && !e.repeat) {
+        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
             GlobalUI.z_pressed = true;
         }
 
@@ -129,9 +137,9 @@ export component InstrumentsFocusScope inherits FocusScope {
         return accept;
     }
     key_released(e) => { 
-        if (e.text == "x" && !e.repeat) {
+        if ((e.text == "x" || e.text == "X") && !e.repeat) {
             GlobalUI.x_pressed = false;
-        } else if (e.text == "z" && !e.repeat) {
+        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
             GlobalUI.z_pressed = false;
         }
 

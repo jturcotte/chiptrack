@@ -643,7 +643,9 @@ impl slint::platform::Platform for GbaPlatform {
     fn run_event_loop(&self) -> Result<(), PlatformError> {
         // FIXME: Those take iwram space by being put on the stack and could probably be used for something better.
         let slint_key_a: SharedString = 'x'.into();
+        let slint_key_a_capital: SharedString = 'X'.into();
         let slint_key_b: SharedString = 'z'.into();
+        let slint_key_b_capital: SharedString = 'Z'.into();
         let slint_key_select: SharedString = slint::platform::Key::Escape.into();
         let slint_key_start: SharedString = slint::platform::Key::Return.into();
         let slint_key_right: SharedString = slint::platform::Key::RightArrow.into();
@@ -735,18 +737,30 @@ impl slint::platform::Platform for GbaPlatform {
                 let switched_keys = released_keys ^ prev_keys;
                 if switched_keys != 0 || frames_until_repeat == Some(0) {
                     log!("{:#b}, {:#b}, {:#b}", prev_keys, released_keys, switched_keys);
-                    let mut process_key = |key_mask: u16, out_key: &SharedString| {
+                    let mut process_key = |key_mask: u16, out_key: &SharedString, capital_out_key: &SharedString| {
                         if switched_keys & key_mask != 0 {
                             if released_keys & key_mask == 0 {
                                 log!("PRESS {}", out_key.chars().next().unwrap() as u8);
-                                window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
+                                // This isn't ideal but KEY_R is mapped to shift, and other platforms pass the key text capitalized
+                                // when shift is pressed, which is taken into account in the event handling.
+                                let text = if (released_keys & KEY_R) == 0 {
+                                    capital_out_key.clone()
+                                } else {
+                                    out_key.clone()
+                                };
+                                window.dispatch_event(WindowEvent::KeyPressed { text: text });
                                 if key_mask & KEYS_REPEATABLE != 0 {
                                     repeating_key_mask = key_mask;
                                     frames_until_repeat = Some(10);
                                 }
                             } else {
                                 log!("RELEASE {}", out_key.chars().next().unwrap() as u8);
-                                window.dispatch_event(WindowEvent::KeyReleased { text: out_key.clone() });
+                                let text = if (released_keys & KEY_R) == 0 {
+                                    capital_out_key.clone()
+                                } else {
+                                    out_key.clone()
+                                };
+                                window.dispatch_event(WindowEvent::KeyReleased { text: text });
                             }
                         }
 
@@ -755,21 +769,26 @@ impl slint::platform::Platform for GbaPlatform {
                             && repeating_key_mask == key_mask
                         {
                             log!("REPEAT {}", out_key.chars().next().unwrap() as u8);
-                            window.dispatch_event(WindowEvent::KeyPressed { text: out_key.clone() });
+                            let text = if (released_keys & KEY_R) == 0 {
+                                capital_out_key.clone()
+                            } else {
+                                out_key.clone()
+                            };
+                            window.dispatch_event(WindowEvent::KeyPressed { text: text });
                             frames_until_repeat = Some(2);
                         }
                     };
 
-                    process_key(KEY_A, &slint_key_a);
-                    process_key(KEY_B, &slint_key_b);
-                    process_key(KEY_SELECT, &slint_key_select);
-                    process_key(KEY_START, &slint_key_start);
-                    process_key(KEY_RIGHT, &slint_key_right);
-                    process_key(KEY_LEFT, &slint_key_left);
-                    process_key(KEY_UP, &slint_key_up);
-                    process_key(KEY_DOWN, &slint_key_down);
-                    process_key(KEY_R, &slint_key_r);
-                    process_key(KEY_L, &slint_key_l);
+                    process_key(KEY_A, &slint_key_a, &slint_key_a_capital);
+                    process_key(KEY_B, &slint_key_b, &slint_key_b_capital);
+                    process_key(KEY_SELECT, &slint_key_select, &slint_key_select);
+                    process_key(KEY_START, &slint_key_start, &slint_key_start);
+                    process_key(KEY_RIGHT, &slint_key_right, &slint_key_right);
+                    process_key(KEY_LEFT, &slint_key_left, &slint_key_left);
+                    process_key(KEY_UP, &slint_key_up, &slint_key_up);
+                    process_key(KEY_DOWN, &slint_key_down, &slint_key_down);
+                    process_key(KEY_R, &slint_key_r, &slint_key_r);
+                    process_key(KEY_L, &slint_key_l, &slint_key_l);
                     prev_keys = released_keys;
 
                     if released_keys == KEYS_ALL {
