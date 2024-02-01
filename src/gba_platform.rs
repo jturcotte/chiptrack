@@ -736,11 +736,10 @@ impl slint::platform::Platform for GbaPlatform {
                 let released_keys = KEYINPUT.read().to_u16();
                 let switched_keys = released_keys ^ prev_keys;
                 if switched_keys != 0 || frames_until_repeat == Some(0) {
-                    log!("{:#b}, {:#b}, {:#b}", prev_keys, released_keys, switched_keys);
                     let mut process_key = |key_mask: u16, out_key: &SharedString, capital_out_key: &SharedString| {
                         if switched_keys & key_mask != 0 {
                             if released_keys & key_mask == 0 {
-                                log!("PRESS {}", out_key.chars().next().unwrap() as u8);
+                                // log!("PRESS {}", out_key.chars().next().unwrap() as u8);
                                 // This isn't ideal but KEY_R is mapped to shift, and other platforms pass the key text capitalized
                                 // when shift is pressed, which is taken into account in the event handling.
                                 let text = if (released_keys & KEY_R) == 0 {
@@ -754,7 +753,7 @@ impl slint::platform::Platform for GbaPlatform {
                                     frames_until_repeat = Some(10);
                                 }
                             } else {
-                                log!("RELEASE {}", out_key.chars().next().unwrap() as u8);
+                                // log!("RELEASE {}", out_key.chars().next().unwrap() as u8);
                                 let text = if (released_keys & KEY_R) == 0 {
                                     capital_out_key.clone()
                                 } else {
@@ -768,7 +767,7 @@ impl slint::platform::Platform for GbaPlatform {
                             && released_keys & key_mask == 0
                             && repeating_key_mask == key_mask
                         {
-                            log!("REPEAT {}", out_key.chars().next().unwrap() as u8);
+                            // log!("REPEAT {}", out_key.chars().next().unwrap() as u8);
                             let text = if (released_keys & KEY_R) == 0 {
                                 capital_out_key.clone()
                             } else {
