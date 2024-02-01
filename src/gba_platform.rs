@@ -155,12 +155,14 @@ fn to_dec(v: u8) -> [u8; 2] {
     [c1, c2]
 }
 
+/// Draw a single u8 `char` at the `index` position in the given `vid_row`.
 fn draw_ascii_byte<const C: usize>(vid_row: VolBlock<TextEntry, Safe, Safe, C>, index: usize, char: u8, palbank: u16) {
     vid_row
         .index(index)
         .write(TextEntry::new().with_tile(char as u16).with_palbank(palbank));
 }
 
+/// Draw an iterator of u8 `chars` within `range` pos at the given `vid_row`.
 fn draw_ascii<RB, U, const C: usize>(vid_row: VolBlock<TextEntry, Safe, Safe, C>, range: RB, chars: U, palbank: u16)
 where
     RB: core::ops::RangeBounds<usize>,
@@ -172,6 +174,7 @@ where
         .for_each(|(row, c)| row.write(TextEntry::new().with_tile(c as u16).with_palbank(palbank)));
 }
 
+/// Same as `draw_ascii` but with a slice of `u8` `chars`.
 fn draw_ascii_ref<RB, const C: usize>(
     vid_row: VolBlock<TextEntry, Safe, Safe, C>,
     range: RB,
@@ -183,6 +186,7 @@ fn draw_ascii_ref<RB, const C: usize>(
     draw_ascii(vid_row, range, chars.iter().map(|c| *c), palbank)
 }
 
+/// Same as `draw_ascii` but with an iterator of `char` `chars`.
 fn draw_ascii_chars<RB, U, const C: usize>(
     vid_row: VolBlock<TextEntry, Safe, Safe, C>,
     range: RB,
@@ -351,14 +355,18 @@ impl MainScreen {
             }
             .max(8)
                 - 8;
-            for i in scroll_pos..(pattern_model.row_count().min(scroll_pos + 16)) {
+            for i in scroll_pos..(scroll_pos + 16) {
                 let vid_row = tsb.get_row(i - scroll_pos + 1).unwrap();
-                let row_data = pattern_model.row_data(i).unwrap();
-                let palbank = if row_data.selected { SELECTED_TEXT } else { NORMAL_TEXT };
-                if row_data.number > -1 {
-                    draw_ascii(vid_row, 1.., to_dec(row_data.number as u8 + 1), palbank);
+                if i < pattern_model.row_count() {
+                    let row_data = pattern_model.row_data(i).unwrap();
+                    let palbank = if row_data.selected { SELECTED_TEXT } else { NORMAL_TEXT };
+                    if row_data.number > -1 {
+                        draw_ascii(vid_row, 1.., to_dec(row_data.number as u8 + 1), palbank);
+                    } else {
+                        draw_ascii(vid_row, 1..3, repeat(b'-'), palbank | FADED_TEXT);
+                    }
                 } else {
-                    draw_ascii(vid_row, 1..3, repeat(b'-'), palbank | FADED_TEXT);
+                    draw_ascii(vid_row, 1..3, repeat(b' '), NORMAL_TEXT);
                 }
                 draw_ascii_byte(
                     vid_row,
