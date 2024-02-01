@@ -341,9 +341,15 @@ impl MainScreen {
 
             // sequencer_song_patterns_tracker will be dirty and trigger a redraw any time this is changed.
             let sequencer_song_pattern_selected = global_engine.get_sequencer_song_pattern_selected() as usize;
-            let scroll_pos = sequencer_song_pattern_selected
-                .max(8)
-                .min(pattern_model.row_count() - 8)
+            // The display area is 16 rows, scroll the selected pattern into the middle of the screen
+            // by scrolling the top of the screen to the selected pattern - 8.
+            // Also make sure that the last pattern is at the bottom of the screen when possible.
+            let scroll_pos = if pattern_model.row_count() > 8 {
+                sequencer_song_pattern_selected.min(pattern_model.row_count() - 8)
+            } else {
+                sequencer_song_pattern_selected
+            }
+            .max(8)
                 - 8;
             for i in scroll_pos..(pattern_model.row_count().min(scroll_pos + 16)) {
                 let vid_row = tsb.get_row(i - scroll_pos + 1).unwrap();
