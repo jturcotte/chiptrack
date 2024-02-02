@@ -154,7 +154,7 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                                 .map(|prefix| (prefix.trim(), true))
                                 .unwrap_or((trimmed, false));
                             let instrument_id = &self.table_instrument_ids[self.table_column.unwrap()];
-                            let step = &mut self.out.patterns[pattern_idx].get_steps_mut(instrument_id, None)
+                            let step = &mut self.out.patterns[pattern_idx].get_steps_mut_by_id(instrument_id, None)
                                 [self.table_row.unwrap()];
                             if !text.is_empty() && text != "-" {
                                 let MidiNote(note) = MidiNote::from_name(text)?;
@@ -187,7 +187,7 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                     if self.tag_stack.contains(&TableRow) {
                         if let Section::Pattern(pattern_idx) = self.section {
                             let instrument_id = &self.table_instrument_ids[self.table_column.unwrap()];
-                            let step = &mut self.out.patterns[pattern_idx].get_steps_mut(instrument_id, None)
+                            let step = &mut self.out.patterns[pattern_idx].get_steps_mut_by_id(instrument_id, None)
                                 [self.table_row.unwrap()];
                             for (i, s) in text.split('/').enumerate() {
                                 let trimmed = s.trim();

@@ -63,6 +63,9 @@ struct InstrumentStep {
 impl InstrumentStep {
     const FIELDS: &'static [&'static str] = &["note", "flags", "param0", "param1"];
 
+    pub fn is_empty(&self) -> bool {
+        self.note == 0 && !self.release && self.param0 == -128 && self.param1 == -128
+    }
     pub fn set_press_note(&mut self, note: Option<u8>) {
         match note {
             None => self.note = 0,
@@ -85,7 +88,36 @@ impl InstrumentStep {
             Some(self.note)
         }
     }
+
+    fn param0(&self) -> Option<i8> {
+        if self.param0 == -128 {
+            None
+        } else {
+            Some(self.param0)
+        }
+    }
+    fn param1(&self) -> Option<i8> {
+        if self.param1 == -128 {
+            None
+        } else {
+            Some(self.param1)
+        }
+    }
+    fn set_param0(&mut self, val: Option<i8>) {
+        match val {
+            // Unset is encoded as -128 (0x80) to use the same byte, rust won't find that niche by itself.
+            None => self.param0 = -128,
+            Some(v) => self.param0 = v,
+        }
+    }
+    fn set_param1(&mut self, val: Option<i8>) {
+        match val {
+            None => self.param1 = -128,
+            Some(v) => self.param1 = v,
+        }
+    }
 }
+
 /// Use a custom serializer instead of derived to represent None parameters as single bits instead of separate 0 bytes
 /// so that we need 2 bytes per step instead of 4.
 impl Serialize for InstrumentStep {
@@ -171,35 +203,6 @@ fn postcard_serialize() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-impl InstrumentStep {
-    fn param0(&self) -> Option<i8> {
-        if self.param0 == -128 {
-            None
-        } else {
-            Some(self.param0)
-        }
-    }
-    fn param1(&self) -> Option<i8> {
-        if self.param1 == -128 {
-            None
-        } else {
-            Some(self.param1)
-        }
-    }
-    fn set_param0(&mut self, val: Option<i8>) {
-        match val {
-            // Unset is encoded as -128 (0x80) to use the same byte, rust won't find that niche by itself.
-            None => self.param0 = -128,
-            Some(v) => self.param0 = v,
-        }
-    }
-    fn set_param1(&mut self, val: Option<i8>) {
-        match val {
-            None => self.param1 = -128,
-            Some(v) => self.param1 = v,
-        }
-    }
-}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct Instrument {
     id: String,
@@ -216,13 +219,6 @@ struct Pattern {
 impl Pattern {
     fn is_empty(&self) -> bool {
         self.instruments.is_empty()
-    }
-
-    fn get_steps(&self, instrument: u8) -> Option<&[InstrumentStep; NUM_STEPS]> {
-        self.instruments
-            .iter()
-            .find(|i| i.synth_index == Some(instrument))
-            .map(|i| &i.steps)
     }
 
     fn next_instrument(&self, current_instrument: u8, forward: bool) -> Option<u8> {
@@ -296,14 +292,24 @@ impl Pattern {
         &self.instruments
     }
 
-    fn get_steps_mut<'a>(
+    fn remove_instrument(&mut self, instrument: u8) {
+        self.instruments.retain(|i| i.synth_index != Some(instrument));
+    }
+
+    fn get_steps(&self, instrument: u8) -> Option<&[InstrumentStep; NUM_STEPS]> {
+        self.instruments
+            .iter()
+            .find(|i| i.synth_index == Some(instrument))
+            .map(|i| &i.steps)
+    }
+
+    /// This might insert a new instrument if not there already and thus
+    /// requires the corresponding string `instrument_id` to be passed.
+    fn get_steps_mut_by_id<'a>(
         &'a mut self,
         instrument_id: &str,
         synth_index: Option<u8>,
     ) -> &'a mut [InstrumentStep; NUM_STEPS] {
-        // Use the string ID to match the instrument so that reloading instruments and moving
-        // instruments to different synth_indices will still match them.
-        // FIXME: Check why the string ID isn't used for get_steps
         let ii = match self.instruments.iter().position(|i| i.id == instrument_id) {
             Some(ii) => ii,
             None => {
@@ -327,20 +333,29 @@ impl Pattern {
         set_release: Option<bool>,
         set_params: Option<(Option<i8>, Option<i8>)>,
     ) {
-        let step = &mut self.get_steps_mut(instrument_id, Some(instrument))[step_num];
+        let instrument_steps = self.get_steps_mut_by_id(instrument_id, Some(instrument));
+        let step = &mut instrument_steps[step_num];
 
+        let mut something_added = false;
         if let Some(release) = set_release {
+            something_added |= release == true;
             step.release = release;
         }
         if let Some(note) = set_press_note {
+            something_added |= note.is_some();
             step.set_press_note(note);
         }
         if let Some((param0, param1)) = set_params {
+            something_added |= param0.is_some() || param1.is_some();
             step.set_param0(param0);
             step.set_param1(param1);
         }
 
-        // FIXME: Remove empty instruments
+        if !something_added {
+            if instrument_steps.iter().all(|s| s.is_empty()) {
+                self.remove_instrument(instrument);
+            }
+        }
     }
 
     fn update_synth_index(&mut self, new_instrument_ids: &[SharedString]) {
