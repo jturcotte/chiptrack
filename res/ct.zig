@@ -1,3 +1,11 @@
+// Copyright © 2024 Jocelyn Turcotte <turcotte.j@gmail.com>
+// SPDX-License-Identifier: CC0-1.0
+//
+// This file contains convenience structs to write commands to the GBA's Programmable Sound Generator (PSG) registers.
+// This is compiled together with the instruments implementation into a WebAssembly file that sits together with
+// the song containing the sequencer patterns, and Chiptrack will execute those function each time an instrument
+// note is pressed, release or held (on each frame they are).
+
 const std = @import("std");
 const fmt = std.fmt;
 
@@ -6,11 +14,15 @@ pub const release_fn = *const fn (freq: u32, note: u8, t: u32) callconv(.C) void
 pub const frame_fn = *const fn (freq: u32, note: u8, t: u32) callconv(.C) void;
 pub const set_param_fn = *const fn (param_num: u8, value: i8) callconv(.C) void;
 
+// These few functions defines the WebAssembly interface between the guest (instruments) and the host (Chiptrack).
 extern fn print([*:0]const u8) void;
 extern fn gba_set_sound_reg(addr: u32, value: u32) void;
 extern fn gba_set_wave_table(table: [*]const u8, table_len: u32) void;
 extern fn set_instrument_at_column(id: [*:0]const u8, col: u32, frames_after_release: u32, press: ?press_fn, release: ?release_fn, frame: ?frame_fn, set_param: ?set_param_fn) void;
 
+/// Instructs Chiptrack to log a message to the console during an instrument's callback function.
+/// This is useful for debugging the instrument's behavior and can be used like this:
+///   ct.debug("The note is {}.", .{ note });
 pub fn debug(comptime f: []const u8, args: anytype) void {
     var b: [256]u8 = undefined;
     const r = fmt.bufPrint(&b, f, args) catch unreachable;

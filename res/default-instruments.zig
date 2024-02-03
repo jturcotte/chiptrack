@@ -1,3 +1,6 @@
+// Copyright © 2024 Jocelyn Turcotte <turcotte.j@gmail.com>
+// SPDX-License-Identifier: CC0-1.0
+
 const std = @import("std");
 const math = std.math;
 const ct = @import("ct");
@@ -758,6 +761,9 @@ const noise_2 = struct {
     }
 };
 
+/// Instruments are compiled as executables but this is actually going to be executed like a library
+/// entry point. Instruments structs register their functions as callback and they will
+/// be called when needed after this function returns.
 pub fn main() void {
     ct.registerInstrument(square1_1, 0);
     ct.registerInstrument(square1_2, 0);
