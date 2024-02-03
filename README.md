@@ -11,7 +11,7 @@ It uses:
 - [Slint](https://github.com/slint-ui/slint) for the UI
 - [RBoy](https://github.com/mvdnes/rboy) for the sound chip emulation
 - [CPAL](https://github.com/RustAudio/cpal) for the audio output
-- [Instruments are implemented in Zig](res/default-instruments.zig), compiled to WebAssembly and executed using [WAMR](https://github.com/bytecodealliance/wasm-micro-runtime)
+- [Instruments are implemented in Zig](instruments/default-instruments.zig), compiled to WebAssembly and executed using [WAMR](https://github.com/bytecodealliance/wasm-micro-runtime)
 
 ## Install using Cargo
 

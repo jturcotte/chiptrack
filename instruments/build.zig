@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) void {
         // Uses wget to download ct.zig to the current directory if -Dct.zig isn't specified.
         // If you don't have wget on your system, you can also download ct.zig manually and compile with:
         //  zig build -Dct.zig=ct.zig
-        const wget_ct_zig = b.addSystemCommand(&.{ "wget", "https://raw.githubusercontent.com/jturcotte/chiptrack/main/res/ct.zig", "-O" });
+        const wget_ct_zig = b.addSystemCommand(&.{ "wget", "https://raw.githubusercontent.com/jturcotte/chiptrack/main/instruments/ct.zig", "-O" });
         maybe_wf_ct_zig = b.addWriteFiles();
         maybe_wf_ct_zig.?.addCopyFileToSource(wget_ct_zig.addOutputFileArg("ct.zig"), "ct.zig");
         break :blk "ct.zig";
