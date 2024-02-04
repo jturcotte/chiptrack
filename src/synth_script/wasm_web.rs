@@ -101,7 +101,7 @@ impl HostFunctionSIINNNN {
                     //        return null-terminated CStrs. Possible alternatives:
                     //        - Asking the instruments to provide the string size would be the safest, but closures
                     //          in wasm-bindgen are currently limited to 8 parameters, so we'd bust that limit
-                    //          and it would probably add an unecessary overhead for the WAMR ports, which maps the
+                    //          and it would probably add an unnecessary overhead for the WAMR ports, which maps the
                     //          instance's memory into the host's.
                     //        - If Int8Array was wrapping the native indexOf we could find the NULL ourselves to only
                     //          copy that part of the memory, but it's not exposed.

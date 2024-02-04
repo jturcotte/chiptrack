@@ -63,6 +63,7 @@ export component MainWindow inherits Window {
         {note_number: first_note + 12 + 10, key_pos: 7 + 5, is_black: true, active: false},
     ];
     in-out property<bool> playing: false;
+    in-out property<bool> recording: true;
 
     callback octave_increased(int);
     pure callback animate_waveform(float, float, float) -> string;
@@ -100,6 +101,7 @@ export component MainWindow inherits Window {
         else if (e.text == "0") { if (!e.repeat) { GlobalEngine.select_instrument(9); } }
         else if (e.text == Key.Backspace) { if (!e.repeat) { GlobalEngine.set_erasing(true); } }
         else if (e.text == Key.Return) { if (!e.repeat) { GlobalEngine.play_clicked(!root.playing); } }
+        else if (e.text == ".") { if (!e.repeat) { GlobalEngine.record_clicked(!root.recording); } }
         else if (e.text == Key.Escape) { if (!e.repeat) { GlobalEngine.mute_instruments(); } }
         else if (e.modifiers.shift && e.text == Key.LeftArrow) { patterns.cycle_focus_panel(false, false); }
         else if (e.modifiers.shift && e.text == Key.RightArrow) { patterns.cycle_focus_panel(true, false); }
@@ -174,12 +176,10 @@ export component MainWindow inherits Window {
                         }
                     }
                     record_button := ToolbarButton {
-                        property<bool> toggled: true;
-                        text: toggled ? "⬤" : "◯";
-                        text_color: toggled ? darkred : black;
+                        text: root.recording ? "⬤" : "◯";
+                        text_color: root.recording ? darkred : black;
                         clicked => {
-                            toggled = !toggled;
-                            GlobalEngine.record_clicked(toggled);
+                            GlobalEngine.record_clicked(!root.recording);
                         }
                     }
                 }
