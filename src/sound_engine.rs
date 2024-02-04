@@ -579,7 +579,7 @@ impl SoundEngine {
             // TODO: Support flash ROM in load_gba_sram to get access to 64kb or 128kb saves
             if 8 + instruments_wasm.len() + song.len() >= 32 * 1024 {
                 return Err(format!(
-                    "SRAM savegames currently only support max 32kb but the song is {} bytes.",
+                    "SRAM save games currently only support max 32kb but the song is {} bytes.",
                     8 + instruments_wasm.len() + song.len()
                 )
                 .into());

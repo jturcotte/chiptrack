@@ -81,7 +81,7 @@ impl InstrumentStep {
     }
 
     pub fn press_note(&self) -> Option<u8> {
-        // 0 is a valid MIDI note, but the GBA hardware doesn't support that frequence, so use it to represent "no press".
+        // 0 is a valid MIDI note, but the GBA hardware doesn't support that frequency, so use it to represent "no press".
         if self.note == 0 {
             None
         } else {
@@ -249,7 +249,7 @@ impl Pattern {
 
     fn order(a: u8) -> u32 {
         let mut ai = a as u32;
-        // Instrument are indiced by UI pages and are sequenced by row,
+        // Instrument are indexed by UI pages and are sequenced by row,
         // but we want to sort by column first, so change the order by moving
         // the 2 column bits from being least significant to being most significant.
         ai |= (ai & 0x3) << 8;
@@ -265,7 +265,7 @@ impl Pattern {
                 // Found exactly what we were looking for, return immediately
                 (_, Some(this_instrument)) if this_instrument == instrument => return Some((ii, this_instrument)),
 
-                // Found an instrument ID closer to the seeked instrument, keep it
+                // Found an instrument ID closer to the sought instrument, keep it
                 (Some((_, best_instrument)), Some(this_instrument))
                     if cmp(
                         Self::order(this_instrument).overflowing_sub(Self::order(instrument)).0,
@@ -900,7 +900,7 @@ impl Sequencer {
 
         if self.playing {
             // The first advance_frame after playing will move from frame 0 to frame 1 and skip presses
-            // of frame 0. Since we don't care about releases of the non-existant previous frame, do the
+            // of frame 0. Since we don't care about releases of the non-existent previous frame, do the
             // presses now, right after starting the playback.
             let mut note_events: Vec<(u8, StepEvent)> = Vec::new();
             self.handle_active_step_presses_and_params(&mut note_events);
@@ -1097,7 +1097,7 @@ impl Sequencer {
                     self.active_frame - self.last_press_frame.unwrap(),
                     self.song.frames_per_step,
                 );
-                // We need to place the release in the previous step (its end), so substract one step.
+                // We need to place the release in the previous step (its end), so subtract one step.
                 let rounded_end_frame = self.last_press_frame.unwrap() + (rounded_steps_note_length.max(1) - 1);
 
                 let is_end_in_prev_step =
@@ -1147,7 +1147,7 @@ impl Sequencer {
 
         // It's a bit weird to keep the release part of the clipboard here,
         // but the fact that recording affects the active step instead of selected one
-        // makes it difficult to find the right compromize.
+        // makes it difficult to find the right compromise.
         self.note_clipboard.note = note;
         (p0, p1)
     }
@@ -1159,7 +1159,7 @@ impl Sequencer {
     }
 
     pub fn cycle_selected_step_note(&mut self, forward: Option<bool>, large_inc: bool) -> (u8, i8, i8) {
-        // The GBA only handles frenquencies from C1 upwards.
+        // The GBA only handles frequencies from C1 upwards.
         const LOWEST_NOTE: u8 = 24;
 
         let (maybe_selected_note, p0, p1) = self.song.patterns[self.selected_pattern_idx()]

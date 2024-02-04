@@ -226,7 +226,6 @@ impl Synth {
         let dmg_cell = self.dmg.clone();
         move |table: &[u8]| {
             let mut dmg = dmg_cell.borrow_mut();
-            // FIXME: Set playing off and then on
             for (i, v) in table.iter().take(16).enumerate() {
                 dmg.wb((0xff30 + i) as u16, *v);
             }

@@ -262,7 +262,7 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
             }
             let mut ai = mai.unwrap() as u32;
             let mut bi = mbi.unwrap() as u32;
-            // Instrument are indiced by UI pages and have sequenced by row,
+            // Instrument are indexed by UI pages and have sequenced by row,
             // but we want to sort by column first, so change the order by moving
             // the 2 column bits from being least significant to being most significant.
             ai |= (ai & 0x3) << 8;
