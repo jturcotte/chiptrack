@@ -169,7 +169,6 @@ impl SynthScript {
             Box::new(wasm::HostFunctionII::new("gba_set_sound_reg", synth_set_sound_reg)),
             Box::new(wasm::HostFunctionA::new("gba_set_wave_table", synth_set_wave_table)),
         ];
-        // let test = (set_instrument_at_column2, set_instrument_at_column);
 
         let runtime = Rc::new(WasmRuntime::new(functions).unwrap());
 

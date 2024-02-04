@@ -70,21 +70,21 @@ export global GlobalEngine {
     in-out property<int> sequencer_song_pattern_selected: 0;
     in-out property<int> sequencer_song_pattern_active: 0;
 
-    in-out property<[string]> script_instrument_ids: ["S1", "S2", "T1", "T2", "W1", "W2", "N2", "N4"];
-    in-out property<int> sequencer_pattern_instruments_len: 6;
+    in-out property<[string]> script_instrument_ids: [];
+    in-out property<int> sequencer_pattern_instruments_len: 0;
     in-out property<[PatternInstrumentData]> sequencer_pattern_instruments: [
-        {id: "S2", 
-            notes: [65, -1, -1, -1, 65, -1, -1, -1, 65, -1, -1, -1, 65, -1, -1, -1]},
-        {id: "T2", 
-            notes: [65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1]},
-        {id: "W1", 
-            notes: [65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65]},
-        {id: "N2", 
-            notes: [65, -1, -1, -1, 65, -1, -1, -1, 65, -1, -1, -1, 65, -1, -1, -1]},
-        {id: "N4", 
-            notes: [65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1]},
-        {id: "N5", 
-            notes: [65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1, 65, -1]},
+        {id: "",
+            notes: [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]},
+        {id: "",
+            notes: [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]},
+        {id: "",
+            notes: [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]},
+        {id: "",
+            notes: [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]},
+        {id: "",
+            notes: [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]},
+        {id: "",
+            notes: [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]},
     ];
     in-out property<[StepData]> sequencer_steps: [
         {press: true, note: 65},

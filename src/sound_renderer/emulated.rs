@@ -547,7 +547,7 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
 
         // Unfortunately for now we can only dynamically update a Path by constructing a string SVG command list.
         // https://github.com/slint-ui/slint/issues/754
-        // With around 3-digits integer x and y coordinates, SVG commands will be on average around 10 chars each.
+        // With around 3-digits integer x and y coordinates, SVG commands will be on average around 8 chars each.
         let mut commands = String::with_capacity(INTRO_OUTRO_LEN + render_len * 8);
         let iters = chan0_samples.zip(chan1_samples).zip(chan2_samples).zip(chan3_samples);
         let mid_height = (height / 2.0).floor();

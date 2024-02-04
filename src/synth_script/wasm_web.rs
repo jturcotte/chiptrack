@@ -293,9 +293,9 @@ impl WasmModuleInst {
                     .expect("CURRENT_INSTANCE hasn't been initialized yet, async race condition?")
                     .exports();
                 let table = Reflect::get(exports.as_ref(), &"__indirect_function_table".into())
-                    .unwrap()
+                    .expect("Could not get the __indirect_function_table property from the module's exports.")
                     .dyn_into::<WebAssembly::Table>()
-                    .unwrap();
+                    .expect("The function table for instrument callbacks should be exported as __indirect_function_table from the WebAssembly module. Pass --export-table to zig build-exe or set export_table = true in build.zig.");
                 table.get(table_index).expect("Table.get failed")
             });
             Some(WasmIndirectFunction { function })

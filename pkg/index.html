@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="UTF-8">
   <title>Chiptrack (Web Assembly version)</title>
@@ -17,40 +18,31 @@
     canvas {
       display: block;
       margin-left: auto;
-      margin-right: auto;    
+      margin-right: auto;
+      width: 100vw !important;
+      height: 100vh !important;
     }
 
     canvas:focus {
       outline: none;
     }
 
-    @media screen and (max-width: 992px) and (orientation: landscape) {
-      .hide-in-mobile-landscape {
-        display: none;
-      }
+    * {
+      margin: 0;
+      padding: 0;
+    }
 
-      * {
-        margin: 0;
-        padding: 0;
-      }
-
+    @supports (-webkit-touch-callout: none) {
       canvas {
-        width: 100vw !important;
-        height: 100vh !important;
-      }
-
-      @supports (-webkit-touch-callout: none) {
-        canvas {
-          /* Mobile Safari doesn't seem to allow pushing the toolbar up by scrolling with 100vh. */
-          height: 101vh !important;
-        }
+        /* Mobile Safari doesn't seem to allow pushing the toolbar up by scrolling with 100vh. */
+        height: 101vh !important;
       }
     }
   </style>
 </head>
 
 <body>
-  <canvas id="canvas" width="640" height="480" unselectable="on"></canvas>
+  <canvas id="canvas" unselectable="on"></canvas>
   <script type="module">
     import init from './chiptrack.js';
     init();
