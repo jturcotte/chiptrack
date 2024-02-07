@@ -412,14 +412,17 @@ fn run_main() {
         window_weak.unwrap().set_playing(toggled);
     });
 
-    let cloned_sound_renderer = sound_renderer.clone();
-    let window_weak = window.as_weak();
-    global_engine.on_record_clicked(move |toggled| {
-        cloned_sound_renderer
-            .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().set_recording(toggled));
-        window_weak.unwrap().set_recording(toggled);
-    });
+    #[cfg(feature = "desktop")]
+    {
+        let cloned_sound_renderer = sound_renderer.clone();
+        let window_weak = window.as_weak();
+        global_engine.on_record_clicked(move |toggled| {
+            cloned_sound_renderer
+                .borrow_mut()
+                .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().set_recording(toggled));
+            window_weak.unwrap().set_recording(toggled);
+        });
+    }
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_select_next_song_pattern(move |forward| {
