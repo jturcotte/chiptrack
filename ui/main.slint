@@ -158,25 +158,25 @@ export component MainWindow inherits Window {
                     padding: 0;
 
                     settings_button := ToolbarButton {
-                        text: "⚙";
+                        text: "♦";
                         clicked => {
                             root.show_settings = true;
                         }
                     }
                     ToolbarButton {
-                        text: patterns.focused_panel == FocusedPanel.instruments ? "▦" : "▥";
+                        text: patterns.focused_panel == FocusedPanel.instruments ? "≡" : "#";
                         clicked => {
                             patterns.toggle_instruments_grid();
                         }
                     }
                     play_button := ToolbarButton {
-                        text: root.playing ? "■" : "▶";
+                        text: root.playing ? "■" : "►";
                         clicked => {
                             GlobalEngine.play_clicked(!root.playing);
                         }
                     }
                     record_button := ToolbarButton {
-                        text: root.recording ? "⬤" : "◯";
+                        text: root.recording ? "●" : "○";
                         text_color: root.recording ? darkred : black;
                         clicked => {
                             GlobalEngine.record_clicked(!root.recording);
