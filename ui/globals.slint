@@ -137,7 +137,7 @@ export global GlobalEngine {
     callback cycle_instrument_param(int, bool);
     callback cycle_step_param_start(int);
     callback cycle_step_param_end(int);
-    callback cycle_step_param(int, bool);
+    callback cycle_step_param(int, bool, bool);
     callback cycle_song_pattern_start();
     callback cycle_song_pattern_start_with_new();
     callback cycle_song_pattern(bool);
@@ -173,4 +173,5 @@ export global GlobalSettings {
 export global GlobalUtils {
     pure callback get_midi_note_name(int) -> string;
     pure callback get_midi_note_short_name(int) -> string;
+    pure callback to_signed_hex(int) -> string;
 }

@@ -197,8 +197,8 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                                     Some(trimmed.parse::<i8>()?)
                                 };
                                 match i {
-                                    0 => step.set_param0(val),
-                                    1 => step.set_param1(val),
+                                    0 => step.param0 = val,
+                                    1 => step.param1 = val,
                                     _ => Err(format!("Too many param: {}", text))?,
                                 }
                             }
@@ -274,7 +274,7 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
             write!(f, "## Pattern {}\n\n", pi + 1)?;
 
             fn params_string(s: &InstrumentStep) -> String {
-                match (s.param0(), s.param1()) {
+                match (s.param0, s.param1) {
                     (Some(p0), Some(p1)) => format!("`{}/{}`", p0, p1),
                     (Some(p), None) => format!("`{}`", p),
                     (None, Some(p)) => format!("`/{}`", p),
@@ -524,56 +524,56 @@ fn param_parse() {
     .unwrap();
     assert_eq!(song.patterns[0].instruments[0].steps[3].press_note(), None);
     assert_eq!(song.patterns[0].instruments[0].steps[3].release, false);
-    assert_eq!(song.patterns[0].instruments[0].steps[3].param0(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[3].param1(), None);
+    assert_eq!(song.patterns[0].instruments[0].steps[3].param0, None);
+    assert_eq!(song.patterns[0].instruments[0].steps[3].param1, None);
 
     assert_eq!(song.patterns[0].instruments[0].steps[4].press_note(), Some(72));
     assert_eq!(song.patterns[0].instruments[0].steps[4].release, false);
-    assert_eq!(song.patterns[0].instruments[0].steps[4].param0(), Some(1));
-    assert_eq!(song.patterns[0].instruments[0].steps[4].param1(), Some(5));
+    assert_eq!(song.patterns[0].instruments[0].steps[4].param0, Some(1));
+    assert_eq!(song.patterns[0].instruments[0].steps[4].param1, Some(5));
 
     assert_eq!(song.patterns[0].instruments[0].steps[5].press_note(), None);
     assert_eq!(song.patterns[0].instruments[0].steps[5].release, false);
-    assert_eq!(song.patterns[0].instruments[0].steps[5].param0(), Some(0));
-    assert_eq!(song.patterns[0].instruments[0].steps[5].param1(), Some(5));
+    assert_eq!(song.patterns[0].instruments[0].steps[5].param0, Some(0));
+    assert_eq!(song.patterns[0].instruments[0].steps[5].param1, Some(5));
 
     assert_eq!(song.patterns[0].instruments[0].steps[6].press_note(), None);
     assert_eq!(song.patterns[0].instruments[0].steps[6].release, false);
-    assert_eq!(song.patterns[0].instruments[0].steps[6].param0(), Some(1));
-    assert_eq!(song.patterns[0].instruments[0].steps[6].param1(), Some(4));
+    assert_eq!(song.patterns[0].instruments[0].steps[6].param0, Some(1));
+    assert_eq!(song.patterns[0].instruments[0].steps[6].param1, Some(4));
 
     assert_eq!(song.patterns[0].instruments[0].steps[7].press_note(), None);
     assert_eq!(song.patterns[0].instruments[0].steps[7].release, false);
-    assert_eq!(song.patterns[0].instruments[0].steps[7].param0(), Some(0));
-    assert_eq!(song.patterns[0].instruments[0].steps[7].param1(), None);
+    assert_eq!(song.patterns[0].instruments[0].steps[7].param0, Some(0));
+    assert_eq!(song.patterns[0].instruments[0].steps[7].param1, None);
 
     assert_eq!(song.patterns[0].instruments[0].steps[8].press_note(), None);
     assert_eq!(song.patterns[0].instruments[0].steps[8].release, true);
-    assert_eq!(song.patterns[0].instruments[0].steps[8].param0(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[8].param1(), Some(3));
+    assert_eq!(song.patterns[0].instruments[0].steps[8].param0, None);
+    assert_eq!(song.patterns[0].instruments[0].steps[8].param1, Some(3));
 
     assert_eq!(song.patterns[0].instruments[0].steps[9].press_note(), None);
     assert_eq!(song.patterns[0].instruments[0].steps[9].release, false);
-    assert_eq!(song.patterns[0].instruments[0].steps[9].param0(), Some(1));
-    assert_eq!(song.patterns[0].instruments[0].steps[9].param1(), None);
+    assert_eq!(song.patterns[0].instruments[0].steps[9].param0, Some(1));
+    assert_eq!(song.patterns[0].instruments[0].steps[9].param1, None);
 
     assert_eq!(song.patterns[0].instruments[0].steps[10].press_note(), Some(72));
     assert_eq!(song.patterns[0].instruments[0].steps[10].release, true);
-    assert_eq!(song.patterns[0].instruments[0].steps[10].param0(), Some(1));
-    assert_eq!(song.patterns[0].instruments[0].steps[10].param1(), Some(5));
+    assert_eq!(song.patterns[0].instruments[0].steps[10].param0, Some(1));
+    assert_eq!(song.patterns[0].instruments[0].steps[10].param1, Some(5));
 
     assert_eq!(song.patterns[0].instruments[0].steps[11].press_note(), Some(72));
     assert_eq!(song.patterns[0].instruments[0].steps[11].release, true);
-    assert_eq!(song.patterns[0].instruments[0].steps[11].param0(), Some(1));
-    assert_eq!(song.patterns[0].instruments[0].steps[11].param1(), Some(5));
+    assert_eq!(song.patterns[0].instruments[0].steps[11].param0, Some(1));
+    assert_eq!(song.patterns[0].instruments[0].steps[11].param1, Some(5));
 
     assert_eq!(song.patterns[0].instruments[0].steps[12].press_note(), Some(72));
     assert_eq!(song.patterns[0].instruments[0].steps[12].release, true);
-    assert_eq!(song.patterns[0].instruments[0].steps[12].param0(), Some(1));
-    assert_eq!(song.patterns[0].instruments[0].steps[12].param1(), Some(5));
+    assert_eq!(song.patterns[0].instruments[0].steps[12].param0, Some(1));
+    assert_eq!(song.patterns[0].instruments[0].steps[12].param1, Some(5));
 
     assert_eq!(song.patterns[0].instruments[0].steps[13].press_note(), Some(72));
     assert_eq!(song.patterns[0].instruments[0].steps[13].release, true);
-    assert_eq!(song.patterns[0].instruments[0].steps[13].param0(), Some(1));
-    assert_eq!(song.patterns[0].instruments[0].steps[13].param1(), Some(5));
+    assert_eq!(song.patterns[0].instruments[0].steps[13].param0, Some(1));
+    assert_eq!(song.patterns[0].instruments[0].steps[13].param1, Some(5));
 }

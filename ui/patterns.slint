@@ -99,8 +99,8 @@ component SequencerStep {
         spacing: 1px;
         StepSelectableText {
             selected: step.selected && root.show_selection && GlobalUI.selected_column == 0 /*param0*/;
-            width: 30%;
-            text: (step.param0_set ? step.param0_val : "");
+            width: 25%;
+            text: (step.param0_set ? GlobalUtils.to_signed_hex(step.param0_val) : "");
             text_color: step.press ? black : #a0a0a0;
             horizontal_alignment: right;
         }
@@ -112,8 +112,8 @@ component SequencerStep {
         }
         StepSelectableText {
             selected: step.selected && root.show_selection && GlobalUI.selected_column == 1 /*param1*/;
-            width: 30%;
-            text: (step.param1_set ? step.param1_val : "");
+            width: 25%;
+            text: (step.param1_set ? GlobalUtils.to_signed_hex(step.param1_val) : "");
             text_color: step.press ? black : #a0a0a0;
             horizontal_alignment: left;
         }
@@ -264,7 +264,7 @@ export component PatternsPanel inherits HorizontalLayout {
     }
 
     current_pattern := Rectangle { 
-        width: patterns_list.height_of_cell * 8;
+        width: patterns_list.height_of_cell * 6.5;
         VerticalLayout {
             spacing: 1px;
             label := Rectangle {

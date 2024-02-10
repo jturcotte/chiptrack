@@ -289,7 +289,7 @@ impl SoundEngine {
 
     pub fn cycle_step_param_start(&mut self, param_num: u8) {
         let mut seq = self.sequencer.borrow_mut();
-        let (note, p0, p1) = seq.cycle_selected_step_param(param_num, None);
+        let (note, p0, p1) = seq.cycle_selected_step_param(param_num, None, false);
         if !seq.playing() {
             self.script
                 .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
@@ -304,11 +304,11 @@ impl SoundEngine {
                 .release_instrument(self.frame_number, seq.selected_instrument);
         }
     }
-    pub fn cycle_step_param(&mut self, param_num: u8, forward: bool) {
+    pub fn cycle_step_param(&mut self, param_num: u8, forward: bool, large_inc: bool) {
         let (note, p0, p1) = self
             .sequencer
             .borrow_mut()
-            .cycle_selected_step_param(param_num, Some(forward));
+            .cycle_selected_step_param(param_num, Some(forward), large_inc);
         if !self.sequencer.borrow().playing() {
             let instrument = self.sequencer.borrow().selected_instrument;
 

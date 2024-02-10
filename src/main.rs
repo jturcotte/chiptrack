@@ -307,10 +307,10 @@ fn run_main() {
             .invoke_on_sound_engine(move |se| se.cycle_step_param_end(param_num as u8));
     });
     let cloned_sound_renderer = sound_renderer.clone();
-    global_engine.on_cycle_step_param(move |param_num, forward| {
+    global_engine.on_cycle_step_param(move |param_num, forward, large_inc| {
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.cycle_step_param(param_num as u8, forward));
+            .invoke_on_sound_engine(move |se| se.cycle_step_param(param_num as u8, forward, large_inc));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -540,6 +540,15 @@ fn run_main() {
     window
         .global::<GlobalUtils>()
         .on_get_midi_note_short_name(|note| MidiNote(note).short_name());
+    #[cfg(feature = "desktop")]
+    window.global::<GlobalUtils>().on_to_signed_hex(|i| {
+        (if i < 0 {
+            format!("-{:02X}", i.abs() as i8)
+        } else {
+            format!("{:02X}", i as i8)
+        })
+        .into()
+    });
 
     // For WASM we need to wait for the user to trigger the creation of the sound
     // device through an input event. For other platforms, artificially force the

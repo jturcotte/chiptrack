@@ -56,15 +56,15 @@ pub enum StepEvent {
 struct InstrumentStep {
     note: u8,
     release: bool,
-    param0: i8,
-    param1: i8,
+    param0: Option<i8>,
+    param1: Option<i8>,
 }
 
 impl InstrumentStep {
     const FIELDS: &'static [&'static str] = &["note", "flags", "param0", "param1"];
 
     pub fn is_empty(&self) -> bool {
-        self.note == 0 && !self.release && self.param0 == -128 && self.param1 == -128
+        self.note == 0 && !self.release && self.param0.is_none() && self.param1.is_none()
     }
     pub fn set_press_note(&mut self, note: Option<u8>) {
         match note {
@@ -88,34 +88,6 @@ impl InstrumentStep {
             Some(self.note)
         }
     }
-
-    fn param0(&self) -> Option<i8> {
-        if self.param0 == -128 {
-            None
-        } else {
-            Some(self.param0)
-        }
-    }
-    fn param1(&self) -> Option<i8> {
-        if self.param1 == -128 {
-            None
-        } else {
-            Some(self.param1)
-        }
-    }
-    fn set_param0(&mut self, val: Option<i8>) {
-        match val {
-            // Unset is encoded as -128 (0x80) to use the same byte, rust won't find that niche by itself.
-            None => self.param0 = -128,
-            Some(v) => self.param0 = v,
-        }
-    }
-    fn set_param1(&mut self, val: Option<i8>) {
-        match val {
-            None => self.param1 = -128,
-            Some(v) => self.param1 = v,
-        }
-    }
 }
 
 /// Use a custom serializer instead of derived to represent None parameters as single bits instead of separate 0 bytes
@@ -125,19 +97,17 @@ impl Serialize for InstrumentStep {
     where
         S: Serializer,
     {
-        let p0 = self.param0();
-        let p1 = self.param1();
-        let num_params = p0.is_some() as usize + p1.is_some() as usize;
+        let num_params = self.param0.is_some() as usize + self.param1.is_some() as usize;
         let note = (self.release as u8) << 7 | self.note;
-        let flags = (p1.is_some() as u8) << 1 | p0.is_some() as u8;
+        let flags = (self.param1.is_some() as u8) << 1 | self.param0.is_some() as u8;
 
         let mut rgb = serializer.serialize_struct("InstrumentStep", 2 + num_params)?;
         rgb.serialize_field(InstrumentStep::FIELDS[0], &note)?;
         rgb.serialize_field(InstrumentStep::FIELDS[1], &flags)?;
-        if let Some(val) = p0 {
+        if let Some(val) = self.param0 {
             rgb.serialize_field(InstrumentStep::FIELDS[2], &val)?;
         }
-        if let Some(val) = p1 {
+        if let Some(val) = self.param1 {
             rgb.serialize_field(InstrumentStep::FIELDS[3], &val)?;
         }
         rgb.end()
@@ -168,18 +138,18 @@ impl<'de> Deserialize<'de> for InstrumentStep {
                 let mut i = InstrumentStep {
                     note: note & 0x7f,
                     release: note & 0x80 != 0,
-                    param0: -128,
-                    param1: -128,
+                    param0: None,
+                    param1: None,
                 };
                 if flags & 0b01 != 0 {
                     let val: i8 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(2, &self))?;
-                    i.set_param0(Some(val));
+                    i.param0 = Some(val);
                 }
                 if flags & 0b10 != 0 {
                     let val: i8 = seq
                         .next_element()?
                         .ok_or_else(|| de::Error::invalid_length(2 + flags.count_ones() as usize - 1, &self))?;
-                    i.set_param1(Some(val));
+                    i.param1 = Some(val);
                 }
                 Ok(i)
             }
@@ -193,8 +163,8 @@ fn postcard_serialize() -> Result<(), Box<dyn Error>> {
     let i = InstrumentStep {
         note: 36,
         release: true,
-        param0: -128,
-        param1: 8,
+        param0: None,
+        param1: Some(8),
     };
 
     let ser = postcard::to_allocvec(&i)?;
@@ -347,8 +317,8 @@ impl Pattern {
         }
         if let Some((param0, param1)) = set_params {
             something_added |= param0.is_some() || param1.is_some();
-            step.set_param0(param0);
-            step.set_param1(param1);
+            step.param0 = param0;
+            step.param1 = param1;
         }
 
         if !something_added {
@@ -396,8 +366,8 @@ impl Default for InstrumentStep {
         InstrumentStep {
             note: 0,
             release: false,
-            param0: -128,
-            param1: -128,
+            param0: None,
+            param1: None,
         }
     }
 }
@@ -715,14 +685,14 @@ impl Sequencer {
                     row_data.press = step.press();
                     row_data.release = step.release;
                     row_data.note = step.press_note().unwrap_or(0) as i32;
-                    match step.param0() {
+                    match step.param0 {
                         Some(v) => {
                             row_data.param0_set = true;
                             row_data.param0_val = v as i32;
                         }
                         None => row_data.param0_set = false,
                     }
-                    match step.param1() {
+                    match step.param1 {
                         Some(v) => {
                             row_data.param1_set = true;
                             row_data.param1_val = v as i32;
@@ -947,8 +917,8 @@ impl Sequencer {
             {
                 if let Some(note) = step.press_note() {
                     // Use the default if the sequencer didn't have any param set for that press.
-                    let p0 = step.param0().unwrap_or(DEFAULT_PARAM_VAL);
-                    let p1 = step.param1().unwrap_or(DEFAULT_PARAM_VAL);
+                    let p0 = step.param0.unwrap_or(DEFAULT_PARAM_VAL);
+                    let p1 = step.param1.unwrap_or(DEFAULT_PARAM_VAL);
                     log!(
                         "➕ PRS {} note {} params {} / {}",
                         self.synth_instrument_ids[i as usize],
@@ -958,11 +928,11 @@ impl Sequencer {
                     );
                     note_events.push((i, StepEvent::Press(step.note, p0, p1)));
                 } else {
-                    if let Some(val) = step.param0() {
+                    if let Some(val) = step.param0 {
                         log!("✖️ PAR {} param {} = {}", self.synth_instrument_ids[i as usize], 0, val);
                         note_events.push((i, StepEvent::SetParam(0, val)));
                     }
-                    if let Some(val) = step.param1() {
+                    if let Some(val) = step.param1 {
                         log!("✖️ PAR {} param {} = {}", self.synth_instrument_ids[i as usize], 1, val);
                         note_events.push((i, StepEvent::SetParam(1, val)));
                     }
@@ -1166,7 +1136,7 @@ impl Sequencer {
             .get_steps(self.selected_instrument)
             .map_or((None, None, None), |ss| {
                 let s = ss[self.selected_step];
-                (s.press_note(), s.param0(), s.param1())
+                (s.press_note(), s.param0, s.param1)
             });
         let inc = if large_inc { 12 } else { 1 };
         let active_note = maybe_selected_note.unwrap_or(self.note_clipboard.note);
@@ -1219,7 +1189,7 @@ impl Sequencer {
 
         if forward && *val < 127 {
             *val += 1;
-        } else if !forward && *val > -127 {
+        } else if !forward && *val > -128 {
             *val -= 1;
         }
 
@@ -1240,12 +1210,12 @@ impl Sequencer {
         *instrument_params
     }
 
-    pub fn cycle_selected_step_param(&mut self, param_num: u8, forward: Option<bool>) -> (u8, i8, i8) {
+    pub fn cycle_selected_step_param(&mut self, param_num: u8, forward: Option<bool>, large_inc: bool) -> (u8, i8, i8) {
         let (maybe_selected_note, mut step_parameters) = self.song.patterns[self.selected_pattern_idx()]
             .get_steps(self.selected_instrument)
             .map_or((None, (None, None)), |ss| {
                 let s = ss[self.selected_step];
-                (s.press_note(), (s.param0(), s.param1()))
+                (s.press_note(), (s.param0, s.param1))
             });
 
         let instrument_params = self.instrument_params[self.selected_instrument as usize];
@@ -1260,11 +1230,21 @@ impl Sequencer {
             }
             &mut step_parameters.1
         };
-        if forward.unwrap_or(false) && val.unwrap() < 127 {
-            *val.as_mut().unwrap() += 1;
-        } else if forward.map(|f| !f).unwrap_or(false) && val.unwrap() > -127 {
-            *val.as_mut().unwrap() -= 1;
-        }
+        if large_inc {
+            let inc = if forward.unwrap_or(false) { 0x10 } else { -0x10 };
+            let v = val.as_mut().unwrap();
+            // Do it with wrapping here in case the instrument wants to split parameters
+            // in two and have the 4 most significant bits do something else.
+            // The signed integer however gets in the way of this, but it's still nice
+            // to have it for the full value, so wrap the 0x10 increments but cap the 0x01 ones.
+            *v = v.wrapping_add(inc);
+        } else {
+            if forward.unwrap_or(false) && val.unwrap() < 127 {
+                *val.as_mut().unwrap() += 0x01;
+            } else if forward.map(|f| !f).unwrap_or(false) && val.unwrap() > -128 {
+                *val.as_mut().unwrap() -= 0x01;
+            }
+        };
 
         self.set_pattern_step_events(
             self.selected_step,
@@ -1287,7 +1267,7 @@ impl Sequencer {
             .get_steps(self.selected_instrument)
             .map_or((None, None), |ss| {
                 let s = ss[step_num];
-                (s.param0(), s.param1())
+                (s.param0, s.param1)
             });
         let instrument = self.selected_instrument as usize;
         let instrument_params = &mut self.instrument_params[instrument];

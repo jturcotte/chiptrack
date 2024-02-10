@@ -76,10 +76,10 @@ export component StepsFocusScope inherits FocusScope {
         if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.z_pressed && e.text == "x") { if (!e.repeat) { GlobalEngine.cut_selected_step_param(GlobalUI.selected_column); } }
         else if (GlobalUI.z_pressed && e.text == "x") { if (!e.repeat) { GlobalEngine.cut_selected_step_note(); } }
         else if (GlobalUI.selected_column < 2 /*params*/ && e.text == "x") { if (!e.repeat) { GlobalEngine.cycle_step_param_start(GlobalUI.selected_column); } }
-        // else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.UpArrow) { GlobalEngine.cycle_step_param(1, true); }
-        // else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.DownArrow) { GlobalEngine.cycle_step_param(1, false); }
-        else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.LeftArrow) { GlobalEngine.cycle_step_param(GlobalUI.selected_column, false); }
-        else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.RightArrow) { GlobalEngine.cycle_step_param(GlobalUI.selected_column, true); }
+        else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.UpArrow) { GlobalEngine.cycle_step_param(GlobalUI.selected_column, true, true); }
+        else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.DownArrow) { GlobalEngine.cycle_step_param(GlobalUI.selected_column, false, true); }
+        else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.LeftArrow) { GlobalEngine.cycle_step_param(GlobalUI.selected_column, false, false); }
+        else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.RightArrow) { GlobalEngine.cycle_step_param(GlobalUI.selected_column, true, false); }
         else if (GlobalUI.selected_column == 2 /*press*/ && e.text == "x") { if (!e.repeat) { GlobalEngine.cycle_note_start(); } }
         else if (GlobalUI.selected_column == 2 /*press*/ && GlobalUI.x_pressed && e.text == Key.UpArrow) { GlobalEngine.cycle_note(true, true); }
         else if (GlobalUI.selected_column == 2 /*press*/ && GlobalUI.x_pressed && e.text == Key.DownArrow) { GlobalEngine.cycle_note(false, true); }
