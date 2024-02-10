@@ -127,10 +127,10 @@ export component InstrumentsFocusScope inherits FocusScope {
         else if (GlobalUI.x_pressed && e.text == Key.DownArrow) { GlobalEngine.cycle_instrument_param(1, false); }
         else if (GlobalUI.x_pressed && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument_param(0, false); }
         else if (GlobalUI.x_pressed && e.text == Key.RightArrow) { GlobalEngine.cycle_instrument_param(0, true); }
-        else if (e.text == Key.UpArrow) { GlobalEngine.cycle_instrument(0, -1); }
-        else if (e.text == Key.DownArrow) { GlobalEngine.cycle_instrument(0, 1); }
-        else if (!e.modifiers.shift && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument(-1, 0); }
-        else if (!e.modifiers.shift && e.text == Key.RightArrow) { GlobalEngine.cycle_instrument(1, 0); }
+        else if (!GlobalUI.z_pressed && e.text == Key.UpArrow) { GlobalEngine.cycle_instrument(0, -1); }
+        else if (!GlobalUI.z_pressed && e.text == Key.DownArrow) { GlobalEngine.cycle_instrument(0, 1); }
+        else if (!GlobalUI.z_pressed && !e.modifiers.shift && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument(-1, 0); }
+        else if (!GlobalUI.z_pressed && !e.modifiers.shift && e.text == Key.RightArrow) { GlobalEngine.cycle_instrument(1, 0); }
         else {
             return root_key_pressed(e);
         }
