@@ -72,7 +72,12 @@ pub struct SynthScript {
 }
 
 impl SynthScript {
-    pub const DEFAULT_INSTRUMENTS: &'static [u8] = include_bytes!("../instruments/default-instruments.wasm");
+    #[cfg(not(feature = "gba"))]
+    pub const DEFAULT_INSTRUMENTS_TEXT: &'static [u8] = include_bytes!("../instruments/default-instruments.wat");
+    // Built by build.rs
+    #[cfg(feature = "gba")]
+    pub const DEFAULT_INSTRUMENTS: &'static [u8] =
+        include_bytes!(concat!(env!("OUT_DIR"), "/default-instruments.wasm"));
 
     pub fn new<F, G, H>(synth_set_sound_reg: F, synth_set_wave_table: G, apply_instrument_ids: H) -> SynthScript
     where
@@ -189,7 +194,10 @@ impl SynthScript {
     }
 
     pub fn load_default(&mut self) -> Result<(), String> {
-        self.load_bytes(SynthScript::DEFAULT_INSTRUMENTS.to_vec())
+        #[cfg(feature = "gba")]
+        return self.load_bytes(SynthScript::DEFAULT_INSTRUMENTS.to_vec());
+        #[cfg(not(feature = "gba"))]
+        return self.load_wasm_or_wat_bytes(SynthScript::DEFAULT_INSTRUMENTS_TEXT.to_vec());
     }
 
     pub fn load_bytes(&mut self, encoded: Vec<u8>) -> Result<(), String> {
@@ -232,7 +240,7 @@ impl SynthScript {
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
         let mut f = File::create(instruments_path)?;
-        f.write_all(SynthScript::DEFAULT_INSTRUMENTS)?;
+        f.write_all(SynthScript::DEFAULT_INSTRUMENTS_TEXT)?;
         f.flush()?;
         Ok(())
     }
