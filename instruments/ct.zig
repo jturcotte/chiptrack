@@ -61,6 +61,14 @@ pub fn registerInstrument(comptime instrument: anytype, col: u32) void {
     set_instrument_at_column(instrument.id, col, far, press, release, frame, set_param);
 }
 
+/// See the following resources for more information on the GB's and GBA's PSG
+/// that can be referred to when implementing instruments:
+/// https://rust-console.github.io/gbatek-gbaonly/#gbasoundcontroller
+/// http://belogic.com/gba/
+/// https://www.copetti.org/writings/consoles/game-boy/#audio
+/// https://www.coranac.com/tonc/text/sndsqr.htm
+/// https://gbdev.io/pandocs/Audio.html
+/// https://gbdev.gg8.se/wiki/articles/Gameboy_sound_hardware
 pub const gba = struct {
     pub const nr10 = 0x4000060;
     pub const nr11_12 = 0x4000062;
