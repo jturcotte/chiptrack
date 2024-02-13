@@ -4,6 +4,7 @@
 // After modifying the instruments Zig source code, you must re-compile the WebAssembly file that can be executed by Chiptrack.
 // This file instructs the Zig compiler how to compile it and for this you need
 //  - The Zig compiler, available at https://ziglang.org/download/
+//  - ct.zig, the Chiptrack instruments support module, available at https://raw.githubusercontent.com/jturcotte/chiptrack/v0.3/instruments/ct.zig
 //  - wasm2wat in your PATH, available at https://github.com/WebAssembly/wabt/releases
 //
 // Then to rebuild the instruments .wat file from modified source code:
@@ -18,21 +19,14 @@ pub fn build(b: *std.Build) void {
     // Build options, "zig build --help" will show their usage.
     const source_file =
         b.option([]const u8, "source", "Instruments source file to compile (default: instruments.zig).") orelse "instruments.zig";
-    const ct_zig_path_option =
-        b.option([]const u8, "ct.zig", "Path to ct.zig, when not provided the build will be downloaded using wget AND OVERWRITE ct.zig in the current directory.");
+    const ct_zig_path =
+        b.option([]const u8, "ct.zig", "Path to ct.zig (default: ct.zig).") orelse "ct.zig";
     const wat_out =
         b.option(bool, "wat", "Compile the instruments to WAT (Web Assembly Text Format) instead of binary WASM. Chiptrack can load either format but this is better for GitHub gist uploads and requires wasm2wat in PATH (default: true).") orelse true;
 
-    var maybe_wf_ct_zig: ?*std.Build.Step.WriteFile = null;
-    const ct_zig_path = ct_zig_path_option orelse blk: {
-        // Uses wget to download ct.zig to the current directory if -Dct.zig isn't specified.
-        // If you don't have wget on your system, you can also download ct.zig manually and compile with:
-        //  zig build -Dct.zig=ct.zig
-        const wget_ct_zig = b.addSystemCommand(&.{ "wget", "https://raw.githubusercontent.com/jturcotte/chiptrack/main/instruments/ct.zig", "-O" });
-        maybe_wf_ct_zig = b.addWriteFiles();
-        maybe_wf_ct_zig.?.addCopyFileToSource(wget_ct_zig.addOutputFileArg("ct.zig"), "ct.zig");
-        break :blk "ct.zig";
-    };
+    if (std.fs.cwd().access(ct_zig_path, .{}) == std.fs.Dir.AccessError.FileNotFound)
+        @panic("ct.zig was not found but is necessary to build. You can download it from https://raw.githubusercontent.com/jturcotte/chiptrack/v0.3/instruments/ct.zig .");
+
     // Listing the module here also allows editors like VSCode with Zig language support to discover it and provide code completion.
     const ct_module = b.addModule("ct", .{ .source_file = .{ .path = ct_zig_path } });
 
@@ -52,9 +46,6 @@ pub fn build(b: *std.Build) void {
     wasm.stack_size = 8192;
     wasm.strip = !wat_out;
     wasm.addModule("ct", ct_module);
-    if (maybe_wf_ct_zig) |wf_ct_zig| {
-        wasm.step.dependOn(&wf_ct_zig.step);
-    }
 
     const wf = b.addWriteFiles();
     b.getInstallStep().dependOn(&wf.step);

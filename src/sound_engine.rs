@@ -27,8 +27,6 @@ use core::cell::RefCell;
 #[cfg(feature = "desktop")]
 use std::error::Error;
 #[cfg(feature = "desktop")]
-use std::ffi::OsString;
-#[cfg(feature = "desktop")]
 use std::path::{Path, PathBuf};
 
 pub const NUM_INSTRUMENTS: usize = 64;
@@ -517,20 +515,13 @@ impl SoundEngine {
                 {
                     song_path.set_extension("ct.md");
                 }
-                let mut instruments_path = song_path.clone();
-                instruments_path.set_file_name(OsString::from(
-                    instruments_path
-                        .file_name()
-                        .unwrap()
-                        .to_str()
-                        .expect("Bad path?")
-                        .replace(".ct.md", "-instruments.wasm"),
-                ));
+                let song_dir = song_path.parent().expect("Not an absolute path?").to_path_buf();
+
                 invoke_on_sound_engine(move |engine| {
                     move || -> Result<(), Box<dyn Error>> {
                         // Songs shouldn't rely on the default instruments that will vary between versions,
                         // so save a copy of the instruments and make the saved song point to that file.
-                        engine.script.save_as(instruments_path.as_path())?;
+                        let instruments_path = engine.script.save_copy_to(song_dir.as_path())?;
                         engine
                             .sequencer
                             .borrow_mut()

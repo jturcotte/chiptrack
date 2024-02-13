@@ -74,6 +74,8 @@ pub struct SynthScript {
 impl SynthScript {
     #[cfg(not(feature = "gba"))]
     pub const DEFAULT_INSTRUMENTS_TEXT: &'static [u8] = include_bytes!("../instruments/default-instruments.wat");
+    pub const DEFAULT_INSTRUMENTS_ZIG: &'static [u8] = include_bytes!("../instruments/default-instruments.zig");
+    pub const DEFAULT_INSTRUMENTS_BUILD: &'static [u8] = include_bytes!("../instruments/build.zig");
     // Built by build.rs
     #[cfg(feature = "gba")]
     pub const DEFAULT_INSTRUMENTS: &'static [u8] =
@@ -238,11 +240,36 @@ impl SynthScript {
     }
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-    pub fn save_as(&mut self, instruments_path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
-        let mut f = File::create(instruments_path)?;
-        f.write_all(SynthScript::DEFAULT_INSTRUMENTS_TEXT)?;
-        f.flush()?;
-        Ok(())
+    pub fn save_copy_to(
+        &mut self,
+        instruments_dir: &std::path::Path,
+    ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+        let instruments_path = instruments_dir.join("instruments.wat");
+        // Also save the zig files for the user to edit and rebuild, but just print a warning if they already exist.
+        let instruments_zig_path = instruments_dir.join("instruments.zig");
+        let build_zig_path = instruments_dir.join("build.zig");
+
+        let files = [
+            (instruments_path.clone(), SynthScript::DEFAULT_INSTRUMENTS_TEXT),
+            (instruments_zig_path.clone(), SynthScript::DEFAULT_INSTRUMENTS_ZIG),
+            (build_zig_path.clone(), SynthScript::DEFAULT_INSTRUMENTS_BUILD),
+        ];
+
+        for (path, content) in files.iter() {
+            let f = File::options().write(true).create_new(true).open(&path);
+            match f {
+                Ok(mut file) => {
+                    file.write_all(content)?;
+                    file.flush()?;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    elog!("File already exists: {:?}, not overwriting. If those are not default instruments anymore the instruments might not match.", path);
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+
+        Ok(instruments_path)
     }
 
     pub fn press_instrument_note(&mut self, frame_number: usize, instrument: u8, note: u8, param0: i8, param1: i8) {
