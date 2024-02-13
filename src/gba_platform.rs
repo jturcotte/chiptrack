@@ -237,7 +237,7 @@ impl MainScreen {
         set_palette(FADED_TEXT, [Color::WHITE, Color(0b0_11010_11010_11010)]);
         set_palette(
             SELECTED_TEXT,
-            [Color(0b0_11000_11000_11000), Color(0b0_11110_10010_00100)],
+            [Color(0b0_11000_11000_11000), Color(0b0_00000_00000_10000)],
         );
         set_palette(
             FADED_TEXT | ALT_COL_TEXT,
