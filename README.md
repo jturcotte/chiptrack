@@ -6,12 +6,22 @@ A cross-platform sequencer and synthesizer using the Game Boy Advance sound chip
 
 [Try the Web Player](https://jturcotte.github.io/chiptrack)
 
+## Install using Cargo
+
+```bash
+# On Linux you might need WAMR and CPAL local dependencies, for example on Ubuntu:
+# sudo apt install build-essential cmake pkg-config libasound2-dev libxft-dev
+
+cargo install --git https://github.com/jturcotte/chiptrack
+```
+
 ## Features
+- [Instruments are programmable](#instruments-are-programmable)
+- [Runs natively on the Game Boy Advance](#runs-natively-on-the-game-boy-advance)
+- [Songs can be distributed and played from GitHub gists](#songs-can-be-distributed-and-played-from-github-gists)
+- [Basic MIDI support in the desktop version](#basic-midi-support-in-the-desktop-version)
 
 ### Instruments are programmable
-
-Each song carries a little WebAssembly program that converts sequenced notes to Game Boy Advance sound
-commands:
 
 ```zig
 pub fn press(freq: u32, note: u8, param0: i8, param1: i8) callconv(.C) void {
@@ -27,32 +37,17 @@ pub fn press(freq: u32, note: u8, param0: i8, param1: i8) callconv(.C) void {
 }
 ```
 
- **This means that the song has almost complete control over the sound chip.** [Default instruments are provided for new songs](instruments/default-instruments.zig), a copy is made when saving.
+Each song carries a little WebAssembly program that converts sequenced notes to Game Boy Advance sound
+commands. **This gives almost complete control over the sound chip to each song.**
 
-When run from the desktop or Game Boy Advance version, the WebAssembly bytecode is interpreted.
-On desktop, the .wasm/.wat files are monitored and will reload automatically when recompiled.
-In the Web version, both Chiptrack and the instruments are loaded as WebAssembly modules and executed
-by the browser.
-
-Each instrument has 2 customizable parameters available that can be modified at any sequencer step.
+[Default instruments are provided for empty projects](instruments/default-instruments.zig) and can be customized.
 
 ### Runs natively on the Game Boy Advance
 
 The built-in sound chip is used for sound production in this case.
-The desktop and Web versions will produce the sound in software by interpreting sound register commands.
-
-[Zig is currently supported on the instruments side](instruments/ct.zig), but any programming language
-that can produce WebAssembly can technically be used.
-To execute instruments on the 16MHz CPU of the Game Boy Advance a system programming language like Zig
-or C is however recommended.
+The desktop and Web versions will produce the sound in software by emulating sound register commands.
 
 ### Songs can be distributed and played from GitHub gists
-
-The desktop version and Web Player can play the gists directly from their URL.
-
-https://gist.github.com/search?q=%23chiptrack
-
-Songs are saved as Markdown and are human-readable:
 
 ```md
 ## Pattern 16
@@ -64,33 +59,15 @@ Songs are saved as Markdown and are human-readable:
 |A-4 | -  |C#4 |C-2.| -  | -  |
 | -  | -  | -  | -  | -  | -  |
 |A-4 |A-2 |E-4 |C-2.| -  | -  |
-| -  | -  | -  | -  | -  | -  |
-| -  |A-2 |C#4 | -  |C-2.| -  |
-| -  | -  | -  | -  | -  | -  |
-|A-4 | -  |E-4 | -  | -  |C-2.|
-| -  | -  | -  | -  | -  | -  |
-| -  | -  |F#4 |C-2.| -  | -  |
-| -  | -  | -  | -  | -  | -  |
-|A-4 |E-2 |E-4 |C-2.| -  | -  |
-| -  | -  | -  | -  | -  | -  |
-|B-4 |E-2 |F#4 | -  |C-2.| -  |
-| -  | -  | -  | -  | -  | -  |
+...
 ```
 
-The desktop version converts it to a binary format when saved for the Game Boy Advance version.
+Songs are saved as Markdown and are human-readable and can be discovered by searching by using GitHub's search: https://gist.github.com/search?q=%23chiptrack
 
 ### Basic MIDI support in the desktop version
 
 An external MIDI keyboard can be used to play or record notes.
 
-## Install using Cargo
-
-```bash
-# On Linux you might need WAMR and CPAL local dependencies, for example on Ubuntu:
-# sudo apt install build-essential cmake pkg-config libasound2-dev libxft-dev
-
-cargo install --git https://github.com/jturcotte/chiptrack
-```
 ## Key / Button Mapping
 
 Function | Desktop | Game Boy Advance
@@ -108,8 +85,8 @@ Reset sound channels | <kbd>Esc</kbd>  | <kbd>Select</kbd>
 Save | <kbd>Ctrl</kbd> + <kbd>S</kbd> | <kbd>L</kbd> + <kbd>Start</kbd>
 Export song to GBA save file | <kbd>Ctrl</kbd> + <kbd>G</kbd> | N/A
 Toggle recording mode | <kbd>.</kbd> | N/A
-White notes | <kbd>A</kbd>\|<kbd>S</kbd>\|<kbd>D</kbd>\|<kbd>F</kbd>\|<kbd>G</kbd>\|<kbd>H</kbd>\|<kbd>J</kbd>\|<kbd>K</kbd> | N/A
 Black notes | <kbd>W</kbd>\|<kbd>E</kbd>\|<kbd>T</kbd>\|<kbd>Y</kbd><kbd>U</kbd> | N/A
+White notes | <kbd>A</kbd>\|<kbd>S</kbd>\|<kbd>D</kbd>\|<kbd>F</kbd>\|<kbd>G</kbd>\|<kbd>H</kbd>\|<kbd>J</kbd>\|<kbd>K</kbd> | N/A
 Erase step (or hold during playback) | <kbd>Backspace</kbd> | N/A
 
 
