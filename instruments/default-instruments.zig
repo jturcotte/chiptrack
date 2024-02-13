@@ -6,6 +6,11 @@ const math = std.math;
 const ct = @import("ct");
 const gba = ct.gba;
 
+// We can't read the current state from the sound chip, so we have to keep a static copy
+// here and update it every time before writing it to the sound chip so that instruments
+// can update channels independently.
+var sound_ctrl = gba.SoundCtrl.init();
+
 const Fraction = struct {
     num: u16,
     de: u16,
@@ -135,7 +140,7 @@ const ADSR = struct {
     }
 };
 
-const adsr_template = ADSR.init(0xd, 0x1, 0xd, 0x3);
+const adsr_template = ADSR.init(0x8, 0x5, 0xa, 0x3);
 var square1_adsr = ADSR{
     .attack_step = 0,
     .decay_step = 0,
@@ -155,10 +160,47 @@ var wave_adsr = ADSR{
     .release_step = 0,
 };
 
-/// `p0`: duty (0-3)
-/// `p1`: vibrato period
+//=== The instruments definition starts here ===//
+
+/// This is a very basic instruments that holds the note until it's released.
 const square1_1 = struct {
     pub const id: [*:0]const u8 = "S1";
+
+    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+        // Reset the Sweep here since another instrument might have set it.
+        gba.Sweep.init().writeTo(gba.square1);
+        // Set the volume to 0xa out of 0xf (4 bits).
+        gba.EnvDutyLen.init()
+            .withEnvStart(0xa)
+            .withDuty(gba.dut_2_4)
+            .writeTo(gba.square1);
+        // Set the frequency and trigger the note, this also applies the envelope.
+        gba.CtrlFreq.init()
+            .withSquareFreq(freq)
+            .withTrigger(1)
+            .writeTo(gba.square1);
+    }
+    pub fn release(freq: u32, _: u8, _: u32) callconv(.C) void {
+        // Set a decreasing envelope from 0xa down to 0x0
+        // with a decrease of 1 per env clock (64Hz).
+        gba.EnvDutyLen.init()
+            .withEnvDir(gba.env_dec)
+            .withEnvStart(0xa)
+            .withEnvInterval(1)
+            .withDuty(gba.dut_2_4)
+            .writeTo(gba.square1);
+        gba.CtrlFreq.init()
+            .withSquareFreq(freq)
+            .withTrigger(1)
+            .writeTo(gba.square1);
+    }
+};
+
+/// A square instrument with a vibrato effect.
+/// `p0`: duty (0-3)
+/// `p1`: vibrato period
+const square1_2 = struct {
+    pub const id: [*:0]const u8 = "S2";
     pub const frames_after_release: u32 = adsr_template.frames_after_release();
 
     var env_duty = gba.EnvDutyLen{ .duty = gba.dut_1_4 };
@@ -200,9 +242,10 @@ const square1_1 = struct {
     }
 };
 
+/// Using the length counter for a short bleep.
 /// `p0`: duty (0-3)
-const square1_2 = struct {
-    pub const id: [*:0]const u8 = "S2";
+const square1_3 = struct {
+    pub const id: [*:0]const u8 = "S3";
 
     pub fn press(freq: u32, _: u8, p0: i8, _: i8) callconv(.C) void {
         gba.Sweep.init().writeTo(gba.square1);
@@ -221,8 +264,9 @@ const square1_2 = struct {
     }
 };
 
-const square1_3 = struct {
-    pub const id: [*:0]const u8 = "S3";
+/// An instrument alternating the duty cycle every 2 frames.
+const square1_4 = struct {
+    pub const id: [*:0]const u8 = "S4";
     pub const frames_after_release: u32 = adsr_template.frames_after_release();
 
     pub fn press(_: u32, _: u8, _: i8, _: i8) callconv(.C) void {
@@ -251,8 +295,9 @@ const square1_3 = struct {
     }
 };
 
-const square1_4 = struct {
-    pub const id: [*:0]const u8 = "S4";
+/// Sweep the frequency down with an automatic envelope.
+const square1_5 = struct {
+    pub const id: [*:0]const u8 = "S5";
 
     pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
         gba.Sweep.init()
@@ -273,7 +318,7 @@ const square1_4 = struct {
     }
 };
 
-/// Example of an instrument that uses both square channels.
+/// Example of an instrument that uses both square channels and applies a vibrato effect to both.
 /// `p0`: semitones detune
 const square2_1 = struct {
     pub const id: [*:0]const u8 = "T1";
@@ -285,7 +330,7 @@ const square2_1 = struct {
         steps = if (p0 == 0) 4 else p0;
 
         gba.Sweep.init().writeTo(gba.square1);
-        (gba.EnvDutyLen{ .duty = gba.dut_1_8, .env_start = 10 })
+        (gba.EnvDutyLen{ .duty = gba.dut_3_4, .env_start = 10 })
             .writeTo(gba.square1);
         (gba.EnvDutyLen{ .duty = gba.dut_2_4, .env_start = 13 })
             .writeTo(gba.square2);
@@ -305,13 +350,14 @@ const square2_1 = struct {
             gba.CtrlFreq.init()
                 .withSquareFreq(vibrato(delay, p, freq, t))
                 .writeTo(gba.square1);
+            // Same vibrato parameters for the second square channel but phase it so that it's opposite.
             gba.CtrlFreq.init()
                 .withSquareFreq(vibrato(delay + p / 2, p, apply_semitone(freq, steps), t))
                 .writeTo(gba.square2);
         }
     }
     pub fn release(freq: u32, _: u8, _: u32) callconv(.C) void {
-        (gba.EnvDutyLen{ .duty = gba.dut_1_8, .env_interval = 1, .env_dir = gba.env_dec, .env_start = 10 })
+        (gba.EnvDutyLen{ .duty = gba.dut_3_4, .env_interval = 1, .env_dir = gba.env_dec, .env_start = 10 })
             .writeTo(gba.square1);
         (gba.EnvDutyLen{ .duty = gba.dut_2_4, .env_interval = 1, .env_dir = gba.env_dec, .env_start = 13 })
             .writeTo(gba.square2);
@@ -326,6 +372,7 @@ const square2_1 = struct {
     }
 };
 
+/// Arpeggio effect alternating between 3 tones based on the sequenced note.
 /// `p0`: arpeggio note 1 semitones
 /// `p1`: arpeggio note 2 semitones
 const square2_2 = struct {
@@ -354,9 +401,9 @@ const square2_2 = struct {
     }
 };
 
+/// Square instrument with a switch effect between the left and right channels.
 /// `p0`: left channel switch period
 /// `p1`: right channel switch period
-var sound_ctrl = gba.SoundCtrl.init();
 const square2_3 = struct {
     pub const id: [*:0]const u8 = "T3";
 
@@ -398,7 +445,7 @@ const square2_3 = struct {
     }
 };
 
-/// Basic square instrument with envelope
+/// Basic square instrument with a manual per frame envelope instead of using EnvDutyLen's automatic envelope.
 const square2_4 = struct {
     pub const id: [*:0]const u8 = "T4";
     pub const frames_after_release: u32 = adsr_template.frames_after_release();
@@ -411,7 +458,7 @@ const square2_4 = struct {
     }
     pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
         gba.EnvDutyLen.init()
-            .withDuty(gba.dut_2_4)
+            .withDuty(gba.dut_3_4)
             .withEnvStart(square2_adsr.frame())
             .writeTo(gba.square2);
         gba.CtrlFreq.init()
@@ -462,6 +509,7 @@ const wave_1 = struct {
     pub const frames_after_release: u32 = 4;
 };
 
+/// Bass-like wave sound when played at lower frequencies.
 const wave_2 = struct {
     pub const id: [*:0]const u8 = "W2";
 
@@ -475,6 +523,7 @@ const wave_2 = struct {
     pub const frames_after_release: u32 = 4;
 };
 
+/// Arpeggio effect on a ramp-up wave shape.
 const wave_3 = struct {
     pub const id: [*:0]const u8 = "W3";
     pub const frames_after_release: u32 = 4;
@@ -510,6 +559,8 @@ const wave_4 = struct {
     pub const frames_after_release: u32 = 4;
 };
 
+/// Sweep up a by number of semitones each frame.
+/// `p0`: number of semitones to sweep up
 const wave_5 = struct {
     pub const id: [*:0]const u8 = "W5";
     pub const frames_after_release: u32 = 16;
@@ -541,12 +592,17 @@ const wave_5 = struct {
     }
 };
 
+/// A noise instrument with different pre-defined sounds per note.
 const noise_1 = struct {
     pub const id: [*:0]const u8 = "N1";
     pub const frames_after_release: u32 = 15;
 
+    // Different sounds must update the sound chip over multiple frames but the sound is selected
+    // on press. So keep a slice to the selected static lifetime tables of register values so
+    // that the frame function can use it.
     var env_frames: []const ?gba.EnvDutyLen = &.{};
     var ctrl_frames: []const ?gba.NoiseCtrlFreq = &.{};
+
     pub fn frame(_: u32, _: u8, t: u32) callconv(.C) void {
         if (t < env_frames.len)
             if (env_frames[t]) |reg|
@@ -556,6 +612,7 @@ const noise_1 = struct {
                 reg.writeTo(gba.noise);
     }
     pub fn press(_: u32, note: u8, _: i8, _: i8) callconv(.C) void {
+        // Ignore the frequency but use the MIDI note number to select which sound to play.
         switch (note % 12) {
             0 => {
                 const Static = struct {
@@ -600,7 +657,7 @@ const noise_1 = struct {
                 env_frames = &Static.env;
                 ctrl_frames = &Static.ctrl;
             },
-            4 => {
+            3 => {
                 const Static = struct {
                     const env = .{
                         .{ .env_start = 10, .env_dir = gba.env_dec, .env_interval = 1 },
@@ -617,7 +674,7 @@ const noise_1 = struct {
                 env_frames = &Static.env;
                 ctrl_frames = &Static.ctrl;
             },
-            5 => {
+            4 => {
                 const Static = struct {
                     const env = .{
                         .{ .env_start = 10, .env_dir = gba.env_dec, .env_interval = 2 },
@@ -636,7 +693,7 @@ const noise_1 = struct {
                 env_frames = &Static.env;
                 ctrl_frames = &Static.ctrl;
             },
-            7 => {
+            5 => {
                 const Static = struct {
                     const env = .{
                         .{ .env_start = 9, .env_dir = gba.env_dec, .env_interval = 0 },
@@ -668,7 +725,7 @@ const noise_1 = struct {
                 env_frames = &Static.env;
                 ctrl_frames = &Static.ctrl;
             },
-            9 => {
+            6 => {
                 const Static = struct {
                     const env = .{
                         .{ .env_start = 13, .env_dir = gba.env_dec, .env_interval = 0 },
@@ -700,7 +757,7 @@ const noise_1 = struct {
                 env_frames = &Static.env;
                 ctrl_frames = &Static.ctrl;
             },
-            11 => {
+            7 => {
                 const Static = struct {
                     const env = .{
                         .{ .env_start = 13, .env_dir = gba.env_dec, .env_interval = 0 },
@@ -740,6 +797,7 @@ const noise_1 = struct {
     }
 };
 
+/// A noise instrument that derives the sound parameters arbitrarily from the frequency.
 const noise_2 = struct {
     pub const id: [*:0]const u8 = "N2";
 
@@ -749,8 +807,7 @@ const noise_2 = struct {
             .withEnvDir(gba.env_dec)
             .withEnvInterval(1)
             .writeTo(gba.noise);
-        // Use the frequency as input for now just so that different
-        // keys produce different sounds.
+        // Use the frequency as input just so that different keys produce different sounds.
         const gb_freq = gba.encodeSquareFreq(freq);
         gba.NoiseCtrlFreq.init()
             .withFreq(@truncate(gb_freq >> 4))
@@ -764,11 +821,13 @@ const noise_2 = struct {
 /// Instruments are compiled as executables but this is actually going to be executed like a library
 /// entry point. Instruments structs register their functions as callback and they will
 /// be called when needed after this function returns.
+/// Instruments that are not registered are not visible to the application.
 pub fn main() void {
     ct.registerInstrument(square1_1, 0);
     ct.registerInstrument(square1_2, 0);
     ct.registerInstrument(square1_3, 0);
     ct.registerInstrument(square1_4, 0);
+    ct.registerInstrument(square1_5, 0);
     ct.registerInstrument(square2_1, 1);
     ct.registerInstrument(square2_2, 1);
     ct.registerInstrument(square2_3, 1);
