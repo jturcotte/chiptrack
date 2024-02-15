@@ -1,8 +1,8 @@
 # Chiptrack
 
-A cross-platform sequencer and synthesizer using the Game Boy Advance sound chip.
+A cross-platform sequencer for the Game Boy Advance sound chip.
 
-[![image](https://user-images.githubusercontent.com/839935/173205865-e4ce44f0-75d3-4c26-8230-6d04aaa9dcdd.png)](https://jturcotte.github.io/chiptrack)
+[![image](https://github.com/jturcotte/chiptrack/assets/839935/187a2ce6-072f-43d6-9937-2c7579562908)](https://jturcotte.github.io/chiptrack)
 
 [Try the Web Player](https://jturcotte.github.io/chiptrack)
 
@@ -16,10 +16,17 @@ cargo install --git https://github.com/jturcotte/chiptrack
 ```
 
 ## Features
-- [Instruments are programmable](#instruments-are-programmable)
 - [Runs natively on the Game Boy Advance](#runs-natively-on-the-game-boy-advance)
+- [Instruments are programmable](#instruments-are-programmable)
 - [Songs can be distributed and played from GitHub gists](#songs-can-be-distributed-and-played-from-github-gists)
 - [Basic MIDI support in the desktop version](#basic-midi-support-in-the-desktop-version)
+
+### Runs natively on the Game Boy Advance
+
+![image](https://github.com/jturcotte/chiptrack/assets/839935/e358fc48-d26b-46e2-9d37-58d40fa94877)
+
+The built-in sound chip is used for sound production in this case.
+The desktop and Web versions will produce the sound in software by emulating sound register commands.
 
 ### Instruments are programmable
 
@@ -41,11 +48,6 @@ Each song carries a little WebAssembly program that converts sequenced notes to 
 commands. **This gives almost complete control over the sound chip to each song.**
 
 [Default instruments are provided for empty projects](instruments/default-instruments.zig) and can be customized.
-
-### Runs natively on the Game Boy Advance
-
-The built-in sound chip is used for sound production in this case.
-The desktop and Web versions will produce the sound in software by emulating sound register commands.
 
 ### Songs can be distributed and played from GitHub gists
 
