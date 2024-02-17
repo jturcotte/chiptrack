@@ -398,7 +398,7 @@ struct NoteClipboard {
 
 pub struct Sequencer {
     pub song: SequencerSong,
-    active_frame: u32,
+    active_frame: Option<u32>,
     active_step: usize,
     active_song_pattern: usize,
     pub selected_instrument: u8,
@@ -410,6 +410,7 @@ pub struct Sequencer {
     erasing: bool,
     has_stub_pattern: bool,
     next_cycle_song_pattern_start_can_have_new: bool,
+    pub received_instruments_ids_after_load: bool,
     last_press_frame: Option<u32>,
     just_recorded_over_next_step: bool,
     // FIXME: Use a bitset
@@ -425,7 +426,7 @@ impl Sequencer {
     pub fn new(main_window: WeakWindowWrapper) -> Sequencer {
         Sequencer {
             song: Default::default(),
-            active_frame: 0,
+            active_frame: None,
             active_step: 0,
             active_song_pattern: 0,
             selected_instrument: 0,
@@ -437,6 +438,7 @@ impl Sequencer {
             erasing: false,
             has_stub_pattern: false,
             next_cycle_song_pattern_start_can_have_new: false,
+            received_instruments_ids_after_load: false,
             last_press_frame: None,
             just_recorded_over_next_step: false,
             muted_instruments: BTreeSet::new(),
@@ -449,6 +451,10 @@ impl Sequencer {
             song_pattern_clipboard: 0,
             main_window: main_window.clone(),
         }
+    }
+
+    fn active_frame_or_zero(&self) -> u32 {
+        self.active_frame.unwrap_or(0)
     }
 
     // Pattern number in a given `song_pattern_idx`.
@@ -861,23 +867,12 @@ impl Sequencer {
         self.playing
     }
 
-    pub fn set_playing(&mut self, val: bool) -> Vec<(u8, StepEvent)> {
+    pub fn set_playing(&mut self, val: bool) {
         self.playing = val;
         // Reset the active_frame so that it's aligned with full
         // steps and that record_press would record any key while
         // stopped to the current frame and not the next.
-        self.active_frame = 0;
-
-        if self.playing {
-            // The first advance_frame after playing will move from frame 0 to frame 1 and skip presses
-            // of frame 0. Since we don't care about releases of the non-existent previous frame, do the
-            // presses now, right after starting the playback.
-            let mut note_events: Vec<(u8, StepEvent)> = Vec::new();
-            self.handle_active_step_presses_and_params(&mut note_events);
-            note_events
-        } else {
-            Vec::new()
-        }
+        self.active_frame = None;
     }
     pub fn set_recording(&mut self, val: bool) {
         self.recording = val;
@@ -981,28 +976,43 @@ impl Sequencer {
             return (None, note_events);
         }
 
-        // FIXME: Reset or remove overflow check
-        self.active_frame += 1;
-        if self.active_frame % self.song.frames_per_step == 0 {
-            // Release are at then end of a step, so start by triggering any release of the
-            // previous frame.
-            self.handle_active_step_releases(&mut note_events);
+        match self.active_frame {
+            None => {
+                self.active_frame = Some(1);
 
-            self.advance_step(true);
-            if self.erasing {
-                self.set_pattern_step_events(
-                    self.active_step,
-                    self.active_song_pattern,
-                    Some(None),
-                    Some(false),
-                    Some((None, None)),
-                );
+                // The first advance_frame after playing will move from frame 0 to frame 1 and skip presses
+                // of frame 0. Since we don't care about releases of the non-existent previous frame, do the
+                // presses now, right after starting the playback.
+                let mut note_events: Vec<(u8, StepEvent)> = Vec::new();
+                self.handle_active_step_presses_and_params(&mut note_events);
+
+                (Some(self.active_step as u32), note_events)
             }
+            Some(frame) if frame % self.song.frames_per_step == 0 => {
+                // FIXME: Reset or remove overflow check
+                self.active_frame = Some(frame + 1);
+                // Release are at then end of a step, so start by triggering any release of the
+                // previous frame.
+                self.handle_active_step_releases(&mut note_events);
 
-            self.handle_active_step_presses_and_params(&mut note_events);
-            (Some(self.active_step as u32), note_events)
-        } else {
-            (None, note_events)
+                self.advance_step(true);
+                if self.erasing {
+                    self.set_pattern_step_events(
+                        self.active_step,
+                        self.active_song_pattern,
+                        Some(None),
+                        Some(false),
+                        Some((None, None)),
+                    );
+                }
+
+                self.handle_active_step_presses_and_params(&mut note_events);
+                (Some(self.active_step as u32), note_events)
+            }
+            Some(frame) => {
+                self.active_frame = Some(frame + 1);
+                (None, note_events)
+            }
         }
     }
 
@@ -1040,7 +1050,7 @@ impl Sequencer {
                     None,
                     // Try to clamp the event to the nearest frame.
                     // Use 4 instead of 3 just to try to compensate for the key press to visual and audible delay.
-                    if self.active_frame % self.song.frames_per_step < self.snap_at_step_frame() {
+                    if self.active_frame_or_zero() % self.song.frames_per_step < self.snap_at_step_frame() {
                         (self.active_step, self.active_song_pattern)
                     } else {
                         self.just_recorded_over_next_step = true;
@@ -1064,14 +1074,14 @@ impl Sequencer {
                     (n + to / 2) / to * to
                 }
                 let rounded_steps_note_length = round(
-                    self.active_frame - self.last_press_frame.unwrap(),
+                    self.active_frame_or_zero() - self.last_press_frame.unwrap(),
                     self.song.frames_per_step,
                 );
                 // We need to place the release in the previous step (its end), so subtract one step.
                 let rounded_end_frame = self.last_press_frame.unwrap() + (rounded_steps_note_length.max(1) - 1);
 
-                let is_end_in_prev_step =
-                    rounded_end_frame / self.song.frames_per_step < self.active_frame / self.song.frames_per_step;
+                let is_end_in_prev_step = rounded_end_frame / self.song.frames_per_step
+                    < self.active_frame_or_zero() / self.song.frames_per_step;
                 let end_snaps_to_next_step = rounded_end_frame % self.song.frames_per_step < self.snap_at_step_frame();
                 (
                     None,
@@ -1113,7 +1123,7 @@ impl Sequencer {
             Some(note),
             Some((Some(p0).filter(|v| *v != 0), Some(p1).filter(|v| *v != 0))),
         );
-        self.last_press_frame = Some(self.active_frame);
+        self.last_press_frame = Some(self.active_frame_or_zero());
 
         // It's a bit weird to keep the release part of the clipboard here,
         // but the fact that recording affects the active step instead of selected one
@@ -1570,6 +1580,9 @@ impl Sequencer {
     }
 
     pub fn set_synth_instrument_ids(&mut self, instrument_ids: Vec<SharedString>) {
+        // Playback can start
+        self.received_instruments_ids_after_load = true;
+
         for p in &mut self.song.patterns {
             p.update_synth_index(&instrument_ids);
         }

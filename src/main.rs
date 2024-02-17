@@ -500,9 +500,12 @@ fn run_main() {
             }
             // If it only diverged within the fluctuation range, keep the current phasing.
             Some(previous_phasing) => previous_phasing,
-            // First time
+            // Still uninitialized
             None => {
-                maybe_previous_phasing = Some(cur_phasing);
+                // Don't set in stone until the sound engine is ready.
+                if last_synth_tick != -1 {
+                    maybe_previous_phasing = Some(cur_phasing);
+                }
                 cur_phasing
             }
         };

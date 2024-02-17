@@ -81,6 +81,10 @@ impl SoundEngine {
         }
     }
 
+    pub fn is_ready(&self) -> bool {
+        self.sequencer.borrow().received_instruments_ids_after_load
+    }
+
     pub fn new(synth: Synth, main_window: WeakWindowWrapper) -> SoundEngine {
         let sequencer = Rc::new(RefCell::new(Sequencer::new(main_window.clone())));
         let script = SynthScript::new(
@@ -203,10 +207,8 @@ impl SoundEngine {
     }
 
     pub fn set_playing(&mut self, playing: bool) {
-        let note_events = self.sequencer.borrow_mut().set_playing(playing);
-        if playing {
-            self.send_note_events_to_synth(note_events);
-        } else {
+        self.sequencer.borrow_mut().set_playing(playing);
+        if !playing {
             self.mute_instruments();
         }
     }

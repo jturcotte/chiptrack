@@ -699,6 +699,12 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer<impl FnOnce() ->
                             closure(engine);
                         }
 
+                        // The instruments are loaded asynchronously in the web version,
+                        // keep returning until they are loaded and that main() was executed.
+                        if !engine.is_ready() {
+                            return;
+                        }
+
                         const NUM_CHANNELS: usize = 2;
 
                         let dest_len = dest.len();
