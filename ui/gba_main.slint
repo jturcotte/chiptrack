@@ -30,15 +30,15 @@ export component MainWindow inherits Window {
     callback clear_status_text();
 
     function root_key_pressed(e: KeyEvent) -> EventResult {
-        if (e.modifiers.shift && e.text == Key.LeftArrow) { cycle_focus_panel(false); }
-        else if (e.modifiers.shift && e.text == Key.RightArrow) { cycle_focus_panel(true); }
-        else if (e.text == Key.LeftArrow) { GlobalEngine.cycle_pattern_instrument(false); }
-        else if (e.text == Key.RightArrow) { GlobalEngine.cycle_pattern_instrument(true); }
-        else if (e.text == Key.UpArrow) { GlobalEngine.select_next_song_pattern(false); }
-        else if (e.text == Key.DownArrow) { GlobalEngine.select_next_song_pattern(true); }
-        else if (e.modifiers.control && e.text == Key.Return) { save_to_sram(); }
-        else if (e.text == Key.Return) { GlobalEngine.play_clicked(!root.playing); }
-        else if (e.text == Key.Escape) {
+        if e.modifiers.shift && e.text == Key.LeftArrow { cycle_focus_panel(false); }
+        else if e.modifiers.shift && e.text == Key.RightArrow { cycle_focus_panel(true); }
+        else if e.text == Key.LeftArrow { GlobalEngine.cycle_pattern_instrument(false); }
+        else if e.text == Key.RightArrow { GlobalEngine.cycle_pattern_instrument(true); }
+        else if e.text == Key.UpArrow { GlobalEngine.select_next_song_pattern(false); }
+        else if e.text == Key.DownArrow { GlobalEngine.select_next_song_pattern(true); }
+        else if e.modifiers.control && e.text == Key.Return { save_to_sram(); }
+        else if e.text == Key.Return { GlobalEngine.play_clicked(!root.playing); }
+        else if e.text == Key.Escape {
             GlobalEngine.mute_instruments();
             clear_status_text();
         } else {
@@ -48,8 +48,8 @@ export component MainWindow inherits Window {
     }
 
     function cycle_focus_panel(forward: bool) {
-        if (forward) {
-            if (focused_panel == FocusedPanel.patterns) {
+        if forward {
+            if focused_panel == FocusedPanel.patterns {
                 focused_panel = FocusedPanel.steps;
                 steps_key_handler.focus();
             } else if (focused_panel == FocusedPanel.steps){
@@ -60,7 +60,7 @@ export component MainWindow inherits Window {
             if (focused_panel == FocusedPanel.instruments){
                 focused_panel = FocusedPanel.steps;
                 steps_key_handler.focus();
-            } else if (focused_panel == FocusedPanel.steps) {
+            } else if focused_panel == FocusedPanel.steps {
                 focused_panel = FocusedPanel.patterns;
                 patterns_key_handler.focus();
             }

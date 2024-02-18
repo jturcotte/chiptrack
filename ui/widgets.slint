@@ -42,9 +42,9 @@ export component ScrollableSelection inherits TouchArea {
         x: 0px;
         property<int> v;
         moved => {
-            if (self.pressed) {
+            if self.pressed {
                 v = max(0, min(root.total_rows - 1, self.mouse_y / self.height * root.total_rows));
-                if (v != root.cur_row) {
+                if v != root.cur_row {
                     root.scrolled(v);
                 }
             }

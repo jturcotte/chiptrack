@@ -40,10 +40,10 @@ component InstrumentButton inherits Rectangle {
         width: 100%;
         height: 100%;
         pointer-event(e) => {
-            if (e.kind == PointerEventKind.down) {
-                if (e.button == PointerEventButton.left) {
+            if e.kind == PointerEventKind.down {
+                if e.button == PointerEventButton.left {
                     root.pressed();
-                } else if (e.button == PointerEventButton.right) {
+                } else if e.button == PointerEventButton.right {
                     root.right_pressed();
                 }
             }

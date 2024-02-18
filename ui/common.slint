@@ -14,7 +14,7 @@ export global GlobalUI {
     in-out property<KeyEvent> last_pressed_key;
 
     public function cycle_step_colum(forward: bool) {
-        if (forward && GlobalUI.selected_column < 3) {
+        if forward && GlobalUI.selected_column < 3 {
             GlobalUI.selected_column += 1;
         } else if (!forward && GlobalUI.selected_column > 0){
             GlobalUI.selected_column -= 1;
@@ -28,21 +28,21 @@ export component PatternsFocusScope inherits FocusScope {
     callback root_key_released(KeyEvent) -> EventResult;
 
     key_pressed(e) => {
-        if ((e.text == "x" || e.text == "X") && !e.repeat) {
+        if (e.text == "x" || e.text == "X") && !e.repeat {
             GlobalUI.x_pressed = true;
-        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
+        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
             GlobalUI.z_pressed = true;
         }
 
         if (e.text == "X" && e.modifiers.shift &&
                 GlobalUI.last_pressed_key.text == "Z" && GlobalUI.last_pressed_key.modifiers.shift) {
-            if (!e.repeat) { GlobalEngine.clone_selected_song_pattern(); }
+            if !e.repeat { GlobalEngine.clone_selected_song_pattern(); }
         }
-        else if (GlobalUI.z_pressed && e.text == "x") { if (!e.repeat) { GlobalEngine.remove_last_song_pattern(); } }
-        else if (e.text == "x" && GlobalUI.last_pressed_key.text == "x") { if (!e.repeat) { GlobalEngine.cycle_song_pattern_start_with_new(); } }
-        else if (e.text == "x") { if (!e.repeat) { GlobalEngine.cycle_song_pattern_start(); } }
-        else if (GlobalUI.x_pressed && e.text == Key.LeftArrow) { GlobalEngine.cycle_song_pattern(false); }
-        else if (GlobalUI.x_pressed && e.text == Key.RightArrow) { GlobalEngine.cycle_song_pattern(true); }
+        else if GlobalUI.z_pressed && e.text == "x" { if !e.repeat { GlobalEngine.remove_last_song_pattern(); } }
+        else if e.text == "x" && GlobalUI.last_pressed_key.text == "x" { if !e.repeat { GlobalEngine.cycle_song_pattern_start_with_new(); } }
+        else if e.text == "x" { if !e.repeat { GlobalEngine.cycle_song_pattern_start(); } }
+        else if GlobalUI.x_pressed && e.text == Key.LeftArrow { GlobalEngine.cycle_song_pattern(false); }
+        else if GlobalUI.x_pressed && e.text == Key.RightArrow { GlobalEngine.cycle_song_pattern(true); }
         else {
             GlobalUI.last_pressed_key = e;
             return root_key_pressed(e);
@@ -51,9 +51,9 @@ export component PatternsFocusScope inherits FocusScope {
         return accept;
     }
     key_released(e) => {
-        if ((e.text == "x" || e.text == "X") && !e.repeat) {
+        if (e.text == "x" || e.text == "X") && !e.repeat {
             GlobalUI.x_pressed = false;
-        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
+        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
             GlobalUI.z_pressed = false;
         }
 
@@ -67,43 +67,43 @@ export component StepsFocusScope inherits FocusScope {
     callback root_key_released(KeyEvent) -> EventResult;
 
     key_pressed(e) => {
-        if ((e.text == "x" || e.text == "X") && !e.repeat) {
+        if (e.text == "x" || e.text == "X") && !e.repeat {
             GlobalUI.x_pressed = true;
-        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
+        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
             GlobalUI.z_pressed = true;
         }
 
-        if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.z_pressed && e.text == "x") { if (!e.repeat) { GlobalEngine.cut_selected_step_param(GlobalUI.selected_column); } }
-        else if (GlobalUI.z_pressed && e.text == "x") { if (!e.repeat) { GlobalEngine.cut_selected_step_note(); } }
-        else if (GlobalUI.selected_column < 2 /*params*/ && e.text == "x") { if (!e.repeat) { GlobalEngine.cycle_step_param_start(GlobalUI.selected_column); } }
-        else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.UpArrow) { GlobalEngine.cycle_step_param(GlobalUI.selected_column, true, true); }
-        else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.DownArrow) { GlobalEngine.cycle_step_param(GlobalUI.selected_column, false, true); }
-        else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.LeftArrow) { GlobalEngine.cycle_step_param(GlobalUI.selected_column, false, false); }
-        else if (GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.RightArrow) { GlobalEngine.cycle_step_param(GlobalUI.selected_column, true, false); }
-        else if (GlobalUI.selected_column == 2 /*press*/ && e.text == "x") { if (!e.repeat) { GlobalEngine.cycle_note_start(); } }
-        else if (GlobalUI.selected_column == 2 /*press*/ && GlobalUI.x_pressed && e.text == Key.UpArrow) { GlobalEngine.cycle_note(true, true); }
-        else if (GlobalUI.selected_column == 2 /*press*/ && GlobalUI.x_pressed && e.text == Key.DownArrow) { GlobalEngine.cycle_note(false, true); }
-        else if (GlobalUI.selected_column == 2 /*press*/ && GlobalUI.x_pressed && e.text == Key.LeftArrow) { GlobalEngine.cycle_note(false, false); }
-        else if (GlobalUI.selected_column == 2 /*press*/ && GlobalUI.x_pressed && e.text == Key.RightArrow) { GlobalEngine.cycle_note(true, false); }
-        else if (GlobalUI.selected_column == 3 /*release*/ && e.text == "x") { if (!e.repeat) { GlobalEngine.toggle_selected_step_release(); } }
-        else if (!GlobalUI.z_pressed && !e.modifiers.shift && e.text == Key.LeftArrow) { GlobalUI.cycle_step_colum(false); }
-        else if (!GlobalUI.z_pressed && !e.modifiers.shift && e.text == Key.RightArrow) { GlobalUI.cycle_step_colum(true); }
-        else if (!GlobalUI.z_pressed && e.text == Key.UpArrow) { GlobalEngine.select_next_step(false); }
-        else if (!GlobalUI.z_pressed && e.text == Key.DownArrow) { GlobalEngine.select_next_step(true); }
+        if GlobalUI.selected_column < 2 /*params*/ && GlobalUI.z_pressed && e.text == "x" { if !e.repeat { GlobalEngine.cut_selected_step_param(GlobalUI.selected_column); } }
+        else if GlobalUI.z_pressed && e.text == "x" { if !e.repeat { GlobalEngine.cut_selected_step_note(); } }
+        else if GlobalUI.selected_column < 2 /*params*/ && e.text == "x" { if !e.repeat { GlobalEngine.cycle_step_param_start(GlobalUI.selected_column); } }
+        else if GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.UpArrow { GlobalEngine.cycle_step_param(GlobalUI.selected_column, true, true); }
+        else if GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.DownArrow { GlobalEngine.cycle_step_param(GlobalUI.selected_column, false, true); }
+        else if GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.LeftArrow { GlobalEngine.cycle_step_param(GlobalUI.selected_column, false, false); }
+        else if GlobalUI.selected_column < 2 /*params*/ && GlobalUI.x_pressed && e.text == Key.RightArrow { GlobalEngine.cycle_step_param(GlobalUI.selected_column, true, false); }
+        else if GlobalUI.selected_column == 2 /*press*/ && e.text == "x" { if !e.repeat { GlobalEngine.cycle_note_start(); } }
+        else if GlobalUI.selected_column == 2 /*press*/ && GlobalUI.x_pressed && e.text == Key.UpArrow { GlobalEngine.cycle_note(true, true); }
+        else if GlobalUI.selected_column == 2 /*press*/ && GlobalUI.x_pressed && e.text == Key.DownArrow { GlobalEngine.cycle_note(false, true); }
+        else if GlobalUI.selected_column == 2 /*press*/ && GlobalUI.x_pressed && e.text == Key.LeftArrow { GlobalEngine.cycle_note(false, false); }
+        else if GlobalUI.selected_column == 2 /*press*/ && GlobalUI.x_pressed && e.text == Key.RightArrow { GlobalEngine.cycle_note(true, false); }
+        else if GlobalUI.selected_column == 3 /*release*/ && e.text == "x" { if !e.repeat { GlobalEngine.toggle_selected_step_release(); } }
+        else if !GlobalUI.z_pressed && !e.modifiers.shift && e.text == Key.LeftArrow { GlobalUI.cycle_step_colum(false); }
+        else if !GlobalUI.z_pressed && !e.modifiers.shift && e.text == Key.RightArrow { GlobalUI.cycle_step_colum(true); }
+        else if !GlobalUI.z_pressed && e.text == Key.UpArrow { GlobalEngine.select_next_step(false); }
+        else if !GlobalUI.z_pressed && e.text == Key.DownArrow { GlobalEngine.select_next_step(true); }
         else {
             return root_key_pressed(e);
         }
         return accept;
     }
     key_released(e) => { 
-        if ((e.text == "x" || e.text == "X") && !e.repeat) {
+        if (e.text == "x" || e.text == "X") && !e.repeat {
             GlobalUI.x_pressed = false;
-        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
+        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
             GlobalUI.z_pressed = false;
         }
 
-        if (GlobalUI.selected_column < 2 /*params*/ && e.text == "x") { GlobalEngine.cycle_step_param_end(GlobalUI.selected_column); }
-        else if (GlobalUI.selected_column == 2 /*press*/ && e.text == "x") { GlobalEngine.cycle_note_end(); }
+        if GlobalUI.selected_column < 2 /*params*/ && e.text == "x" { GlobalEngine.cycle_step_param_end(GlobalUI.selected_column); }
+        else if GlobalUI.selected_column == 2 /*press*/ && e.text == "x" { GlobalEngine.cycle_note_end(); }
         else {
             return root_key_released(e);
         }
@@ -116,34 +116,34 @@ export component InstrumentsFocusScope inherits FocusScope {
     callback root_key_released(KeyEvent) -> EventResult;
 
     key_pressed(e) => {
-        if ((e.text == "x" || e.text == "X") && !e.repeat) {
+        if (e.text == "x" || e.text == "X") && !e.repeat {
             GlobalUI.x_pressed = true;
-        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
+        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
             GlobalUI.z_pressed = true;
         }
 
-        if (e.text == "x") { if (!e.repeat) { GlobalEngine.cycle_instrument_param_start(); } }
-        else if (GlobalUI.x_pressed && e.text == Key.UpArrow) { GlobalEngine.cycle_instrument_param(1, true); }
-        else if (GlobalUI.x_pressed && e.text == Key.DownArrow) { GlobalEngine.cycle_instrument_param(1, false); }
-        else if (GlobalUI.x_pressed && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument_param(0, false); }
-        else if (GlobalUI.x_pressed && e.text == Key.RightArrow) { GlobalEngine.cycle_instrument_param(0, true); }
-        else if (!GlobalUI.z_pressed && e.text == Key.UpArrow) { GlobalEngine.cycle_instrument(0, -1); }
-        else if (!GlobalUI.z_pressed && e.text == Key.DownArrow) { GlobalEngine.cycle_instrument(0, 1); }
-        else if (!GlobalUI.z_pressed && !e.modifiers.shift && e.text == Key.LeftArrow) { GlobalEngine.cycle_instrument(-1, 0); }
-        else if (!GlobalUI.z_pressed && !e.modifiers.shift && e.text == Key.RightArrow) { GlobalEngine.cycle_instrument(1, 0); }
+        if e.text == "x" { if !e.repeat { GlobalEngine.cycle_instrument_param_start(); } }
+        else if GlobalUI.x_pressed && e.text == Key.UpArrow { GlobalEngine.cycle_instrument_param(1, true); }
+        else if GlobalUI.x_pressed && e.text == Key.DownArrow { GlobalEngine.cycle_instrument_param(1, false); }
+        else if GlobalUI.x_pressed && e.text == Key.LeftArrow { GlobalEngine.cycle_instrument_param(0, false); }
+        else if GlobalUI.x_pressed && e.text == Key.RightArrow { GlobalEngine.cycle_instrument_param(0, true); }
+        else if !GlobalUI.z_pressed && e.text == Key.UpArrow { GlobalEngine.cycle_instrument(0, -1); }
+        else if !GlobalUI.z_pressed && e.text == Key.DownArrow { GlobalEngine.cycle_instrument(0, 1); }
+        else if !GlobalUI.z_pressed && !e.modifiers.shift && e.text == Key.LeftArrow { GlobalEngine.cycle_instrument(-1, 0); }
+        else if !GlobalUI.z_pressed && !e.modifiers.shift && e.text == Key.RightArrow { GlobalEngine.cycle_instrument(1, 0); }
         else {
             return root_key_pressed(e);
         }
         return accept;
     }
     key_released(e) => { 
-        if ((e.text == "x" || e.text == "X") && !e.repeat) {
+        if (e.text == "x" || e.text == "X") && !e.repeat {
             GlobalUI.x_pressed = false;
-        } else if ((e.text == "z" || e.text == "Z") && !e.repeat) {
+        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
             GlobalUI.z_pressed = false;
         }
 
-        if (e.text == "x") { GlobalEngine.cycle_instrument_param_end(); }
+        if e.text == "x" { GlobalEngine.cycle_instrument_param_end(); }
         else {
             return root_key_released(e);
         }

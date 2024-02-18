@@ -10,7 +10,7 @@ component PianoKey inherits Rectangle {
     callback pressed();
     callback released();
     background: {
-        if (is_black != highlighted) {
+        if is_black != highlighted {
             #333;
         } else {
             white;
@@ -31,8 +31,8 @@ component PianoKey inherits Rectangle {
         width: parent.width;
         height: parent.height;
         pointer-event(e) => {
-            if (e.button == PointerEventButton.left) {
-                if (e.kind == PointerEventKind.down) {
+            if e.button == PointerEventButton.left {
+                if e.kind == PointerEventKind.down {
                     root.pressed();
                 } else {
                     root.released();
