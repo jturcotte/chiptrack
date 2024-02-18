@@ -170,7 +170,7 @@ impl Synth {
             sample_rate,
             state: output_data.clone(),
         });
-        let mut dmg = rboy::Sound::new(player);
+        let mut dmg = rboy::Sound::new_cgb(player);
         // Already power it on.
         dmg.wb(0xff26, 0x80);
         // And enable all channels

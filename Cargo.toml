@@ -75,7 +75,7 @@ optional = true
 
 [dependencies.rboy]
 git = "https://github.com/jturcotte/rboy.git"
-rev = "8f886fee45395b1ed093c978ad070321dd81ea6b"
+rev = "efbec416ff598da1debf0c216059299901a75f61"
 # Use as a lib, features are used by its bin's main.rs only.
 default-features = false
 optional = true
