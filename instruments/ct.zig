@@ -289,7 +289,6 @@ pub const gba = struct {
         return WavTable{ .v = @bitCast(@byteSwap(t)) };
     }
 
-    var current_bank: u1 = 0;
     /// (NR30) - Channel 3 Stop/Wave RAM select (R/W)
     pub const WaveRam = packed struct {
         ///  Bit        Expl.
@@ -323,11 +322,9 @@ pub const gba = struct {
             gba_set_sound_reg(address(channel), @as(u16, @bitCast(self)));
         }
         pub fn setTable(table: *const WavTable) void {
-            // Write to the unselected bank
+            (WaveRam{ .playing = 0 }).writeTo(wave);
             gba_set_wave_table(&table.v, table.v.len);
-            // Then select it
-            current_bank ^= 1;
-            (WaveRam{ .playing = 1, .bank = current_bank }).writeTo(wave);
+            (WaveRam{ .playing = 1 }).writeTo(wave);
         }
     };
 
