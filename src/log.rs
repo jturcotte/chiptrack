@@ -53,6 +53,6 @@ macro_rules! elog {
         if let Ok(mut logger) = gba::mgba::MgbaBufferedLogger::try_new(gba::mgba::MgbaMessageLevel::Error) {
             writeln!(logger, $( $t )*).ok();
         }
-        crate::gba_platform::renderer::draw_error_text(&alloc::format!($( $t )*));
+        $crate::gba_platform::renderer::draw_error_text(&alloc::format!($( $t )*));
     }}
 }

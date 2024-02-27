@@ -268,7 +268,7 @@ impl slint::platform::Platform for GbaPlatform {
                                 } else {
                                     out_key.clone()
                                 };
-                                window.dispatch_event(WindowEvent::KeyPressed { text: text });
+                                window.dispatch_event(WindowEvent::KeyPressed { text });
                                 if key_mask & KEYS_REPEATABLE != 0 {
                                     repeating_key_mask = key_mask;
                                     frames_until_repeat = Some(10);
@@ -280,7 +280,7 @@ impl slint::platform::Platform for GbaPlatform {
                                 } else {
                                     out_key.clone()
                                 };
-                                window.dispatch_event(WindowEvent::KeyReleased { text: text });
+                                window.dispatch_event(WindowEvent::KeyReleased { text });
                             }
                         }
 
@@ -294,7 +294,7 @@ impl slint::platform::Platform for GbaPlatform {
                             } else {
                                 out_key.clone()
                             };
-                            window.dispatch_event(WindowEvent::KeyPressed { text: text });
+                            window.dispatch_event(WindowEvent::KeyPressed { text });
                             frames_until_repeat = Some(2);
                         }
                     };

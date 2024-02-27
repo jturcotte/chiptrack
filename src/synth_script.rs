@@ -256,7 +256,7 @@ impl SynthScript {
         ];
 
         for (path, content) in files.iter() {
-            let f = File::options().write(true).create_new(true).open(&path);
+            let f = File::options().write(true).create_new(true).open(path);
             match f {
                 Ok(mut file) => {
                     file.write_all(content)?;

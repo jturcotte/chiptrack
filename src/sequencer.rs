@@ -52,7 +52,7 @@ pub enum StepEvent {
     SetParam(u8, i8), // param_num, val
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct InstrumentStep {
     note: u8,
     release: bool,
@@ -308,7 +308,7 @@ impl Pattern {
 
         let mut something_added = false;
         if let Some(release) = set_release {
-            something_added |= release == true;
+            something_added |= release;
             step.release = release;
         }
         if let Some(note) = set_press_note {
@@ -321,10 +321,8 @@ impl Pattern {
             step.param1 = param1;
         }
 
-        if !something_added {
-            if instrument_steps.iter().all(|s| s.is_empty()) {
-                self.remove_instrument(instrument);
-            }
+        if !something_added && instrument_steps.iter().all(|s| s.is_empty()) {
+            self.remove_instrument(instrument);
         }
     }
 
@@ -360,17 +358,6 @@ pub struct SequencerSong {
 // Initialize all notes to C5
 const DEFAULT_NOTE: u8 = 60;
 const DEFAULT_PARAM_VAL: i8 = 0;
-
-impl Default for InstrumentStep {
-    fn default() -> Self {
-        InstrumentStep {
-            note: 0,
-            release: false,
-            param0: None,
-            param1: None,
-        }
-    }
-}
 
 impl Default for SequencerSong {
     fn default() -> Self {
@@ -1248,13 +1235,11 @@ impl Sequencer {
             // The signed integer however gets in the way of this, but it's still nice
             // to have it for the full value, so wrap the 0x10 increments but cap the 0x01 ones.
             *v = v.wrapping_add(inc);
-        } else {
-            if forward.unwrap_or(false) && val.unwrap() < 127 {
-                *val.as_mut().unwrap() += 0x01;
-            } else if forward.map(|f| !f).unwrap_or(false) && val.unwrap() > -128 {
-                *val.as_mut().unwrap() -= 0x01;
-            }
-        };
+        } else if forward.unwrap_or(false) && val.unwrap() < 127 {
+            *val.as_mut().unwrap() += 0x01;
+        } else if forward.map(|f| !f).unwrap_or(false) && val.unwrap() > -128 {
+            *val.as_mut().unwrap() -= 0x01;
+        }
 
         self.set_pattern_step_events(
             self.selected_step,

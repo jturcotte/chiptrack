@@ -89,8 +89,8 @@ fn to_hex(v: u8) -> [u8; 2] {
 
 fn to_dec(v: u8) -> [u8; 2] {
     debug_assert!(v < 100);
-    let c1 = (v / 10) as u8 + '0' as u8;
-    let c2 = (v % 10) as u8 + '0' as u8;
+    let c1 = (v / 10) + b'0';
+    let c2 = (v % 10) + b'0';
     [c1, c2]
 }
 
@@ -122,7 +122,7 @@ fn draw_ascii_ref<RB, const C: usize>(
 ) where
     RB: core::ops::RangeBounds<usize>,
 {
-    draw_ascii(vid_row, range, chars.iter().map(|c| *c), palbank)
+    draw_ascii(vid_row, range, chars.iter().copied(), palbank)
 }
 
 /// Same as `draw_ascii` but with an iterator of `char` `chars`.
