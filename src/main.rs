@@ -35,6 +35,7 @@ use url::Url;
 
 #[cfg(feature = "desktop")]
 use alloc::borrow::ToOwned;
+#[cfg(feature = "desktop")]
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec;
@@ -205,7 +206,7 @@ fn run_main() {
         });
 
         window.on_clear_status_text(move || {
-            gba_platform::clear_status_text();
+            gba_platform::renderer::clear_status_text();
         });
     }
     let _window_weak = window.as_weak();

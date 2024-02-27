@@ -616,7 +616,7 @@ impl SoundEngine {
                         song_bytes.len(),
                     );
                     let song_len = u32::from_le_bytes(buf) as usize;
-                    gba_platform::draw_status_text(&alloc::format!("Saved {}B song to SRAM.", song_len));
+                    gba_platform::renderer::draw_status_text(&alloc::format!("Saved {}B song to SRAM.", song_len));
                 }
                 Err(e) => elog!("save error: {}", e),
             }
