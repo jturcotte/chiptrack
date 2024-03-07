@@ -1,6 +1,6 @@
 # Chiptrack
 
-A cross-platform sequencer for the Game Boy Advance sound chip.
+A programmable cross-platform sequencer for the Game Boy Advance sound chip.
 
 [![image](https://github.com/jturcotte/chiptrack/assets/839935/187a2ce6-072f-43d6-9937-2c7579562908)](https://jturcotte.github.io/chiptrack)
 
@@ -27,6 +27,9 @@ cargo install --git https://github.com/jturcotte/chiptrack
 
 The built-in sound chip is used for sound production in this case.
 The desktop and Web versions will produce the sound in software by emulating sound register commands.
+
+Slint models are used as cross-platform abstraction, read from a [custom renderer](src/gba_platform/renderer.rs)
+to take advantage of the GBA's hardware acceleration.
 
 ### Instruments are programmable
 
