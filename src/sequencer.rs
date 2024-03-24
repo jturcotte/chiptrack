@@ -393,6 +393,7 @@ pub struct Sequencer {
     selected_song_pattern: usize,
     pin_selection_to_active: bool,
     playing: bool,
+    play_song_mode: bool,
     recording: bool,
     erasing: bool,
     has_stub_pattern: bool,
@@ -421,6 +422,7 @@ impl Sequencer {
             selected_song_pattern: 0,
             pin_selection_to_active: true,
             playing: false,
+            play_song_mode: false,
             recording: true,
             erasing: false,
             has_stub_pattern: false,
@@ -515,11 +517,10 @@ impl Sequencer {
 
         if self.playing {
             self.pin_selection_to_active = false;
-        } else {
-            self.pin_selection_to_active = true;
+        } else if self.pin_selection_to_active {
+            // When pinned and not playing, make sure that the selected pattern is also activated
+            // so that recording notes happen in the selected pattern.
             self.activate_song_pattern(song_pattern);
-            // Move back to the first step so that playback can start again with the full pattern.
-            self.select_step(0);
         }
 
         // update_steps relies on both the active and selected song pattern to be set to be able
@@ -558,13 +559,10 @@ impl Sequencer {
 
         if self.playing {
             self.pin_selection_to_active = false;
-        } else {
-            if !self.pin_selection_to_active {
-                self.pin_selection_to_active = true;
-                // When re-pinning, make sure that the selected pattern is also activated.
-                // activate_step also need this to properly show the current step as active.
-                self.activate_song_pattern(self.selected_song_pattern);
-            }
+        } else if self.pin_selection_to_active {
+            // When re-pinning, make sure that the selected pattern is also activated.
+            // activate_step also need this to properly show the current step as active.
+            self.activate_song_pattern(self.selected_song_pattern);
             self.activate_step(step);
         }
     }
@@ -780,17 +778,28 @@ impl Sequencer {
         self.toggle_step_release(self.selected_step)
     }
 
-    fn advance_step(&mut self, forward: bool) {
-        let (next_step, next_song_pattern) = Self::next_step_and_pattern_and_song_pattern(
-            forward,
-            self.active_step,
-            self.active_song_pattern,
-            self.num_song_patterns(),
-        );
+    fn advance_step(&mut self) {
+        let next_step = if self.play_song_mode {
+            let (next_step, next_song_pattern) = Self::next_step_and_pattern_and_song_pattern(
+                true,
+                self.active_step,
+                self.active_song_pattern,
+                self.num_song_patterns(),
+            );
 
-        if next_song_pattern != self.active_song_pattern {
-            self.activate_song_pattern(next_song_pattern);
-        }
+            if next_song_pattern != self.active_song_pattern {
+                self.activate_song_pattern(next_song_pattern);
+            }
+            next_step
+        } else {
+            // In pattern playback, continue playing from the selected pattern if it changed.
+            if self.active_step == NUM_STEPS - 1 && self.selected_song_pattern != self.active_song_pattern {
+                self.activate_song_pattern(self.selected_song_pattern);
+                0
+            } else {
+                (self.active_step + 1) % NUM_STEPS
+            }
+        };
 
         self.activate_step(next_step);
     }
@@ -854,12 +863,33 @@ impl Sequencer {
         self.playing
     }
 
-    pub fn set_playing(&mut self, val: bool) {
+    pub fn set_playing(&mut self, val: bool, song_mode: bool) {
         self.playing = val;
+        self.play_song_mode = song_mode;
         // Reset the active_frame so that it's aligned with full
         // steps and that record_press would record any key while
         // stopped to the current frame and not the next.
         self.active_frame = None;
+
+        // Reset the step position to the beginning of the pattern.
+        // In song mode also pin the selection to the active pattern/step
+        // so that the playback position is kept visible.
+        if self.playing {
+            if song_mode {
+                self.pin_selection_to_active = true;
+                // When re-pinning, make sure that the selected pattern is also activated.
+                // activate_step also need this to properly show the selected step as active.
+                self.activate_song_pattern(self.selected_song_pattern);
+                self.activate_step(0);
+            } else {
+                self.pin_selection_to_active = false;
+                self.activate_step(0);
+            }
+        } else {
+            // When not playing, keep the active step pinned to the selection so that
+            // notes can be recorded on the selected step.
+            self.pin_selection_to_active = true;
+        }
     }
     pub fn set_recording(&mut self, val: bool) {
         self.recording = val;
@@ -982,7 +1012,7 @@ impl Sequencer {
                 // previous frame.
                 self.handle_active_step_releases(&mut note_events);
 
-                self.advance_step(true);
+                self.advance_step();
                 if self.erasing {
                     self.set_pattern_step_events(
                         self.active_step,

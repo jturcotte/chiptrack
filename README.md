@@ -86,6 +86,7 @@ Copy | <kbd>X</kbd>  | <kbd>A</kbd>
 Cut | <kbd>Z</kbd> + <kbd>X</kbd>  | <kbd>B</kbd> + <kbd>A</kbd>
 Paste (on empty slot) | <kbd>X</kbd>  | <kbd>A</kbd>
 Play song | <kbd>Enter</kbd> | <kbd>Start</kbd>
+Play pattern | <kbd>Ctrl</kbd> + <kbd>Enter</kbd> | <kbd>Select</kbd> + <kbd>Start</kbd>
 Reset sound channels | <kbd>Esc</kbd>  | <kbd>Select</kbd>
 Save | <kbd>Ctrl</kbd> + <kbd>S</kbd> | <kbd>L</kbd> + <kbd>Start</kbd>
 Export song to GBA save file | <kbd>Ctrl</kbd> + <kbd>G</kbd> | N/A

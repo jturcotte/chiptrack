@@ -405,12 +405,12 @@ fn run_main() {
 
     let cloned_sound_renderer = sound_renderer.clone();
     let window_weak = window.as_weak();
-    global_engine.on_play_clicked(move |toggled| {
+    global_engine.on_play_clicked(move |toggled, song_mode| {
         // FIXME: Stop the sound device
         cloned_sound_renderer
             .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.set_playing(toggled));
-        window_weak.unwrap().set_playing(toggled);
+            .invoke_on_sound_engine(move |se| se.set_playing(toggled, song_mode));
+        window_weak.unwrap().global::<GlobalUI>().set_playing(toggled);
     });
 
     #[cfg(feature = "desktop")]
@@ -421,7 +421,7 @@ fn run_main() {
             cloned_sound_renderer
                 .borrow_mut()
                 .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().set_recording(toggled));
-            window_weak.unwrap().set_recording(toggled);
+            window_weak.unwrap().global::<GlobalUI>().set_recording(toggled);
         });
     }
 

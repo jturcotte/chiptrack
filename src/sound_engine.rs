@@ -206,8 +206,8 @@ impl SoundEngine {
         }
     }
 
-    pub fn set_playing(&mut self, playing: bool) {
-        self.sequencer.borrow_mut().set_playing(playing);
+    pub fn set_playing(&mut self, playing: bool, song_mode: bool) {
+        self.sequencer.borrow_mut().set_playing(playing, song_mode);
         if !playing {
             self.mute_instruments();
         }

@@ -167,14 +167,14 @@ impl slint::platform::Platform for GbaPlatform {
         let slint_key_a_capital: SharedString = 'X'.into();
         let slint_key_b: SharedString = 'z'.into();
         let slint_key_b_capital: SharedString = 'Z'.into();
-        let slint_key_select: SharedString = slint::platform::Key::Escape.into();
+        let slint_key_select: SharedString = slint::platform::Key::Control.into();
         let slint_key_start: SharedString = slint::platform::Key::Return.into();
         let slint_key_right: SharedString = slint::platform::Key::RightArrow.into();
         let slint_key_left: SharedString = slint::platform::Key::LeftArrow.into();
         let slint_key_up: SharedString = slint::platform::Key::UpArrow.into();
         let slint_key_down: SharedString = slint::platform::Key::DownArrow.into();
         let slint_key_r: SharedString = slint::platform::Key::Shift.into();
-        let slint_key_l: SharedString = slint::platform::Key::Control.into();
+        let slint_key_l: SharedString = slint::platform::Key::Alt.into();
 
         let main_screen = &self.main_screen;
         let window = self.window.clone();
