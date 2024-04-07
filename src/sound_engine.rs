@@ -143,7 +143,7 @@ impl SoundEngine {
 
     fn send_note_events_to_synth(&mut self, note_events: Vec<(u8, StepEvent)>) {
         for (instrument, event) in note_events {
-            let is_selected_instrument = instrument == self.sequencer.borrow().selected_instrument;
+            let is_selected_instrument = instrument == self.sequencer.borrow().displayed_instrument;
 
             let (note_to_press, note_to_release) = match event {
                 StepEvent::Press(note, p0, p1) => {
@@ -224,8 +224,8 @@ impl SoundEngine {
         self.frame_number += 1;
     }
 
-    pub fn select_instrument(&mut self, instrument: u8) {
-        self.sequencer.borrow_mut().select_instrument(instrument);
+    pub fn display_instrument(&mut self, instrument: u8) {
+        self.sequencer.borrow_mut().display_instrument(instrument);
 
         self.pressed_note = None;
 
@@ -262,97 +262,97 @@ impl SoundEngine {
     pub fn cycle_instrument_param_start(&mut self) {
         let seq = self.sequencer.borrow();
         let note = seq.clipboard_note();
-        let (p0, p1) = seq.selected_instrument_params();
+        let (p0, p1) = seq.displayed_instrument_params();
         self.script
-            .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
+            .press_instrument_note(self.frame_number, seq.displayed_instrument, note, p0, p1);
     }
     pub fn cycle_instrument_param_end(&mut self) {
         self.script
-            .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
+            .release_instrument(self.frame_number, self.sequencer.borrow().displayed_instrument);
     }
     pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) {
         let mut seq = self.sequencer.borrow_mut();
         let (p0, p1) = seq.cycle_instrument_param(param_num, forward);
         let note = seq.clipboard_note();
 
-        let instrument = seq.selected_instrument;
+        let instrument = seq.displayed_instrument;
         if self.script.instrument_has_set_param_fn(instrument) {
             // The instrument will get the new value without a press.
             self.script
                 .set_instrument_param(instrument, param_num, if param_num == 0 { p0 } else { p1 })
         } else {
-            // There is no set param function set by the instrument, trigger a press as feedback like we do in cycle_note.
+            // There is no set param function set by the instrument, trigger a press as feedback like we do in cycle_step_note.
             self.script
                 .press_instrument_note(self.frame_number, instrument, note, p0, p1);
         }
     }
 
-    pub fn cycle_step_param_start(&mut self, param_num: u8) {
+    pub fn cycle_step_param_start(&mut self, step: usize, param_num: u8) {
         let mut seq = self.sequencer.borrow_mut();
-        let (note, p0, p1) = seq.cycle_selected_step_param(param_num, None, false);
+        let (note, p0, p1) = seq.cycle_step_param(step, param_num, None, false);
         if !seq.playing() {
             self.script
-                .press_instrument_note(self.frame_number, seq.selected_instrument, note, p0, p1);
+                .press_instrument_note(self.frame_number, seq.displayed_instrument, note, p0, p1);
         }
     }
-    pub fn cycle_step_param_end(&mut self, param_num: u8) {
+    pub fn cycle_step_param_end(&mut self, step: usize, param_num: u8) {
         let mut seq = self.sequencer.borrow_mut();
-        seq.copy_selected_step_param(param_num);
+        seq.copy_step_params(step, Some(param_num));
         if !seq.playing() {
             // FIXME: Ref-count the press or something to handle +Shift,+Ctrl,-Shift,-Ctrl
             self.script
-                .release_instrument(self.frame_number, seq.selected_instrument);
+                .release_instrument(self.frame_number, seq.displayed_instrument);
         }
     }
-    pub fn cycle_step_param(&mut self, param_num: u8, forward: bool, large_inc: bool) {
+    pub fn cycle_step_param(&mut self, step: usize, param_num: u8, forward: bool, large_inc: bool) {
         let (note, p0, p1) = self
             .sequencer
             .borrow_mut()
-            .cycle_selected_step_param(param_num, Some(forward), large_inc);
+            .cycle_step_param(step, param_num, Some(forward), large_inc);
         if !self.sequencer.borrow().playing() {
-            let instrument = self.sequencer.borrow().selected_instrument;
+            let instrument = self.sequencer.borrow().displayed_instrument;
 
             if self.script.instrument_has_set_param_fn(instrument) {
                 // The instrument will get the new value without a press.
                 self.script
                     .set_instrument_param(instrument, param_num, if param_num == 0 { p0 } else { p1 })
             } else {
-                // There is no set param function set by the instrument, trigger a press as feedback like we do in cycle_note.
+                // There is no set param function set by the instrument, trigger a press as feedback like we do in cycle_step_note.
                 self.script
                     .press_instrument_note(self.frame_number, instrument, note, p0, p1);
             }
         }
     }
 
-    pub fn cycle_note_start(&mut self) {
-        let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_selected_step_note(None, false);
+    pub fn cycle_step_note_start(&mut self, step: usize) {
+        let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_step_note(step, None, false);
         if !self.sequencer.borrow().playing() {
             self.script.press_instrument_note(
                 self.frame_number,
-                self.sequencer.borrow().selected_instrument,
+                self.sequencer.borrow().displayed_instrument,
                 new_note,
                 p0,
                 p1,
             );
         }
     }
-    pub fn cycle_note_end(&mut self) {
+    pub fn cycle_step_note_end(&mut self, step: usize) {
         let mut seq = self.sequencer.borrow_mut();
-        seq.copy_selected_step_note();
+        seq.copy_step_note(step);
         if !seq.playing() {
             self.script
-                .release_instrument(self.frame_number, seq.selected_instrument);
+                .release_instrument(self.frame_number, seq.displayed_instrument);
         }
     }
-    pub fn cycle_note(&mut self, forward: bool, large_inc: bool) {
+    pub fn cycle_step_note(&mut self, step: usize, forward: bool, large_inc: bool) {
         let (new_note, p0, p1) = self
             .sequencer
             .borrow_mut()
-            .cycle_selected_step_note(Some(forward), large_inc);
+            .cycle_step_note(step, Some(forward), large_inc);
         if !self.sequencer.borrow().playing() {
             self.script.press_instrument_note(
                 self.frame_number,
-                self.sequencer.borrow().selected_instrument,
+                self.sequencer.borrow().displayed_instrument,
                 new_note,
                 p0,
                 p1,
@@ -364,7 +364,7 @@ impl SoundEngine {
         let (p0, p1) = self.sequencer.borrow_mut().record_press(note);
         self.script.press_instrument_note(
             self.frame_number,
-            self.sequencer.borrow().selected_instrument,
+            self.sequencer.borrow().displayed_instrument,
             note,
             p0,
             p1,
@@ -395,7 +395,7 @@ impl SoundEngine {
         // for the current instrument if it wasn't the last pressed one.
         if let Some(note_to_release) = self.singularize_note_release(NoteSource::Key(note), false) {
             self.script
-                .release_instrument(self.frame_number, self.sequencer.borrow().selected_instrument);
+                .release_instrument(self.frame_number, self.sequencer.borrow().displayed_instrument);
             self.sequencer.borrow_mut().record_release(note);
             self.release_note_visually(note_to_release);
         }

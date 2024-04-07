@@ -5,7 +5,6 @@ import { InstrumentsPanel } from "instruments.slint";
 
 import {
     FocusedPanel,
-    GlobalUI,
     InstrumentsFocusScope,
     PatternsFocusScope,
     StepsFocusScope
@@ -16,6 +15,7 @@ import {
     PatternInstrumentData,
     StepData,
     GlobalEngine,
+    GlobalUI,
     GlobalUtils
 } from "globals.slint";
 
@@ -82,6 +82,7 @@ component StepSelectableText inherits Rectangle {
 component SequencerStep { 
     callback pressed();
     callback right_pressed();
+    in property<bool> step_selected;
     in property<bool> highlighted;
     in property<bool> show_selection;
     in property<StepData> step;
@@ -98,7 +99,7 @@ component SequencerStep {
         x: 0px;
         spacing: 1px;
         StepSelectableText {
-            selected: step.selected && root.show_selection && GlobalUI.selected_column == 0 /*param0*/;
+            selected: step_selected && root.show_selection && GlobalUI.selected_column == 0 /*param0*/;
             width: 25%;
             text: (step.param0_set ? GlobalUtils.to_signed_hex(step.param0_val) : "");
             text_color: step.press ? black : #a0a0a0;
@@ -111,7 +112,7 @@ component SequencerStep {
             // horizontal_stretch: 0;
         }
         StepSelectableText {
-            selected: step.selected && root.show_selection && GlobalUI.selected_column == 1 /*param1*/;
+            selected: step_selected && root.show_selection && GlobalUI.selected_column == 1 /*param1*/;
             width: 25%;
             text: (step.param1_set ? GlobalUtils.to_signed_hex(step.param1_val) : "");
             text_color: step.press ? black : #a0a0a0;
@@ -119,7 +120,7 @@ component SequencerStep {
         }
         StepSelectableText {
             text: (step.press ? "[" : "-") + (step.press ? name : "---");
-            selected: step.selected && root.show_selection && GlobalUI.selected_column == 2 /*press*/;
+            selected: step_selected && root.show_selection && GlobalUI.selected_column == 2 /*press*/;
             y: (parent.height - self.height) / 2;
             text_color: step.press || step.release ? black : #a0a0a0;
             horizontal_alignment: right;
@@ -127,7 +128,7 @@ component SequencerStep {
         }
         StepSelectableText {
             text: (step.release ? "]" : "-");
-            selected: step.selected && root.show_selection && GlobalUI.selected_column >= 2/*press,release*/;
+            selected: step_selected && root.show_selection && GlobalUI.selected_column >= 2/*press,release*/;
             y: (parent.height - self.height) / 2;
             text_color: step.press || step.release ? black : #a0a0a0;
             horizontal_alignment: left;
@@ -170,9 +171,9 @@ component PatternsList {
         cur_row: GlobalEngine.sequencer_song_pattern_selected;
         viewport_rows: 16;
         scrollbar_width: height_of_cell * 0.25;
-        scrolled(pos) => { GlobalEngine.select_song_pattern(pos) }
+        scrolled(pos) => { GlobalUI.select_song_pattern(pos) }
         scroll-event(e) => {
-            GlobalEngine.select_next_song_pattern(e.delta_y < 0);
+            GlobalUI.select_next_song_pattern(e.delta_y < 0);
             return accept;
         }
 
@@ -192,7 +193,7 @@ component PatternsList {
                     number: pattern.number;
                     highlighted: idx == GlobalEngine.sequencer_song_pattern_active;
                     fill: pattern.selected;
-                    clicked => { GlobalEngine.select_song_pattern(idx); }
+                    clicked => { GlobalUI.select_song_pattern(idx); }
                 }
             }
         }
@@ -270,7 +271,7 @@ export component PatternsPanel inherits HorizontalLayout {
             label := Rectangle {
                 Text {
                     x: 0px;
-                    text: GlobalEngine.script_instrument_ids[GlobalEngine.selected_instrument];
+                    text: GlobalEngine.script_instrument_ids[GlobalEngine.displayed_instrument];
                     height: 100%;
                     width: 100%;
                     font_size: self.height * 0.8;
@@ -281,12 +282,19 @@ export component PatternsPanel inherits HorizontalLayout {
             for step[idx] in GlobalEngine.sequencer_steps:
             HorizontalLayout {
                 SequencerStep {
+                    step_selected: idx == GlobalUI.selected_step;
                     highlighted: idx == GlobalEngine.sequencer_step_active;
                     show_selection: focused_panel == FocusedPanel.steps;
                     step: step;
                     name: GlobalUtils.get_midi_note_name(step.note);
-                    pressed => { GlobalEngine.toggle_step(idx); }
-                    right_pressed => { GlobalEngine.toggle_step_release(idx); }
+                    pressed => {
+                        GlobalEngine.toggle_step(idx);
+                        GlobalUI.select_step(idx);
+                    }
+                    right_pressed => {
+                        GlobalEngine.toggle_step_release(idx);
+                        GlobalUI.select_step(idx);
+                    }
                 }
             }
         }
@@ -319,7 +327,7 @@ export component PatternsPanel inherits HorizontalLayout {
                 width: (self.height - l.spacing * 16) / 17 * 2;
                 clicked => {
                     if instrument.synth_index != -1 {
-                        GlobalEngine.select_instrument(instrument.synth_index);
+                        GlobalEngine.display_instrument(instrument.synth_index);
                     }
                 }
 

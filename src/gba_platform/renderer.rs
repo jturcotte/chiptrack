@@ -38,10 +38,11 @@ pub struct MainScreen {
     instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     focused_panel_previous: RefCell<FocusedPanel>,
     selected_column_previous: RefCell<i32>,
+    selected_step_previous: RefCell<i32>,
     sequencer_pattern_instruments_len_previous: RefCell<usize>,
     sequencer_song_pattern_active_previous: RefCell<usize>,
     sequencer_step_active_previous: RefCell<usize>,
-    selected_instrument_previous: RefCell<usize>,
+    displayed_instrument_previous: RefCell<usize>,
 }
 
 struct ModelDirtinessTracker {
@@ -193,10 +194,11 @@ impl MainScreen {
             instruments_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             focused_panel_previous: RefCell::new(FocusedPanel::Steps),
             selected_column_previous: RefCell::new(0),
+            selected_step_previous: RefCell::new(0),
             sequencer_pattern_instruments_len_previous: RefCell::new(0),
             sequencer_song_pattern_active_previous: RefCell::new(0),
             sequencer_step_active_previous: RefCell::new(0),
-            selected_instrument_previous: RefCell::new(0),
+            displayed_instrument_previous: RefCell::new(0),
         }
     }
 
@@ -229,6 +231,8 @@ impl MainScreen {
         let focused_panel_dirty = focused_panel_previous != focused_panel;
         let selected_column = global_ui.get_selected_column();
         let selected_column_dirty = self.selected_column_previous.replace(selected_column) != selected_column;
+        let selected_step = global_ui.get_selected_step();
+        let selected_step_dirty = self.selected_step_previous.replace(selected_step) != selected_step;
         let sequencer_pattern_instruments_len = global_engine.get_sequencer_pattern_instruments_len() as usize;
         let sequencer_pattern_instruments_len_dirty = self
             .sequencer_pattern_instruments_len_previous
@@ -242,9 +246,9 @@ impl MainScreen {
         let sequencer_step_active = global_engine.get_sequencer_step_active() as usize;
         let sequencer_step_active_dirty =
             self.sequencer_step_active_previous.replace(sequencer_step_active) != sequencer_step_active;
-        let selected_instrument = global_engine.get_selected_instrument() as usize;
-        let selected_instrument_dirty =
-            self.selected_instrument_previous.replace(selected_instrument) != selected_instrument;
+        let displayed_instrument = global_engine.get_displayed_instrument() as usize;
+        let displayed_instrument_dirty =
+            self.displayed_instrument_previous.replace(displayed_instrument) != displayed_instrument;
 
         let sequencer_song_patterns_dirty = self.sequencer_song_patterns_tracker.take_dirtiness();
         let sequencer_steps_dirty = self.sequencer_steps_tracker.take_dirtiness();
@@ -316,18 +320,23 @@ impl MainScreen {
             }
         }
 
-        if sequencer_steps_dirty || sequencer_step_active_dirty || selected_column_dirty || focused_panel_dirty {
-            let selected_instrument = global_engine.get_selected_instrument() as usize;
+        if sequencer_steps_dirty
+            || sequencer_step_active_dirty
+            || selected_column_dirty
+            || selected_step_dirty
+            || focused_panel_dirty
+        {
+            let displayed_instrument = global_engine.get_displayed_instrument() as usize;
             let vid_row = tsb.get_row(0).unwrap();
-            let selected_instrument_id = global_engine
+            let displayed_instrument_id = global_engine
                 .get_instruments()
-                .row_data(selected_instrument)
+                .row_data(displayed_instrument)
                 .unwrap()
                 .id;
             draw_ascii_chars(
                 vid_row,
                 STEPS_START_X..STEPS_START_X + 3,
-                selected_instrument_id.chars().chain(repeat(' ')),
+                displayed_instrument_id.chars().chain(repeat(' ')),
                 NORMAL_TEXT,
             );
 
@@ -335,7 +344,7 @@ impl MainScreen {
             for i in 0..sequencer_steps.row_count() {
                 let vid_row = tsb.get_row(i + 1).unwrap();
                 let row_data = sequencer_steps.row_data(i).unwrap();
-                let selected = row_data.selected && focused_panel == FocusedPanel::Steps;
+                let selected = selected_step as usize == i && focused_panel == FocusedPanel::Steps;
                 let param0_bank = if selected && selected_column == 0 {
                     SELECTED_TEXT
                 } else {
@@ -473,12 +482,12 @@ impl MainScreen {
             }
         }
         if focused_panel == FocusedPanel::Instruments
-            && (toggled_instruments || selected_instrument_dirty || instruments_dirty)
+            && (toggled_instruments || displayed_instrument_dirty || instruments_dirty)
         {
             let instruments = global_engine.get_instruments();
             let scroll_pos =
                 // 4 instruments per row
-                (selected_instrument / 4)
+                (displayed_instrument / 4)
                 // Keep the cursor on the middle row even if the first row is selected
                     .max(4)
                 // With the cursor in the middle of the screen, keep the last row at the bottom of the screen (4 rows more)
@@ -491,7 +500,7 @@ impl MainScreen {
                     let x = col * 4 + INSTR_START_X;
                     let instrument_idx = row * 4 + col;
                     let instrument = instruments.row_data(instrument_idx).unwrap();
-                    let palbank = if instrument_idx == selected_instrument {
+                    let palbank = if instrument_idx == displayed_instrument {
                         SELECTED_TEXT
                     } else {
                         NORMAL_TEXT

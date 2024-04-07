@@ -3,7 +3,6 @@
 
 import {
     FocusedPanel,
-    GlobalUI,
     InstrumentsFocusScope,
     PatternsFocusScope,
     StepsFocusScope
@@ -12,6 +11,7 @@ import {
 import {
     GlobalSettings,
     GlobalEngine,
+    GlobalUI,
     GlobalUtils
 } from "globals.slint";
 
@@ -33,8 +33,8 @@ export component MainWindow inherits Window {
         else if e.modifiers.shift && e.text == Key.RightArrow { cycle_focus_panel(true); }
         else if e.text == Key.LeftArrow { GlobalEngine.cycle_pattern_instrument(false); }
         else if e.text == Key.RightArrow { GlobalEngine.cycle_pattern_instrument(true); }
-        else if e.text == Key.UpArrow { GlobalEngine.select_next_song_pattern(false); }
-        else if e.text == Key.DownArrow { GlobalEngine.select_next_song_pattern(true); }
+        else if e.text == Key.UpArrow { GlobalUI.select_next_song_pattern(false); }
+        else if e.text == Key.DownArrow { GlobalUI.select_next_song_pattern(true); }
         else if e.text == Key.Return && e.modifiers.alt { save_to_sram(); }
         else if e.text == Key.Return && e.modifiers.control { GlobalUI.toggle_play(false); }
         else if e.text == Key.Return { GlobalUI.toggle_play(true); }

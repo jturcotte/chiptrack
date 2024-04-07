@@ -146,4 +146,9 @@ impl WeakWindowWrapper {
         func(self.inner.upgrade().unwrap());
         Ok(())
     }
+
+    #[cfg(not(feature = "std"))]
+    pub fn run_direct<R>(&self, func: impl FnOnce(MainWindow) -> R) -> R {
+        func(self.inner.upgrade().unwrap())
+    }
 }

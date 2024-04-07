@@ -16,7 +16,6 @@ export struct StepData {
     press: bool,
     release: bool,
     note: int,
-    selected: bool,
     param0_set: bool,
     param0_val: int,
     param1_set: bool,
@@ -56,6 +55,114 @@ export struct SongSettings {
     frames_per_step: int,
 }
 
+// State shared by the desktop and gba UIs is put here in a
+// global to avoid having to duplicate them in the separate root components.
+export global GlobalUI {
+    // param0, param1, press, release
+    in-out property<int> selected_column: 2;
+    in-out property<int> selected_step: 0;
+    in-out property<bool> x_pressed: false;
+    in-out property<bool> z_pressed: false;
+    in-out property<KeyEvent> last_pressed_key;
+    in-out property<bool> playing: false;
+    in property<bool> recording: true;
+    out property<bool> pin_selection_to_active: false;
+
+    public function toggle_play(song_mode: bool) {
+        playing = !playing;
+
+        if playing {
+            // In song mode pin the selection to the active pattern/step
+            // so that the playback position is kept visible.
+            pin_selection_to_active = song_mode;
+
+            // Reset the playback step position to the beginning of the pattern.
+            GlobalEngine.activate_step(0);
+        } else {
+            // When not playing, keep the active step pinned to the selection so that
+            // notes can be recorded on the selected step.
+            // Also reset the playback step position to the selected song pattern and step.
+            pin_selection_to_active = true;
+            GlobalEngine.activate_song_pattern(GlobalEngine.sequencer_song_pattern_selected);
+            GlobalEngine.activate_step(selected_step);
+        }
+
+        GlobalEngine.set_playing(playing, song_mode);
+    }
+
+    public function cycle_step_colum(forward: bool) {
+        if forward && selected_column < 3 {
+            selected_column += 1;
+        } else if (!forward && selected_column > 0){
+            selected_column -= 1;
+        }
+    }
+
+    public function select_song_pattern(song_pattern: int) {
+        if playing {
+            pin_selection_to_active = false;
+        } else {
+            // When not playing, make sure that the selected pattern is also activated
+            // so that recording notes happen in the selected pattern and that playback will start there.
+            GlobalEngine.activate_song_pattern(song_pattern);
+        }
+        GlobalEngine.display_song_pattern(song_pattern);
+    }
+
+    public function select_next_song_pattern(forward: bool) {
+        if forward && GlobalEngine.sequencer_song_pattern_selected + 1 < GlobalEngine.sequencer_song_patterns.length {
+            select_song_pattern(GlobalEngine.sequencer_song_pattern_selected + 1);
+        } else if !forward && GlobalEngine.sequencer_song_pattern_selected > 0 {
+            select_song_pattern(GlobalEngine.sequencer_song_pattern_selected - 1);
+        }
+    }
+
+    public function select_step(step: int) {
+        if playing {
+            pin_selection_to_active = false;
+        } else {
+            // This updates the step receiving key record events when not playing.
+            GlobalEngine.activate_step(step);
+        }
+        selected_step = step;
+    }
+
+    public function select_next_step(forward: bool) {
+        if playing {
+            pin_selection_to_active = false;
+        }
+        if forward {
+            if selected_step < 15 {
+                select_step(selected_step + 1);
+            } else {
+                // FIXME: Report return val issue and re-use select_next_song_pattern
+                if GlobalEngine.sequencer_song_pattern_selected + 1 < GlobalEngine.sequencer_song_patterns.length {
+                    select_step(0);
+                    select_next_song_pattern(true);
+                }
+            }
+        } else {
+            if selected_step > 0 {
+                select_step(selected_step - 1);
+            } else {
+                if GlobalEngine.sequencer_song_pattern_selected > 0 {
+                    select_step(15);
+                    select_next_song_pattern(false);
+                }
+            }
+        }
+    }
+
+    public function update_selected_step() {
+        if playing && pin_selection_to_active {
+            selected_step = GlobalEngine.sequencer_step_active;
+        }
+    }
+
+}
+
+
+
 export global GlobalEngine {
     in-out property<[SongPatternData]> sequencer_song_patterns: [
         {number: 0},
@@ -91,7 +198,7 @@ export global GlobalEngine {
         {press: false}, {press: false}, {press: false},
         {press: true, release: true, note: 65},
         {press: false}, {press: false}, {press: false},
-        {press: true, note: 65, selected: true},
+        {press: true, note: 65},
         {press: false}, {press: false}, {press: false},
         {press: false, release: true},
         {press: false}, {press: false}, {press: false}];
@@ -108,7 +215,7 @@ export global GlobalEngine {
         {active: false}, {active: false}, {active: false}, {active: false},
         ];
 
-    in-out property<int> selected_instrument: 0;
+    in-out property<int> displayed_instrument: 0;
     pure callback phase_visualization_tick(float) -> float;
 
     in-out property<int> last_synth_tick: -1;
@@ -126,34 +233,33 @@ export global GlobalEngine {
     callback note_pressed(int);
     callback note_released(int);
     callback set_erasing(bool);
-    callback select_instrument(int);
+    callback display_instrument(int);
     callback cycle_instrument(int, int);
     callback cycle_pattern_instrument(bool);
-    callback cycle_note_start();
-    callback cycle_note_end();
-    callback cycle_note(bool, bool);
+    callback cycle_step_note_start(int);
+    callback cycle_step_note_end(int);
+    callback cycle_step_note(int, bool, bool);
     callback cycle_instrument_param_start();
     callback cycle_instrument_param_end();
     callback cycle_instrument_param(int, bool);
-    callback cycle_step_param_start(int);
-    callback cycle_step_param_end(int);
-    callback cycle_step_param(int, bool, bool);
+    callback cycle_step_param_start(int, int);
+    callback cycle_step_param_end(int, int);
+    callback cycle_step_param(int, int, bool, bool);
     callback cycle_song_pattern_start();
     callback cycle_song_pattern_start_with_new();
     callback cycle_song_pattern(bool);
-    callback cut_selected_step_note();
-    callback cut_selected_step_param(int);
+    callback cut_step_note(int);
+    callback cut_step_param(int, int);
     callback toggle_mute_instrument(int);
     callback toggle_step(int);
     callback toggle_step_release(int);
-    callback toggle_selected_step_release();
-    callback select_next_step(bool);
-    callback play_clicked(/*playing*/ bool, /*song_mode*/ bool);
+    callback activate_step(int);
+    callback set_playing(/*playing*/ bool, /*song_mode*/ bool);
     callback record_clicked(bool);
-    callback select_next_song_pattern(bool);
-    callback select_song_pattern(int);
+    callback display_song_pattern(int);
     callback remove_last_song_pattern();
-    callback clone_selected_song_pattern();
+    callback clone_displayed_song_pattern();
+    callback activate_song_pattern(int);
     callback save_project();
     callback export_project_as_gba_sav();
     callback mute_instruments();
