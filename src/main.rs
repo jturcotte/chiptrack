@@ -3,7 +3,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "gba", no_main)]
-#![cfg_attr(feature = "gba", feature(alloc_error_handler))]
+#![cfg_attr(feature = "gba", feature(alloc_error_handler, panic_info_message))]
 
 extern crate alloc;
 

@@ -33,11 +33,12 @@ fn oom(layout: core::alloc::Layout) -> ! {
 
 #[panic_handler]
 fn panic_handler(info: &core::panic::PanicInfo) -> ! {
-    if let Ok(mut logger) = MgbaBufferedLogger::try_new(MgbaMessageLevel::Fatal) {
-        write!(logger, "{info}").ok();
-    } else {
-        elog!("{info}");
-    }
+    elog!(
+        "PANIC! {}:{}: {:?}",
+        info.location().map_or("", |l| l.file()),
+        info.location().map_or(0, |l| l.line()),
+        info.message()
+    );
 
     loop {}
 }
