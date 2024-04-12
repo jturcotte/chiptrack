@@ -384,6 +384,12 @@ struct NoteClipboard {
     release: bool,
 }
 
+#[derive(PartialEq)]
+pub enum OnEmpty {
+    PasteOnEmpty,
+    EmptyOnEmpty,
+}
+
 pub struct Sequencer {
     pub song: SequencerSong,
     active_frame: Option<u32>,
@@ -475,7 +481,7 @@ impl Sequencer {
             .unwrap();
 
         // There is currently no event loop on the GBA and the UI lives on a separate thread
-        // on the desktop. So the implementation needs to be separate to avoid the re-entrancy
+        // on the desktop. So the implementation needs to be separate to avoid the reentrancy
         // caused by the UI callback invoking the GlobalEngine, requiring a RefCell that
         // is already held.
         #[cfg(feature = "gba")]
@@ -668,7 +674,7 @@ impl Sequencer {
         if pressed {
             self.cut_step_note(step);
         } else {
-            self.cycle_step_note(step, None, false);
+            self.cycle_step_note(step, None, false, OnEmpty::PasteOnEmpty);
         }
     }
 
@@ -1060,7 +1066,13 @@ impl Sequencer {
         self.record_key_event(KeyEvent::Release, None, None);
     }
 
-    pub fn cycle_step_note(&mut self, step: usize, forward: Option<bool>, large_inc: bool) -> (u8, i8, i8) {
+    pub fn cycle_step_note(
+        &mut self,
+        step: usize,
+        forward: Option<bool>,
+        large_inc: bool,
+        on_empty: OnEmpty,
+    ) -> (u8, i8, i8) {
         // The GBA only handles frequencies from C1 upwards.
         const LOWEST_NOTE: u8 = 24;
 
@@ -1070,6 +1082,9 @@ impl Sequencer {
                 let s = ss[step];
                 (s.press_note(), s.param0, s.param1)
             });
+        if maybe_selected_note.is_none() && on_empty == OnEmpty::EmptyOnEmpty {
+            return (0, 0, 0);
+        }
         let inc = if large_inc { 12 } else { 1 };
         let active_note = maybe_selected_note.unwrap_or(self.note_clipboard.note);
         let new_note = if forward.unwrap_or(false) && active_note + inc <= 127 {
@@ -1148,6 +1163,7 @@ impl Sequencer {
         param_num: u8,
         forward: Option<bool>,
         large_inc: bool,
+        on_empty: OnEmpty,
     ) -> (u8, i8, i8) {
         let (maybe_selected_note, mut step_parameters) = self.song.patterns[self.displayed_pattern_idx()]
             .get_steps(self.displayed_instrument)
@@ -1159,11 +1175,17 @@ impl Sequencer {
         let instrument_params = self.instrument_params[self.displayed_instrument as usize];
         let val = if param_num == 0 {
             if step_parameters.0.is_none() {
+                if on_empty == OnEmpty::EmptyOnEmpty {
+                    return (0, 0, 0);
+                }
                 step_parameters.0 = Some(instrument_params.0);
             }
             &mut step_parameters.0
         } else {
             if step_parameters.1.is_none() {
+                if on_empty == OnEmpty::EmptyOnEmpty {
+                    return (0, 0, 0);
+                }
                 step_parameters.1 = Some(instrument_params.1);
             }
             &mut step_parameters.1

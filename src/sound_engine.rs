@@ -4,6 +4,7 @@
 #[cfg(feature = "gba")]
 use crate::gba_platform;
 use crate::log;
+use crate::sequencer::OnEmpty;
 use crate::sequencer::Sequencer;
 use crate::sequencer::StepEvent;
 #[cfg(feature = "desktop")]
@@ -289,7 +290,7 @@ impl SoundEngine {
 
     pub fn cycle_step_param_start(&mut self, step: usize, param_num: u8) {
         let mut seq = self.sequencer.borrow_mut();
-        let (note, p0, p1) = seq.cycle_step_param(step, param_num, None, false);
+        let (note, p0, p1) = seq.cycle_step_param(step, param_num, None, false, OnEmpty::PasteOnEmpty);
         if !seq.playing() {
             self.script
                 .press_instrument_note(self.frame_number, seq.displayed_instrument, note, p0, p1);
@@ -305,10 +306,13 @@ impl SoundEngine {
         }
     }
     pub fn cycle_step_param(&mut self, step: usize, param_num: u8, forward: bool, large_inc: bool) {
-        let (note, p0, p1) = self
-            .sequencer
-            .borrow_mut()
-            .cycle_step_param(step, param_num, Some(forward), large_inc);
+        let (note, p0, p1) = self.sequencer.borrow_mut().cycle_step_param(
+            step,
+            param_num,
+            Some(forward),
+            large_inc,
+            OnEmpty::PasteOnEmpty,
+        );
         if !self.sequencer.borrow().playing() {
             let instrument = self.sequencer.borrow().displayed_instrument;
 
@@ -323,9 +327,25 @@ impl SoundEngine {
             }
         }
     }
+    pub fn cycle_step_range_param(
+        &mut self,
+        step_range_start: usize,
+        step_range_end: usize,
+        param_num: u8,
+        forward: bool,
+        large_inc: bool,
+    ) {
+        let mut seq = self.sequencer.borrow_mut();
+        for step in step_range_start..=step_range_end {
+            seq.cycle_step_param(step, param_num, Some(forward), large_inc, OnEmpty::EmptyOnEmpty);
+        }
+    }
 
     pub fn cycle_step_note_start(&mut self, step: usize) {
-        let (new_note, p0, p1) = self.sequencer.borrow_mut().cycle_step_note(step, None, false);
+        let (new_note, p0, p1) = self
+            .sequencer
+            .borrow_mut()
+            .cycle_step_note(step, None, false, OnEmpty::PasteOnEmpty);
         if !self.sequencer.borrow().playing() {
             self.script.press_instrument_note(
                 self.frame_number,
@@ -345,10 +365,10 @@ impl SoundEngine {
         }
     }
     pub fn cycle_step_note(&mut self, step: usize, forward: bool, large_inc: bool) {
-        let (new_note, p0, p1) = self
-            .sequencer
-            .borrow_mut()
-            .cycle_step_note(step, Some(forward), large_inc);
+        let (new_note, p0, p1) =
+            self.sequencer
+                .borrow_mut()
+                .cycle_step_note(step, Some(forward), large_inc, OnEmpty::PasteOnEmpty);
         if !self.sequencer.borrow().playing() {
             self.script.press_instrument_note(
                 self.frame_number,
@@ -357,6 +377,18 @@ impl SoundEngine {
                 p0,
                 p1,
             );
+        }
+    }
+    pub fn cycle_step_range_note(
+        &mut self,
+        step_range_start: usize,
+        step_range_end: usize,
+        forward: bool,
+        large_inc: bool,
+    ) {
+        let mut seq = self.sequencer.borrow_mut();
+        for step in step_range_start..=step_range_end {
+            seq.cycle_step_note(step, Some(forward), large_inc, OnEmpty::EmptyOnEmpty);
         }
     }
 

@@ -116,6 +116,9 @@ Cycle note/param (large amount) | <kbd>X</kbd> + (<kbd>&#8595;</kbd>\|<kbd>&#859
 Copy | <kbd>X</kbd>  | <kbd>A</kbd>
 Cut | <kbd>Z</kbd> + <kbd>X</kbd>  | <kbd>B</kbd> + <kbd>A</kbd>
 Paste (on empty slot) | <kbd>X</kbd>  | <kbd>A</kbd>
+Enter selection mode | <kbd>Shift</kbd> + <kbd>Z</kbd> | <kbd>R</kbd> + <kbd>B</kbd>
+Select all rows (selection) | <kbd>Shift</kbd> + <kbd>Z</kbd> | <kbd>R</kbd> + <kbd>B</kbd>
+Cancel selection | <kbd>Shift</kbd> | <kbd>R</kbd>
 
 Notes: <kbd>B</kbd> + <kbd>A</kbd> means that <kbd>B</kbd> must be held first*
 

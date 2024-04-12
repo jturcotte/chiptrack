@@ -275,6 +275,12 @@ fn run_main() {
             .borrow_mut()
             .invoke_on_sound_engine(move |se| se.cycle_step_note(step as usize, forward, large_inc));
     });
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_step_range_note(move |step_range_start, step_range_end, forward, large_inc| {
+        cloned_sound_renderer.borrow_mut().invoke_on_sound_engine(move |se| {
+            se.cycle_step_range_note(step_range_start as usize, step_range_end as usize, forward, large_inc)
+        });
+    });
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_cycle_instrument_param_start(move || {
@@ -312,6 +318,18 @@ fn run_main() {
         cloned_sound_renderer
             .borrow_mut()
             .invoke_on_sound_engine(move |se| se.cycle_step_param(step as usize, param_num as u8, forward, large_inc));
+    });
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_step_range_param(move |step_range_start, step_range_end, param_num, forward, large_inc| {
+        cloned_sound_renderer.borrow_mut().invoke_on_sound_engine(move |se| {
+            se.cycle_step_range_param(
+                step_range_start as usize,
+                step_range_end as usize,
+                param_num as u8,
+                forward,
+                large_inc,
+            )
+        });
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -540,9 +558,11 @@ fn run_main() {
                 .invoke_on_sound_engine(move |se| se.apply_song_settings(&settings));
         });
 
+    #[cfg(feature = "desktop")]
     window
         .global::<GlobalUtils>()
         .on_get_midi_note_name(|note| MidiNote(note).name().into());
+    #[cfg(feature = "desktop")]
     window
         .global::<GlobalUtils>()
         .on_get_midi_note_short_name(|note| MidiNote(note).short_name());
