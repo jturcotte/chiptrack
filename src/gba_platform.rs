@@ -76,7 +76,6 @@ unsafe impl critical_section::Impl for GbaCriticalSection {
 }
 
 struct GbaPlatform {
-    main_screen: MainScreen,
     window: Rc<MinimalSoftwareWindow>,
 }
 
@@ -123,9 +122,8 @@ pub fn init() {
     TIMER2_CONTROL.write(TimerControl::new().with_enabled(true).with_scale(TimerScale::_1024));
     TIMER3_CONTROL.write(TimerControl::new().with_enabled(true).with_cascade(true));
 
-    let main_screen = MainScreen::new();
     let window = MinimalSoftwareWindow::new(Default::default());
-    slint::platform::set_platform(Box::new(GbaPlatform { main_screen, window })).expect("backend already initialized");
+    slint::platform::set_platform(Box::new(GbaPlatform { window })).expect("backend already initialized");
 }
 
 pub fn set_sound_renderer(sound_renderer: Rc<RefCell<SoundRenderer>>) {
@@ -177,8 +175,8 @@ impl slint::platform::Platform for GbaPlatform {
         let slint_key_r: SharedString = slint::platform::Key::Shift.into();
         let slint_key_l: SharedString = slint::platform::Key::Alt.into();
 
-        let main_screen = &self.main_screen;
         let window = self.window.clone();
+        let mut main_screen = MainScreen::new();
         main_screen.attach_trackers();
 
         log!("--- Memory used before loop: {}kb", ALLOCATOR.used());

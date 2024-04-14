@@ -12,6 +12,7 @@ use crate::MidiNote;
 use alloc::boxed::Box;
 use core::cell::RefCell;
 use core::iter::repeat;
+use core::mem::replace;
 use core::pin::Pin;
 
 use gba::prelude::*;
@@ -30,19 +31,43 @@ const SELECTED_TEXT: u16 = 0b111;
 // Must not be mixed
 const ERROR_TEXT: u16 = 0b101;
 
+// Cheap version of Slint's PropertyTracker that just compares values.
+struct ChangeChecker<T: PartialEq + Copy> {
+    last_seen: T,
+}
+struct ChangeCheckStatus<T: PartialEq + Copy> {
+    current: T,
+    previous: T,
+}
+impl<T: PartialEq + Copy> ChangeChecker<T> {
+    fn new(initial: T) -> Self {
+        Self { last_seen: initial }
+    }
+
+    fn check(&mut self, current: T) -> ChangeCheckStatus<T> {
+        let previous = replace(&mut self.last_seen, current);
+        ChangeCheckStatus { current, previous }
+    }
+}
+impl<T: PartialEq + Copy> ChangeCheckStatus<T> {
+    fn dirty(&self) -> bool {
+        self.current != self.previous
+    }
+}
+
 pub struct MainScreen {
     sequencer_song_patterns_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     sequencer_steps_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     sequencer_pattern_instruments_tracker:
         Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
     instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
-    focused_panel_previous: RefCell<FocusedPanel>,
-    selected_column_previous: RefCell<i32>,
-    selected_step_previous: RefCell<i32>,
-    sequencer_pattern_instruments_len_previous: RefCell<usize>,
-    sequencer_song_pattern_active_previous: RefCell<usize>,
-    sequencer_step_active_previous: RefCell<usize>,
-    displayed_instrument_previous: RefCell<usize>,
+    focused_panel_checker: ChangeChecker<FocusedPanel>,
+    selected_column_checker: ChangeChecker<i32>,
+    selected_step_checker: ChangeChecker<i32>,
+    sequencer_pattern_instruments_len_checker: ChangeChecker<usize>,
+    sequencer_song_pattern_active_checker: ChangeChecker<usize>,
+    sequencer_step_active_checker: ChangeChecker<usize>,
+    displayed_instrument_checker: ChangeChecker<usize>,
 }
 
 struct ModelDirtinessTracker {
@@ -192,13 +217,13 @@ impl MainScreen {
                 ModelChangeListenerContainer::<ModelDirtinessTracker>::default(),
             ),
             instruments_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
-            focused_panel_previous: RefCell::new(FocusedPanel::Steps),
-            selected_column_previous: RefCell::new(0),
-            selected_step_previous: RefCell::new(0),
-            sequencer_pattern_instruments_len_previous: RefCell::new(0),
-            sequencer_song_pattern_active_previous: RefCell::new(0),
-            sequencer_step_active_previous: RefCell::new(0),
-            displayed_instrument_previous: RefCell::new(0),
+            focused_panel_checker: ChangeChecker::new(FocusedPanel::Steps),
+            selected_column_checker: ChangeChecker::new(0),
+            selected_step_checker: ChangeChecker::new(0),
+            sequencer_pattern_instruments_len_checker: ChangeChecker::new(0),
+            sequencer_song_pattern_active_checker: ChangeChecker::new(0),
+            sequencer_step_active_checker: ChangeChecker::new(0),
+            displayed_instrument_checker: ChangeChecker::new(0),
         }
     }
 
@@ -222,33 +247,25 @@ impl MainScreen {
             .attach_peer(Pin::as_ref(&self.instruments_tracker).model_peer());
     }
 
-    pub fn draw(&self) {
+    pub fn draw(&mut self) {
         let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
         let global_engine = GlobalEngine::get(&handle);
         let global_ui = GlobalUI::get(&handle);
-        let focused_panel = handle.get_focused_panel();
-        let focused_panel_previous = self.focused_panel_previous.replace(focused_panel);
-        let focused_panel_dirty = focused_panel_previous != focused_panel;
-        let selected_column = global_ui.get_selected_column();
-        let selected_column_dirty = self.selected_column_previous.replace(selected_column) != selected_column;
-        let selected_step = global_ui.get_selected_step();
-        let selected_step_dirty = self.selected_step_previous.replace(selected_step) != selected_step;
-        let sequencer_pattern_instruments_len = global_engine.get_sequencer_pattern_instruments_len() as usize;
-        let sequencer_pattern_instruments_len_dirty = self
-            .sequencer_pattern_instruments_len_previous
-            .replace(sequencer_pattern_instruments_len)
-            != sequencer_pattern_instruments_len;
-        let sequencer_song_pattern_active = global_engine.get_sequencer_song_pattern_active() as usize;
-        let sequencer_song_pattern_active_dirty = self
-            .sequencer_song_pattern_active_previous
-            .replace(sequencer_song_pattern_active)
-            != sequencer_song_pattern_active;
-        let sequencer_step_active = global_engine.get_sequencer_step_active() as usize;
-        let sequencer_step_active_dirty =
-            self.sequencer_step_active_previous.replace(sequencer_step_active) != sequencer_step_active;
-        let displayed_instrument = global_engine.get_displayed_instrument() as usize;
-        let displayed_instrument_dirty =
-            self.displayed_instrument_previous.replace(displayed_instrument) != displayed_instrument;
+        let focused_panel = self.focused_panel_checker.check(handle.get_focused_panel());
+        let selected_column = self.selected_column_checker.check(global_ui.get_selected_column());
+        let selected_step = self.selected_step_checker.check(global_ui.get_selected_step());
+        let sequencer_pattern_instruments_len = self
+            .sequencer_pattern_instruments_len_checker
+            .check(global_engine.get_sequencer_pattern_instruments_len() as usize);
+        let sequencer_song_pattern_active = self
+            .sequencer_song_pattern_active_checker
+            .check(global_engine.get_sequencer_song_pattern_active() as usize);
+        let sequencer_step_active = self
+            .sequencer_step_active_checker
+            .check(global_engine.get_sequencer_step_active() as usize);
+        let displayed_instrument = self
+            .displayed_instrument_checker
+            .check(global_engine.get_displayed_instrument() as usize);
 
         let sequencer_song_patterns_dirty = self.sequencer_song_patterns_tracker.take_dirtiness();
         let sequencer_steps_dirty = self.sequencer_steps_tracker.take_dirtiness();
@@ -261,28 +278,28 @@ impl MainScreen {
         const INSTR_START_X: usize = 14;
 
         let status_vid_row = tsb.get_row(18).unwrap();
-        if focused_panel_dirty {
+        if focused_panel.dirty() {
             draw_ascii_byte(
                 status_vid_row,
                 0,
-                (focused_panel == FocusedPanel::Patterns) as u8 * Cga8x8Thick::BULLET,
+                (focused_panel.current == FocusedPanel::Patterns) as u8 * Cga8x8Thick::BULLET,
                 NORMAL_TEXT,
             );
             draw_ascii_byte(
                 status_vid_row,
                 PARAMS_START_X - 1,
-                (focused_panel == FocusedPanel::Steps) as u8 * Cga8x8Thick::BULLET,
+                (focused_panel.current == FocusedPanel::Steps) as u8 * Cga8x8Thick::BULLET,
                 NORMAL_TEXT,
             );
             draw_ascii_byte(
                 status_vid_row,
                 INSTR_START_X - 1,
-                (focused_panel == FocusedPanel::Instruments) as u8 * Cga8x8Thick::BULLET,
+                (focused_panel.current == FocusedPanel::Instruments) as u8 * Cga8x8Thick::BULLET,
                 NORMAL_TEXT,
             );
         }
 
-        if sequencer_song_pattern_active_dirty || sequencer_song_patterns_dirty {
+        if sequencer_song_pattern_active.dirty() || sequencer_song_patterns_dirty {
             let pattern_model = global_engine.get_sequencer_song_patterns();
             draw_ascii_ref(tsb.get_row(0).unwrap(), 0.., b"Song", NORMAL_TEXT);
 
@@ -314,17 +331,17 @@ impl MainScreen {
                 draw_ascii_byte(
                     vid_row,
                     0,
-                    (i == sequencer_song_pattern_active) as u8 * Cga8x8Thick::BULLET,
+                    (i == sequencer_song_pattern_active.current) as u8 * Cga8x8Thick::BULLET,
                     NORMAL_TEXT,
                 )
             }
         }
 
         if sequencer_steps_dirty
-            || sequencer_step_active_dirty
-            || selected_column_dirty
-            || selected_step_dirty
-            || focused_panel_dirty
+            || sequencer_step_active.dirty()
+            || selected_column.dirty()
+            || selected_step.dirty()
+            || focused_panel.dirty()
         {
             let displayed_instrument = global_engine.get_displayed_instrument() as usize;
             let vid_row = tsb.get_row(0).unwrap();
@@ -344,23 +361,23 @@ impl MainScreen {
             for i in 0..sequencer_steps.row_count() {
                 let vid_row = tsb.get_row(i + 1).unwrap();
                 let row_data = sequencer_steps.row_data(i).unwrap();
-                let selected = selected_step as usize == i && focused_panel == FocusedPanel::Steps;
-                let param0_bank = if selected && selected_column == 0 {
+                let selected = selected_step.current as usize == i && focused_panel.current == FocusedPanel::Steps;
+                let param0_bank = if selected && selected_column.current == 0 {
                     SELECTED_TEXT
                 } else {
                     NORMAL_TEXT
                 };
-                let param1_bank = if selected && selected_column == 1 {
+                let param1_bank = if selected && selected_column.current == 1 {
                     SELECTED_TEXT
                 } else {
                     NORMAL_TEXT
                 };
-                let press_bank = if selected && selected_column == 2 {
+                let press_bank = if selected && selected_column.current == 2 {
                     SELECTED_TEXT
                 } else {
                     NORMAL_TEXT
                 };
-                let release_bank = if selected && selected_column >= 2 {
+                let release_bank = if selected && selected_column.current >= 2 {
                     SELECTED_TEXT
                 } else {
                     NORMAL_TEXT
@@ -418,7 +435,7 @@ impl MainScreen {
                 draw_ascii_byte(
                     vid_row,
                     PARAMS_START_X - 1,
-                    (i == sequencer_step_active) as u8 * Cga8x8Thick::BULLET,
+                    (i == sequencer_step_active.current) as u8 * Cga8x8Thick::BULLET,
                     NORMAL_TEXT,
                 );
                 draw_ascii_byte(vid_row, STEPS_START_X - 1, row_data.press as u8 * b'[', press_bank);
@@ -426,18 +443,19 @@ impl MainScreen {
             }
         }
 
-        let toggled_instruments = focused_panel_dirty
-            && (focused_panel == FocusedPanel::Instruments || focused_panel_previous == FocusedPanel::Instruments);
+        let toggled_instruments = focused_panel.dirty()
+            && (focused_panel.current == FocusedPanel::Instruments
+                || focused_panel.previous == FocusedPanel::Instruments);
         if toggled_instruments {
             for i in 0..17 {
                 draw_ascii(tsb.get_row(i).unwrap(), INSTR_START_X.., repeat(0), NORMAL_TEXT);
             }
-            if focused_panel == FocusedPanel::Instruments {
+            if focused_panel.current == FocusedPanel::Instruments {
                 draw_ascii_ref(tsb.get_row(0).unwrap(), INSTR_START_X.., b"Instruments", NORMAL_TEXT);
             }
         }
-        if focused_panel != FocusedPanel::Instruments
-            && (toggled_instruments || sequencer_pattern_instruments_len_dirty || sequencer_pattern_instruments_dirty)
+        if focused_panel.current != FocusedPanel::Instruments
+            && (toggled_instruments || sequencer_pattern_instruments_len.dirty() || sequencer_pattern_instruments_dirty)
         {
             let top_vid_row = tsb.get_row(0).unwrap();
             let sequencer_pattern_instruments = global_engine.get_sequencer_pattern_instruments();
@@ -447,7 +465,7 @@ impl MainScreen {
                 let normal_bank = col_bank | NORMAL_TEXT;
                 let faded_bank = col_bank | FADED_TEXT;
 
-                if i < sequencer_pattern_instruments_len {
+                if i < sequencer_pattern_instruments_len.current {
                     let row_data = sequencer_pattern_instruments.row_data(i).unwrap();
 
                     draw_ascii_chars(
@@ -481,13 +499,13 @@ impl MainScreen {
                 }
             }
         }
-        if focused_panel == FocusedPanel::Instruments
-            && (toggled_instruments || displayed_instrument_dirty || instruments_dirty)
+        if focused_panel.current == FocusedPanel::Instruments
+            && (toggled_instruments || displayed_instrument.dirty() || instruments_dirty)
         {
             let instruments = global_engine.get_instruments();
             let scroll_pos =
                 // 4 instruments per row
-                (displayed_instrument / 4)
+                (displayed_instrument.current / 4)
                 // Keep the cursor on the middle row even if the first row is selected
                     .max(4)
                 // With the cursor in the middle of the screen, keep the last row at the bottom of the screen (4 rows more)
@@ -500,7 +518,7 @@ impl MainScreen {
                     let x = col * 4 + INSTR_START_X;
                     let instrument_idx = row * 4 + col;
                     let instrument = instruments.row_data(instrument_idx).unwrap();
-                    let palbank = if instrument_idx == displayed_instrument {
+                    let palbank = if instrument_idx == displayed_instrument.current {
                         SELECTED_TEXT
                     } else {
                         NORMAL_TEXT
