@@ -69,7 +69,7 @@ component StepSelectableText inherits Rectangle {
     in property text_color <=> t.color;
     in property horizontal_alignment <=> t.horizontal_alignment;
     // FIXME: Check what makes sense on the gba
-    property<color> selection_color: GlobalUI.selected_step_range_start == -1
+    property<color> selection_color: GlobalUI.selected_step_range_first == -1
         ? lightgrey
         : #a0a0ff;
     border_radius: self.height / 8;
@@ -287,11 +287,11 @@ export component PatternsPanel inherits HorizontalLayout {
             HorizontalLayout {
                 SequencerStep {
                     step_selected: idx == GlobalUI.selected_step
-                        || (GlobalUI.selected_step_range_start > GlobalUI.selected_step
+                        || (GlobalUI.selected_step_range_first > GlobalUI.selected_step
                             && GlobalUI.selected_step <= idx
-                            && idx <= GlobalUI.selected_step_range_start)
-                        || (GlobalUI.selected_step_range_start != -1
-                            && GlobalUI.selected_step_range_start <= idx
+                            && idx <= GlobalUI.selected_step_range_first)
+                        || (GlobalUI.selected_step_range_first != -1
+                            && GlobalUI.selected_step_range_first <= idx
                             && idx <= GlobalUI.selected_step);
                     highlighted: idx == GlobalEngine.sequencer_step_active;
                     show_selection: focused_panel == FocusedPanel.steps;

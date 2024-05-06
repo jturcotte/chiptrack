@@ -113,14 +113,19 @@ Function | Desktop | Game Boy Advance
 ---------|---------|-----------------
 Cycle note/param | <kbd>X</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>) | <kbd>A</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>)
 Cycle note/param (large amount) | <kbd>X</kbd> + (<kbd>&#8595;</kbd>\|<kbd>&#8593;</kbd>) | <kbd>A</kbd> + (<kbd>&#8595;</kbd>\|<kbd>&#8593;</kbd>)
-Copy | <kbd>X</kbd>  | <kbd>A</kbd>
-Cut | <kbd>Z</kbd> + <kbd>X</kbd>  | <kbd>B</kbd> + <kbd>A</kbd>
-Paste (on empty slot) | <kbd>X</kbd>  | <kbd>A</kbd>
 Enter selection mode | <kbd>Shift</kbd> + <kbd>Z</kbd> | <kbd>R</kbd> + <kbd>B</kbd>
-Select all rows (selection) | <kbd>Shift</kbd> + <kbd>Z</kbd> | <kbd>R</kbd> + <kbd>B</kbd>
+Select all rows (in selection) | <kbd>Shift</kbd> + <kbd>Z</kbd> | <kbd>R</kbd> + <kbd>B</kbd>
+Copy (in selection) | <kbd>Z</kbd>  | <kbd>B</kbd>
+Cut (in or not in selection) | <kbd>Z</kbd> + <kbd>X</kbd>  | <kbd>B</kbd> + <kbd>A</kbd>
 Cancel selection | <kbd>Shift</kbd> | <kbd>R</kbd>
+Paste selection clipboard | <kbd>Shift</kbd> + <kbd>X</kbd>  | <kbd>R</kbd> + <kbd>A</kbd>
+Paste edit clipboard (on empty slot) | <kbd>X</kbd>  | <kbd>A</kbd>
 
-Notes: <kbd>B</kbd> + <kbd>A</kbd> means that <kbd>B</kbd> must be held first*
+Notes:
+- <kbd>B</kbd> + <kbd>A</kbd> means that <kbd>B</kbd> must be held first*
+- The selection clipboard is set when copy/cutting in selection mode
+- The edit clipboard is set after a note/param cycle (also if unchanged)
+- Cutting when not in selection mode sets both the selection and edit clipboards
 
 ## Based on the awesome work of
 

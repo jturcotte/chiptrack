@@ -60,8 +60,8 @@ export struct SongSettings {
 export global GlobalUI {
     // param0, param1, press, release
     in-out property<int> selected_column: 2;
-    in-out property<int> selected_step_range_start: -1;
-    // Also the range end when selected_step_range_start != -1
+    in-out property<int> selected_step_range_first: -1;
+    // Also the last of the range when selected_step_range_first != -1
     in-out property<int> selected_step: 0;
     in-out property<bool> x_pressed: false;
     in-out property<bool> z_pressed: false;
@@ -69,15 +69,54 @@ export global GlobalUI {
     in-out property<bool> playing: false;
     in property<bool> recording: true;
     out property<bool> pin_selection_to_active: false;
+    out property<bool> shift_pressed_something: false;
+    out property<bool> z_pressed_something: false;
+    in-out property<bool> z_press_handled: false;
 
+    public function update_press_states(e: KeyEvent) {
+        if (e.text == "x" || e.text == "X") && !e.repeat {
+            x_pressed = true;
+        }
+
+        if (e.text == "z" || e.text == "Z") && !e.repeat {
+            z_pressed = true;
+            z_pressed_something = false;
+        } else if z_pressed && !e.repeat {
+            z_pressed_something = true;
+        }
+
+        if e.text == Key.Shift {
+            shift_pressed_something = false;
+        } else if e.modifiers.shift && !e.repeat {
+            shift_pressed_something = true;
+        }
+
+        last_pressed_key = e;
+    }
+    public function update_release_states(e: KeyEvent) {
+        if (e.text == "x" || e.text == "X") {
+            x_pressed = false;
+        } else if (e.text == "z" || e.text == "Z") {
+            z_pressed = false;
+        }
+    }
+
+    public function in_selection_mode() -> bool {
+        selected_step_range_first != -1
+    }
     public function cycle_selection_mode() {
-        if selected_step_range_start == -1 {
+        if selected_step_range_first == -1 {
             // Start selection mode
-            selected_step_range_start = selected_step;
-        } else if !(selected_step_range_start == 0 && selected_step == 15)
-               && !(selected_step_range_start == 15 && selected_step == 0) {
+            selected_step_range_first = selected_step;
+
+            // We can't only select release flags, so move back to the note column.
+            if (selected_column == 3) {
+                selected_column = 2;
+            }
+        } else if !(selected_step_range_first == 0 && selected_step == 15)
+               && !(selected_step_range_first == 15 && selected_step == 0) {
             // All rows are not selected, select all of them
-            selected_step_range_start = 0;
+            selected_step_range_first = 0;
             select_step(15);
         } else {
             cancel_selection_mode();
@@ -85,7 +124,11 @@ export global GlobalUI {
     }
 
     public function cancel_selection_mode() {
-        selected_step_range_start = -1;
+        if selected_step_range_first != -1 {
+            // Allows re-pasting near/where the copy/cut started
+            select_step(min(selected_step_range_first, selected_step));
+            selected_step_range_first = -1;
+        }
     }
 
     public function toggle_play(song_mode: bool) {
@@ -110,58 +153,119 @@ export global GlobalUI {
         GlobalEngine.set_playing(playing, song_mode);
     }
 
-    public function cycle_step_colum(forward: bool) {
-        if forward && selected_column < 3 {
+    public function cycle_step_column(forward: bool) {
+        // Don't enter the release column while in selection mode.
+        if forward && ((selected_column < 3 && !in_selection_mode()) || selected_column < 2) {
             selected_column += 1;
         } else if (!forward && selected_column > 0){
             selected_column -= 1;
         }
     }
 
-    public function cycle_step_param_start() {
-        if selected_step_range_start == -1 {
-            GlobalEngine.cycle_step_param_start(selected_step, selected_column);
-        }
-    }
-    public function cycle_step_param_end() {
-        if selected_step_range_start == -1 {
-            GlobalEngine.cycle_step_param_end(selected_step, selected_column);
-        }
-    }
-    public function cycle_step_param(forward: bool, large_inc: bool) {
-        if selected_step_range_start == -1 {
-            GlobalEngine.cycle_step_param(selected_step, selected_column, forward, large_inc);
-        } else {
-            GlobalEngine.cycle_step_range_param(
-                min(selected_step_range_start, selected_step),
-                max(selected_step_range_start, selected_step),
-                selected_column, forward, large_inc);
-        }
-    }
-
     public function cycle_step_note_start() {
-        if selected_step_range_start == -1 {
+        if selected_step_range_first == -1 {
             GlobalEngine.cycle_step_note_start(selected_step);
         }
     }
     public function cycle_step_note_end() {
-        if selected_step_range_start == -1 {
+        if selected_step_range_first == -1 {
             GlobalEngine.cycle_step_note_end(selected_step);
         }
     }
     public function cycle_step_note(forward: bool, large_inc: bool) {
-        if selected_step_range_start == -1 {
+        if selected_step_range_first == -1 {
             GlobalEngine.cycle_step_note(selected_step, forward, large_inc);
         } else {
             GlobalEngine.cycle_step_range_note(
-                min(selected_step_range_start, selected_step),
-                max(selected_step_range_start, selected_step),
+                min(selected_step_range_first, selected_step),
+                max(selected_step_range_first, selected_step),
                 forward, large_inc);
         }
     }
 
+    public function copy_step_selection() {
+        if GlobalUI.selected_column < 2 /*params*/ {
+            if selected_step_range_first == -1 {
+                GlobalEngine.copy_step_range_param(selected_step, selected_step, selected_column);
+            } else {
+                GlobalEngine.copy_step_range_param(
+                    min(selected_step_range_first, selected_step),
+                    max(selected_step_range_first, selected_step),
+                    selected_column);
+            }
+            cancel_selection_mode();
+        } else if GlobalUI.selected_column == 2 /*press*/ {
+            if selected_step_range_first == -1 {
+                GlobalEngine.copy_step_range_note(selected_step, selected_step);
+            } else {
+                GlobalEngine.copy_step_range_note(
+                    min(selected_step_range_first, selected_step),
+                    max(selected_step_range_first, selected_step));
+            }
+            cancel_selection_mode();
+        }
+        // Ignore when on the release column
+    }
+    public function cut_steps() {
+        if GlobalUI.selected_column < 2 /*params*/ {
+            if selected_step_range_first == -1 {
+                GlobalEngine.cut_step_single_param(selected_step, selected_column);
+            } else {
+                GlobalEngine.cut_step_range_param(
+                    min(selected_step_range_first, selected_step),
+                    max(selected_step_range_first, selected_step),
+                    selected_column);
+            }
+            cancel_selection_mode();
+        } else if GlobalUI.selected_column == 2 /*press*/ {
+            if selected_step_range_first == -1 {
+                GlobalEngine.cut_step_single_note(selected_step);
+            } else {
+                GlobalEngine.cut_step_range_note(
+                    min(selected_step_range_first, selected_step),
+                    max(selected_step_range_first, selected_step));
+            }
+            cancel_selection_mode();
+        }
+        // Ignore when on the release column
+    }
+    public function paste_step_selection() {
+        if GlobalUI.selected_column < 2 /*params*/ {
+            if selected_step_range_first == -1 {
+                GlobalEngine.paste_step_range_param(selected_step, selected_column);
+            }
+        } else if GlobalUI.selected_column == 2 /*press*/ {
+           if selected_step_range_first == -1 {
+                GlobalEngine.paste_step_range_note(selected_step);
+            }
+        }
+
+        // FIXME: Move the selection by the clipboard size.
+        //        I don't know it here, I need to remember it separately when copying/cutting.
+    }
+
+    public function cycle_step_param_start() {
+        if selected_step_range_first == -1 {
+            GlobalEngine.cycle_step_param_start(selected_step, selected_column);
+        }
+    }
+    public function cycle_step_param_end() {
+        if selected_step_range_first == -1 {
+            GlobalEngine.cycle_step_param_end(selected_step, selected_column);
+        }
+    }
+    public function cycle_step_param(forward: bool, large_inc: bool) {
+        if selected_step_range_first == -1 {
+            GlobalEngine.cycle_step_param(selected_step, selected_column, forward, large_inc);
+        } else {
+            GlobalEngine.cycle_step_range_param(
+                min(selected_step_range_first, selected_step),
+                max(selected_step_range_first, selected_step),
+                selected_column, forward, large_inc);
+        }
+    }
     public function toggle_step_release() {
-        if selected_step_range_start == -1 {
+        if selected_step_range_first == -1 {
             GlobalEngine.toggle_step_release(selected_step);
         } // Ignore when in selection mode since this doesn't "cycle", to be consistent.
     }
@@ -202,7 +306,7 @@ export global GlobalUI {
         if forward {
             if selected_step < 15 {
                 select_step(selected_step + 1);
-            } else if selected_step_range_start == -1 {
+            } else if selected_step_range_first == -1 {
                 // FIXME: Report return val issue and re-use select_next_song_pattern
                 if GlobalEngine.sequencer_song_pattern_selected + 1 < GlobalEngine.sequencer_song_patterns.length {
                     select_step(0);
@@ -212,7 +316,7 @@ export global GlobalUI {
         } else {
             if selected_step > 0 {
                 select_step(selected_step - 1);
-            } else if selected_step_range_start == -1 {
+            } else if selected_step_range_first == -1 {
                 if GlobalEngine.sequencer_song_pattern_selected > 0 {
                     select_step(15);
                     select_next_song_pattern(false);
@@ -307,19 +411,25 @@ export global GlobalEngine {
     callback cycle_step_note_start(/*step*/ int);
     callback cycle_step_note_end(/*step*/ int);
     callback cycle_step_note(/*step*/ int, /*forward*/ bool, /*large_inc*/ bool);
-    callback cycle_step_range_note(/*step_range_start*/ int, /*step_range_end*/ int, /*forward*/ bool, /*large_inc*/ bool);
+    callback cycle_step_range_note(/*step_range_first*/ int, /*step_range_last*/ int, /*forward*/ bool, /*large_inc*/ bool);
+    callback copy_step_range_note(/*step_range_first*/ int, /*step_range_last*/ int);
+    callback cut_step_range_note(/*step_range_first*/ int, /*step_range_last*/ int);
+    callback cut_step_single_note(/*step*/ int);
+    callback paste_step_range_note(/*at_step*/ int);
     callback cycle_instrument_param_start();
     callback cycle_instrument_param_end();
     callback cycle_instrument_param(/*param_num*/ int, /*forward*/ bool);
     callback cycle_step_param_start(/*step*/ int, /*param_num*/ int);
     callback cycle_step_param_end(/*step*/ int, /*param_num*/ int);
     callback cycle_step_param(/*step*/ int, /*param_num*/ int, /*forward*/ bool, /*large_inc*/ bool);
-    callback cycle_step_range_param(/*step_range_start*/ int, /*step_range_end*/ int, /*param_num*/ int, /*forward*/ bool, /*large_inc*/ bool);
+    callback cycle_step_range_param(/*step_range_first*/ int, /*step_range_last*/ int, /*param_num*/ int, /*forward*/ bool, /*large_inc*/ bool);
+    callback copy_step_range_param(/*step_range_first*/ int, /*step_range_last*/ int, /*param_num*/ int);
+    callback cut_step_range_param(/*step_range_first*/ int, /*step_range_last*/ int, /*param_num*/ int);
+    callback cut_step_single_param(/*step*/ int, /*param_num*/ int);
+    callback paste_step_range_param(/*at_step*/ int, /*param_num*/ int);
     callback cycle_song_pattern_start();
     callback cycle_song_pattern_start_with_new();
     callback cycle_song_pattern(/*forward*/ bool);
-    callback cut_step_note(/*step*/ int);
-    callback cut_step_param(/*step*/ int, /*param_num*/ int);
     callback toggle_mute_instrument(/*instrument*/ int);
     callback toggle_step(/*step*/ int);
     callback toggle_step_release(/*step*/ int);

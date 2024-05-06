@@ -298,7 +298,7 @@ impl SoundEngine {
     }
     pub fn cycle_step_param_end(&mut self, step: usize, param_num: u8) {
         let mut seq = self.sequencer.borrow_mut();
-        seq.copy_step_params(step, Some(param_num));
+        seq.set_default_step_params(step, Some(param_num));
         if !seq.playing() {
             // FIXME: Ref-count the press or something to handle +Shift,+Ctrl,-Shift,-Ctrl
             self.script
@@ -329,14 +329,15 @@ impl SoundEngine {
     }
     pub fn cycle_step_range_param(
         &mut self,
-        step_range_start: usize,
-        step_range_end: usize,
+        step_range_first: usize,
+        step_range_last: usize,
         param_num: u8,
         forward: bool,
         large_inc: bool,
     ) {
+        debug_assert!(step_range_first <= step_range_last);
         let mut seq = self.sequencer.borrow_mut();
-        for step in step_range_start..=step_range_end {
+        for step in step_range_first..=step_range_last {
             seq.cycle_step_param(step, param_num, Some(forward), large_inc, OnEmpty::EmptyOnEmpty);
         }
     }
@@ -358,7 +359,7 @@ impl SoundEngine {
     }
     pub fn cycle_step_note_end(&mut self, step: usize) {
         let mut seq = self.sequencer.borrow_mut();
-        seq.copy_step_note(step);
+        seq.set_default_step_note(step);
         if !seq.playing() {
             self.script
                 .release_instrument(self.frame_number, seq.displayed_instrument);
@@ -381,13 +382,14 @@ impl SoundEngine {
     }
     pub fn cycle_step_range_note(
         &mut self,
-        step_range_start: usize,
-        step_range_end: usize,
+        step_range_first: usize,
+        step_range_last: usize,
         forward: bool,
         large_inc: bool,
     ) {
+        debug_assert!(step_range_first <= step_range_last);
         let mut seq = self.sequencer.borrow_mut();
-        for step in step_range_start..=step_range_end {
+        for step in step_range_first..=step_range_last {
             seq.cycle_step_note(step, Some(forward), large_inc, OnEmpty::EmptyOnEmpty);
         }
     }

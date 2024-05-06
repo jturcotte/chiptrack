@@ -274,9 +274,16 @@ impl Pattern {
             .map(|i| &i.steps)
     }
 
+    fn get_steps_mut(&mut self, instrument: u8) -> Option<&mut [InstrumentStep; NUM_STEPS]> {
+        self.instruments
+            .iter_mut()
+            .find(|i| i.synth_index == Some(instrument))
+            .map(|i| &mut i.steps)
+    }
+
     /// This might insert a new instrument if not there already and thus
     /// requires the corresponding string `instrument_id` to be passed.
-    fn get_steps_mut_by_id<'a>(
+    fn get_steps_mut_or_insert<'a>(
         &'a mut self,
         instrument_id: &str,
         synth_index: Option<u8>,
@@ -295,6 +302,7 @@ impl Pattern {
         &mut self.instruments[ii].steps
     }
 
+    /// Returns a copy of the state before the change.
     fn set_step_events(
         &mut self,
         instrument: u8,
@@ -303,9 +311,10 @@ impl Pattern {
         set_press_note: Option<Option<u8>>,
         set_release: Option<bool>,
         set_params: Option<(Option<i8>, Option<i8>)>,
-    ) {
-        let instrument_steps = self.get_steps_mut_by_id(instrument_id, Some(instrument));
+    ) -> InstrumentStep {
+        let instrument_steps = self.get_steps_mut_or_insert(instrument_id, Some(instrument));
         let step = &mut instrument_steps[step];
+        let previous = *step;
 
         let mut something_added = false;
         if let Some(release) = set_release {
@@ -325,6 +334,8 @@ impl Pattern {
         if !something_added && instrument_steps.iter().all(|s| s.is_empty()) {
             self.remove_instrument(instrument);
         }
+
+        previous
     }
 
     fn update_synth_index(&mut self, new_instrument_ids: &[SharedString]) {
@@ -384,6 +395,12 @@ struct NoteClipboard {
     release: bool,
 }
 
+enum SelectionClipboard {
+    Empty,
+    InstrumentParams(Vec<Option<i8>>),
+    WholeSteps(Vec<InstrumentStep>),
+}
+
 #[derive(PartialEq)]
 pub enum OnEmpty {
     PasteOnEmpty,
@@ -410,8 +427,11 @@ pub struct Sequencer {
     muted_instruments: BTreeSet<u8>,
     synth_instrument_ids: Vec<SharedString>,
     instrument_params: Vec<(i8, i8)>,
-    note_clipboard: NoteClipboard,
-    song_pattern_clipboard: usize,
+    /// The note that will be used when an empty step is press-toggled.
+    default_note_clipboard: NoteClipboard,
+    /// The pattern that will be used when a new song pattern slot is added.
+    default_song_pattern_clipboard: usize,
+    selection_clipboard: SelectionClipboard,
     main_window: WeakWindowWrapper,
 }
 
@@ -436,12 +456,13 @@ impl Sequencer {
             muted_instruments: BTreeSet::new(),
             synth_instrument_ids: vec![SharedString::new(); NUM_INSTRUMENTS],
             instrument_params: vec![(0, 0); NUM_INSTRUMENTS],
-            note_clipboard: NoteClipboard {
+            default_note_clipboard: NoteClipboard {
                 note: DEFAULT_NOTE,
                 release: true,
             },
-            song_pattern_clipboard: 0,
+            default_song_pattern_clipboard: 0,
             main_window: main_window.clone(),
+            selection_clipboard: SelectionClipboard::Empty,
         }
     }
 
@@ -672,31 +693,79 @@ impl Sequencer {
         let maybe_steps = self.song.patterns[self.displayed_pattern_idx()].get_steps(self.displayed_instrument);
         let pressed = maybe_steps.map_or(false, |ss| ss[step].press());
         if pressed {
-            self.cut_step_note(step);
+            self.cut_step_range_note(step, step);
         } else {
             self.cycle_step_note(step, None, false, OnEmpty::PasteOnEmpty);
         }
     }
 
-    pub fn copy_step_note(&mut self, step: usize) {
+    pub fn set_default_step_note(&mut self, step: usize) {
         let maybe_steps = self.song.patterns[self.displayed_pattern_idx()].get_steps(self.displayed_instrument);
         let pressed_note_and_release = maybe_steps.and_then(|ss| ss[step].press_note().map(|p| (p, ss[step].release)));
         if let Some((note, release)) = pressed_note_and_release {
-            self.note_clipboard = NoteClipboard { note, release };
+            self.default_note_clipboard = NoteClipboard { note, release };
         }
     }
 
-    pub fn cut_step_note(&mut self, step: usize) {
-        self.copy_step_note(step);
-        self.copy_step_params(step, None);
+    pub fn copy_step_range_note(&mut self, step_range_first: usize, step_range_last: usize) {
+        let maybe_steps = self.song.patterns[self.displayed_pattern_idx()].get_steps(self.displayed_instrument);
 
-        self.set_pattern_step_events(
+        self.selection_clipboard = SelectionClipboard::WholeSteps(maybe_steps.map_or_else(
+            || vec![InstrumentStep::default(); step_range_last - step_range_first + 1],
+            |ss| ss[step_range_first..=step_range_last].to_vec(),
+        ));
+    }
+
+    pub fn cut_step_range_note(&mut self, step_range_first: usize, step_range_last: usize) {
+        let displayed_pattern_idx = self.displayed_pattern_idx();
+        let maybe_steps = self.song.patterns[displayed_pattern_idx].get_steps_mut(self.displayed_instrument);
+        let steps = maybe_steps.map_or_else(
+            || vec![InstrumentStep::default(); step_range_last - step_range_first + 1],
+            |ss| {
+                let slice = &mut ss[step_range_first..=step_range_last];
+                // Take a copy
+                let r = slice.to_vec();
+                // Replace the cut steps with an empty step
+                slice.fill(InstrumentStep::default());
+                r
+            },
+        );
+
+        self.selection_clipboard = SelectionClipboard::WholeSteps(steps);
+        self.update_steps();
+    }
+
+    /// Cut while not in selection mode, it sets both the edit and selection clipboards.
+    pub fn cut_step_single_note(&mut self, step: usize) {
+        self.set_default_step_note(step);
+        self.set_default_step_params(step, None);
+
+        let cut_step = self.set_pattern_step_events(
             step,
             self.displayed_song_pattern,
             Some(None),
             Some(false),
             Some((None, None)),
         );
+
+        if !cut_step.is_empty() {
+            self.selection_clipboard = SelectionClipboard::WholeSteps(vec![cut_step]);
+        }
+    }
+
+    pub fn paste_step_range_note(&mut self, at_step: usize) {
+        let instrument_id = &self.synth_instrument_ids[self.displayed_instrument as usize];
+        let displayed_pattern_idx = self.displayed_pattern_idx();
+        let steps = self.song.patterns[displayed_pattern_idx]
+            .get_steps_mut_or_insert(instrument_id, Some(self.displayed_instrument));
+
+        if let SelectionClipboard::WholeSteps(clip_steps) = &self.selection_clipboard {
+            for (i, step) in clip_steps.iter().enumerate() {
+                steps[(at_step + i) % NUM_STEPS] = *step;
+            }
+        }
+
+        self.update_steps();
     }
 
     pub fn toggle_step_release(&mut self, step: usize) {
@@ -704,7 +773,7 @@ impl Sequencer {
         let toggled = !maybe_steps.map_or(false, |ss| ss[step].release);
         self.set_pattern_step_events(step, self.displayed_song_pattern, None, Some(toggled), None);
 
-        self.copy_step_note(step);
+        self.set_default_step_note(step);
     }
 
     fn advance_step(&mut self) {
@@ -740,7 +809,7 @@ impl Sequencer {
         set_press_note: Option<Option<u8>>,
         set_release: Option<bool>,
         set_params: Option<(Option<i8>, Option<i8>)>,
-    ) {
+    ) -> InstrumentStep {
         // If editing the stub pattern, commit it to a real pattern now.
         if self.has_stub_pattern {
             self.commit_stub_song_pattern();
@@ -748,7 +817,7 @@ impl Sequencer {
 
         let pattern = self.pattern_idx(song_pattern);
         let instrument_id = &self.synth_instrument_ids[self.displayed_instrument as usize];
-        self.song.patterns[pattern].set_step_events(
+        let previous = self.song.patterns[pattern].set_step_events(
             self.displayed_instrument,
             instrument_id,
             step,
@@ -789,6 +858,8 @@ impl Sequencer {
                 })
                 .unwrap();
         }
+
+        previous
     }
     pub fn playing(&self) -> bool {
         self.playing
@@ -945,7 +1016,7 @@ impl Sequencer {
     }
 
     pub fn clipboard_note(&self) -> u8 {
-        self.note_clipboard.note
+        self.default_note_clipboard.note
     }
 
     fn record_key_event(&mut self, event: KeyEvent, note: Option<u8>, params: Option<(Option<i8>, Option<i8>)>) {
@@ -1056,7 +1127,7 @@ impl Sequencer {
         // It's a bit weird to keep the release part of the clipboard here,
         // but the fact that recording affects the active step instead of selected one
         // makes it difficult to find the right compromise.
-        self.note_clipboard.note = note;
+        self.default_note_clipboard.note = note;
         (p0, p1)
     }
 
@@ -1086,7 +1157,7 @@ impl Sequencer {
             return (0, 0, 0);
         }
         let inc = if large_inc { 12 } else { 1 };
-        let active_note = maybe_selected_note.unwrap_or(self.note_clipboard.note);
+        let active_note = maybe_selected_note.unwrap_or(self.default_note_clipboard.note);
         let new_note = if forward.unwrap_or(false) && active_note + inc <= 127 {
             active_note + inc
         } else if forward.map(|f| !f).unwrap_or(false) && active_note - inc >= LOWEST_NOTE {
@@ -1099,7 +1170,7 @@ impl Sequencer {
         // Also set params and the note as released according to the clipboard if it wasn't previously pressed.
         let (set_release, set_params) = if maybe_selected_note.is_none() {
             (
-                Some(self.note_clipboard.release),
+                Some(self.default_note_clipboard.release),
                 Some((Some(instrument_params.0), Some(instrument_params.1))),
             )
         } else {
@@ -1207,14 +1278,15 @@ impl Sequencer {
         self.set_pattern_step_events(step, self.displayed_song_pattern, None, None, Some(step_parameters));
 
         (
-            maybe_selected_note.unwrap_or(self.note_clipboard.note),
+            maybe_selected_note.unwrap_or(self.default_note_clipboard.note),
             step_parameters.0.unwrap_or(instrument_params.0),
             step_parameters.1.unwrap_or(instrument_params.1),
         )
     }
 
+    /// Default parameters are set for each instrument and also act as a clipboard for new note presses.
     /// Returns all parameters
-    pub fn copy_step_params(&mut self, step: usize, only_param_num: Option<u8>) -> (Option<i8>, Option<i8>) {
+    pub fn set_default_step_params(&mut self, step: usize, only_param_num: Option<u8>) -> (Option<i8>, Option<i8>) {
         let step_parameters = self.song.patterns[self.displayed_pattern_idx()]
             .get_steps(self.displayed_instrument)
             .map_or((None, None), |ss| {
@@ -1238,16 +1310,81 @@ impl Sequencer {
         step_parameters
     }
 
-    pub fn cut_step_param(&mut self, step: usize, param_num: u8) {
-        let mut cut_params = self.copy_step_params(step, Some(param_num));
-        if param_num == 0 {
-            cut_params.0 = None;
-        }
-        if param_num == 1 {
-            cut_params.1 = None;
+    pub fn copy_step_range_param(&mut self, step_range_first: usize, step_range_last: usize, param_num: u8) {
+        let maybe_steps = self.song.patterns[self.displayed_pattern_idx()].get_steps(self.displayed_instrument);
+
+        let get_param = if param_num == 0 {
+            |s: &InstrumentStep| s.param0
+        } else {
+            |s: &InstrumentStep| s.param1
+        };
+        self.selection_clipboard = SelectionClipboard::InstrumentParams(maybe_steps.map_or_else(
+            || vec![None; step_range_last - step_range_first + 1],
+            |ss| ss[step_range_first..=step_range_last].iter().map(get_param).collect(),
+        ));
+    }
+
+    pub fn cut_step_range_param(&mut self, step_range_first: usize, step_range_last: usize, param_num: u8) {
+        let displayed_pattern_idx = self.displayed_pattern_idx();
+        let maybe_steps = self.song.patterns[displayed_pattern_idx].get_steps_mut(self.displayed_instrument);
+        let get_param = if param_num == 0 {
+            |s: &InstrumentStep| s.param0
+        } else {
+            |s: &InstrumentStep| s.param1
+        };
+        let clear_param = if param_num == 0 {
+            |s: &mut InstrumentStep| s.param0 = None
+        } else {
+            |s: &mut InstrumentStep| s.param1 = None
+        };
+
+        let values = maybe_steps.map_or_else(
+            || vec![None; step_range_last - step_range_first + 1],
+            |ss| {
+                let slice = &mut ss[step_range_first..=step_range_last];
+                // Take a copy
+                let r = slice.iter().map(get_param).collect();
+                // Empty the cut params
+                slice.iter_mut().for_each(clear_param);
+                r
+            },
+        );
+
+        self.selection_clipboard = SelectionClipboard::InstrumentParams(values);
+        self.update_steps();
+    }
+
+    /// Cut while not in selection mode, it sets both the edit and selection clipboards.
+    pub fn cut_step_single_param(&mut self, step: usize, param_num: u8) {
+        let mut cut_params = self.set_default_step_params(step, Some(param_num));
+        if param_num == 0 && cut_params.0.is_some() {
+            self.selection_clipboard = SelectionClipboard::InstrumentParams(vec![cut_params.0.take()]);
+        } else if param_num == 1 && cut_params.1.is_some() {
+            self.selection_clipboard = SelectionClipboard::InstrumentParams(vec![cut_params.1.take()]);
         }
 
         self.set_pattern_step_events(step, self.active_song_pattern, None, None, Some(cut_params));
+    }
+
+    pub fn paste_step_range_param(&mut self, at_step: usize, param_num: u8) {
+        let instrument_id = &self.synth_instrument_ids[self.displayed_instrument as usize];
+        let displayed_pattern_idx = self.displayed_pattern_idx();
+        let steps = self.song.patterns[displayed_pattern_idx]
+            .get_steps_mut_or_insert(instrument_id, Some(self.displayed_instrument));
+
+        let set_param = if param_num == 0 {
+            |s: &mut InstrumentStep, v: Option<i8>| s.param0 = v
+        } else {
+            |s: &mut InstrumentStep, v: Option<i8>| s.param1 = v
+        };
+
+        if let SelectionClipboard::InstrumentParams(clip_params) = &self.selection_clipboard {
+            for (i, param) in clip_params.iter().enumerate() {
+                set_param(&mut steps[(at_step + i) % NUM_STEPS], *param);
+            }
+        }
+
+        self.update_steps();
     }
 
     /// Return the number of the first pattern that is not referenced by the song and that is still empty,
@@ -1282,13 +1419,13 @@ impl Sequencer {
         // Check if the stub inserted during selection needs to be committed.
         if self.has_stub_pattern {
             // This is the
-            self.song.song_patterns[self.displayed_song_pattern] = self.song_pattern_clipboard;
+            self.song.song_patterns[self.displayed_song_pattern] = self.default_song_pattern_clipboard;
             self.commit_stub_song_pattern();
             self.update_steps();
         }
 
         // Update the clipboard, whether it's after a touch or appending a new song pattern.
-        self.song_pattern_clipboard = self.displayed_pattern_idx();
+        self.default_song_pattern_clipboard = self.displayed_pattern_idx();
     }
 
     fn write_displayed_song_pattern(&mut self, new_pattern: usize) {
@@ -1317,7 +1454,7 @@ impl Sequencer {
         }
 
         // Write the cycled value to the clipboard.
-        self.song_pattern_clipboard = pattern;
+        self.default_song_pattern_clipboard = pattern;
 
         self.write_displayed_song_pattern(pattern);
     }
@@ -1329,7 +1466,7 @@ impl Sequencer {
         // Start with an empty pattern so that the user can move back to the pattern panel and edit it from scratch.
         self.song.song_patterns.push(
             self.find_first_unused_pattern_idx()
-                .unwrap_or(self.song_pattern_clipboard),
+                .unwrap_or(self.default_song_pattern_clipboard),
         );
         self.has_stub_pattern = true;
     }
@@ -1388,7 +1525,7 @@ impl Sequencer {
             self.next_cycle_song_pattern_start_can_have_new = false;
 
             // Cut the removed value into the clipboard.
-            self.song_pattern_clipboard = removed;
+            self.default_song_pattern_clipboard = removed;
 
             self.main_window
                 .upgrade_in_event_loop(move |handle| {

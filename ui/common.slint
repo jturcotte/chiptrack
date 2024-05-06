@@ -10,12 +10,6 @@ export component PatternsFocusScope inherits FocusScope {
     callback root_key_released(KeyEvent) -> EventResult;
 
     key_pressed(e) => {
-        if (e.text == "x" || e.text == "X") && !e.repeat {
-            GlobalUI.x_pressed = true;
-        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
-            GlobalUI.z_pressed = true;
-        }
-
         if (e.text == "X" && e.modifiers.shift &&
                 GlobalUI.last_pressed_key.text == "Z" && GlobalUI.last_pressed_key.modifiers.shift) {
             if !e.repeat { GlobalEngine.clone_displayed_song_pattern(); }
@@ -26,18 +20,14 @@ export component PatternsFocusScope inherits FocusScope {
         else if e.text == Key.LeftArrow && GlobalUI.x_pressed { GlobalEngine.cycle_song_pattern(false); }
         else if e.text == Key.RightArrow && GlobalUI.x_pressed { GlobalEngine.cycle_song_pattern(true); }
         else {
-            GlobalUI.last_pressed_key = e;
+            GlobalUI.update_press_states(e);
             return root_key_pressed(e);
         }
-        GlobalUI.last_pressed_key = e;
+        GlobalUI.update_press_states(e);
         return accept;
     }
     key_released(e) => {
-        if (e.text == "x" || e.text == "X") && !e.repeat {
-            GlobalUI.x_pressed = false;
-        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
-            GlobalUI.z_pressed = false;
-        }
+        GlobalUI.update_release_states(e);
 
         return root.root_key_released(e);
     }
@@ -47,21 +37,18 @@ export component PatternsFocusScope inherits FocusScope {
 export component StepsFocusScope inherits FocusScope {
     callback root_key_pressed(KeyEvent) -> EventResult;
     callback root_key_released(KeyEvent) -> EventResult;
-    property<bool> shift_pressed_something: false;
 
     key_pressed(e) => {
-        if (e.text == "x" || e.text == "X") && !e.repeat {
-            GlobalUI.x_pressed = true;
-        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
-            GlobalUI.z_pressed = true;
-        }
-        if e.text == Key.Shift {
-            shift_pressed_something = false;
-        } else if (e.modifiers.shift) {
-            shift_pressed_something = true;
-        }
-
-        if GlobalUI.selected_column < 2 /*params*/ && e.text == "x" && GlobalUI.z_pressed { if !e.repeat { GlobalEngine.cut_step_param(GlobalUI.selected_step, GlobalUI.selected_column); } }
+        if e.text == "x" && GlobalUI.z_pressed { if !e.repeat { GlobalUI.cut_steps(); } }
+        else if (e.text == "x" || e.text == "X") && e.modifiers.shift { if !e.repeat { GlobalUI.paste_step_selection(); } }
+        else if (e.text == "z" || e.text == "Z") && e.modifiers.shift { if !e.repeat {
+            // I need z-press to cycle the selection mode so that I know when shift is held too,
+            // but I also need to handle the copy on release to allow doing z+x to cut the selection.
+            // So keep a flag across the press and release to know if a z-didn't just set the selection mode
+            // (since copy would exit it already) when doing +Shift,+Z,-Shift,-Z.
+            GlobalUI.z_press_handled = true;
+            GlobalUI.cycle_selection_mode();
+        } }
         else if GlobalUI.selected_column < 2 /*params*/ && e.text == "x" { if !e.repeat { GlobalUI.cycle_step_param_start(); } }
         else if GlobalUI.selected_column < 2 /*params*/ && e.text == Key.UpArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_param(true, true); }
         else if GlobalUI.selected_column < 2 /*params*/ && e.text == Key.DownArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_param(false, true); }
@@ -73,27 +60,30 @@ export component StepsFocusScope inherits FocusScope {
         else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.LeftArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(false, false); }
         else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.RightArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(true, false); }
         else if GlobalUI.selected_column == 3 /*release*/ && e.text == "x" { if !e.repeat { GlobalUI.toggle_step_release(); } }
-        else if e.text == "x" && GlobalUI.z_pressed { if !e.repeat { GlobalEngine.cut_step_note(GlobalUI.selected_step); } }
-        else if e.text == Key.LeftArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_step_colum(false); }
-        else if e.text == Key.RightArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_step_colum(true); }
+        else if e.text == Key.LeftArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_step_column(false); }
+        else if e.text == Key.RightArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_step_column(true); }
         else if e.text == Key.UpArrow && !GlobalUI.z_pressed { GlobalUI.select_next_step(false); }
         else if e.text == Key.DownArrow && !GlobalUI.z_pressed { GlobalUI.select_next_step(true); }
-        else if (e.text == "z" || e.text == "Z") && e.modifiers.shift { GlobalUI.cycle_selection_mode(); }
         else {
+            if (e.text == "z" || e.text == "Z") && !e.repeat {
+                // If no key press was handled, check if it was z.
+                GlobalUI.z_press_handled = false;
+            }
+
+            GlobalUI.update_press_states(e);
             return root_key_pressed(e);
         }
+
+        GlobalUI.update_press_states(e);
         return accept;
     }
     key_released(e) => { 
-        if (e.text == "x" || e.text == "X") && !e.repeat {
-            GlobalUI.x_pressed = false;
-        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
-            GlobalUI.z_pressed = false;
-        }
+        GlobalUI.update_release_states(e);
 
         if GlobalUI.selected_column < 2 /*params*/ && e.text == "x" { GlobalUI.cycle_step_param_end(); }
         else if GlobalUI.selected_column == 2 /*press*/ && e.text == "x" { GlobalUI.cycle_step_note_end(); }
-        else if !shift_pressed_something && e.text == Key.Shift { GlobalUI.cancel_selection_mode(); }
+        else if !GlobalUI.z_press_handled && !GlobalUI.z_pressed_something && e.text == "z" { GlobalUI.copy_step_selection(); }
+        else if !GlobalUI.shift_pressed_something && e.text == Key.Shift { GlobalUI.cancel_selection_mode(); }
         else {
             return root_key_released(e);
         }
@@ -106,12 +96,6 @@ export component InstrumentsFocusScope inherits FocusScope {
     callback root_key_released(KeyEvent) -> EventResult;
 
     key_pressed(e) => {
-        if (e.text == "x" || e.text == "X") && !e.repeat {
-            GlobalUI.x_pressed = true;
-        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
-            GlobalUI.z_pressed = true;
-        }
-
         if e.text == "x" { if !e.repeat { GlobalEngine.cycle_instrument_param_start(); } }
         else if e.text == Key.UpArrow && GlobalUI.x_pressed { GlobalEngine.cycle_instrument_param(1, true); }
         else if e.text == Key.DownArrow && GlobalUI.x_pressed { GlobalEngine.cycle_instrument_param(1, false); }
@@ -122,16 +106,14 @@ export component InstrumentsFocusScope inherits FocusScope {
         else if e.text == Key.LeftArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalEngine.cycle_instrument(-1, 0); }
         else if e.text == Key.RightArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalEngine.cycle_instrument(1, 0); }
         else {
+            GlobalUI.update_press_states(e);
             return root_key_pressed(e);
         }
+        GlobalUI.update_press_states(e);
         return accept;
     }
     key_released(e) => { 
-        if (e.text == "x" || e.text == "X") && !e.repeat {
-            GlobalUI.x_pressed = false;
-        } else if (e.text == "z" || e.text == "Z") && !e.repeat {
-            GlobalUI.z_pressed = false;
-        }
+        GlobalUI.update_release_states(e);
 
         if e.text == "x" { GlobalEngine.cycle_instrument_param_end(); }
         else {

@@ -64,7 +64,7 @@ pub struct MainScreen {
     focused_panel_checker: ChangeChecker<FocusedPanel>,
     selected_column_checker: ChangeChecker<i32>,
     selected_step_checker: ChangeChecker<i32>,
-    selected_step_range_start_checker: ChangeChecker<i32>,
+    selected_step_range_first_checker: ChangeChecker<i32>,
     sequencer_pattern_instruments_len_checker: ChangeChecker<usize>,
     sequencer_song_pattern_active_checker: ChangeChecker<usize>,
     sequencer_step_active_checker: ChangeChecker<usize>,
@@ -221,7 +221,7 @@ impl MainScreen {
             focused_panel_checker: ChangeChecker::new(FocusedPanel::Steps),
             selected_column_checker: ChangeChecker::new(0),
             selected_step_checker: ChangeChecker::new(0),
-            selected_step_range_start_checker: ChangeChecker::new(-1),
+            selected_step_range_first_checker: ChangeChecker::new(-1),
             sequencer_pattern_instruments_len_checker: ChangeChecker::new(0),
             sequencer_song_pattern_active_checker: ChangeChecker::new(0),
             sequencer_step_active_checker: ChangeChecker::new(0),
@@ -256,9 +256,9 @@ impl MainScreen {
         let focused_panel = self.focused_panel_checker.check(handle.get_focused_panel());
         let selected_column = self.selected_column_checker.check(global_ui.get_selected_column());
         let selected_step = self.selected_step_checker.check(global_ui.get_selected_step());
-        let selected_step_range_start = self
-            .selected_step_range_start_checker
-            .check(global_ui.get_selected_step_range_start());
+        let selected_step_range_first = self
+            .selected_step_range_first_checker
+            .check(global_ui.get_selected_step_range_first());
         let sequencer_pattern_instruments_len = self
             .sequencer_pattern_instruments_len_checker
             .check(global_engine.get_sequencer_pattern_instruments_len() as usize);
@@ -346,7 +346,7 @@ impl MainScreen {
             || sequencer_step_active.dirty()
             || selected_column.dirty()
             || selected_step.dirty()
-            || selected_step_range_start.dirty()
+            || selected_step_range_first.dirty()
             || focused_panel.dirty()
         {
             let displayed_instrument = global_engine.get_displayed_instrument() as usize;
@@ -371,11 +371,11 @@ impl MainScreen {
                 let ii = i as i32;
                 let selected = focused_panel.current == FocusedPanel::Steps
                     && (selected_step.current == ii
-                        || (selected_step_range_start.current > selected_step.current
+                        || (selected_step_range_first.current > selected_step.current
                             && selected_step.current <= ii
-                            && ii <= selected_step_range_start.current)
-                        || (selected_step_range_start.current != -1
-                            && selected_step_range_start.current <= ii
+                            && ii <= selected_step_range_first.current)
+                        || (selected_step_range_first.current != -1
+                            && selected_step_range_first.current <= ii
                             && ii <= selected_step.current));
 
                 let param0_bank = if selected && selected_column.current == 0 {
