@@ -47,7 +47,7 @@ fn semitones_steps(semitones: u32, accum: *u32) u32 {
 }
 
 fn apply_semitone(freq: u32, semitone: i8) u32 {
-    const abs_semitone = math.absCast(semitone);
+    const abs_semitone = @abs(semitone);
     var r = semitone_ratios[abs_semitone % 12];
     // Multiply the numerator by 2^(semitone/12) for octaves
     r.num *= @shlExact(@as(u16, 1), @intCast(abs_semitone / 12));
@@ -68,7 +68,7 @@ fn vibrato(delay: u32, p: u16, freq: u32, t: u32) u32 {
     // This fixed ratio is smaller than one so use the inverse ratio to avoid floating points.
     const inv_ratio = comptime @as(u32, @intFromFloat(math.round(1 / (math.pow(f32, 1.0594630943592953, 0.475) - 1))));
     const a = freq / inv_ratio;
-    const delta = 1 + 4 * a / p * math.absCast(@mod((@mod(@as(i32, @intCast(t - delay)) - p / 4, p) + p), p) - p / 2) - a;
+    const delta = 1 + 4 * a / p * @abs(@mod((@mod(@as(i32, @intCast(t - delay)) - p / 4, p) + p), p) - p / 2) - a;
     return freq + delta;
 }
 

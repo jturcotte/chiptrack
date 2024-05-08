@@ -28,24 +28,23 @@ pub fn build(b: *std.Build) void {
         @panic("ct.zig was not found but is necessary to build. You can download it from https://raw.githubusercontent.com/jturcotte/chiptrack/v0.3/instruments/ct.zig .");
 
     // Listing the module here also allows editors like VSCode with Zig language support to discover it and provide code completion.
-    const ct_module = b.addModule("ct", .{ .source_file = .{ .path = ct_zig_path } });
+    const ct_module = b.addModule("ct", .{ .root_source_file = .{ .path = ct_zig_path } });
 
     // Build the wasm file.
     const wasm = b.addExecutable(.{
         .name = std.fs.path.stem(source_file),
         .root_source_file = .{ .path = source_file },
-        .target = .{
+        .target = b.resolveTargetQuery(.{
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
-        },
+        }),
         .optimize = .ReleaseFast,
     });
     wasm.rdynamic = true;
     wasm.export_table = true;
     wasm.max_memory = 65536;
     wasm.stack_size = 8192;
-    wasm.strip = !wat_out;
-    wasm.addModule("ct", ct_module);
+    wasm.root_module.addImport("ct", ct_module);
 
     const wf = b.addWriteFiles();
     b.getInstallStep().dependOn(&wf.step);
