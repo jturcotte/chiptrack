@@ -16,6 +16,7 @@ mod sequencer;
 mod sound_engine;
 mod sound_renderer;
 mod synth_script;
+mod ui;
 mod utils;
 
 #[cfg(target_arch = "wasm32")]
@@ -26,7 +27,6 @@ use crate::midi::Midi;
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_STEPS;
 use crate::sound_renderer::new_sound_renderer;
-use crate::utils::MidiNote;
 
 #[cfg(feature = "desktop")]
 use slint::Model;
@@ -53,7 +53,6 @@ pub fn main() {
     run_main()
 }
 
-// FIXME: Can it be moved?
 #[cfg(feature = "gba")]
 #[no_mangle]
 extern "C" fn main() -> ! {
@@ -110,6 +109,9 @@ fn run_main() {
     ]));
 
     let window = MainWindow::new().unwrap();
+
+    ui::set_global_ui_handlers(&window);
+    ui::set_global_utils_handlers(&window);
 
     let global_engine = GlobalEngine::get(&window);
     // The model set in the UI are only for development.
@@ -617,24 +619,6 @@ fn run_main() {
                 .borrow_mut()
                 .invoke_on_sound_engine(move |se| se.apply_song_settings(&settings));
         });
-
-    #[cfg(feature = "desktop")]
-    window
-        .global::<GlobalUtils>()
-        .on_get_midi_note_name(|note| MidiNote(note).name().into());
-    #[cfg(feature = "desktop")]
-    window
-        .global::<GlobalUtils>()
-        .on_get_midi_note_short_name(|note| MidiNote(note).short_name());
-    #[cfg(feature = "desktop")]
-    window.global::<GlobalUtils>().on_to_signed_hex(|i| {
-        (if i < 0 {
-            format!("-{:02X}", i.abs() as i8)
-        } else {
-            format!("{:02X}", i as i8)
-        })
-        .into()
-    });
 
     // For WASM we need to wait for the user to trigger the creation of the sound
     // device through an input event. For other platforms, artificially force the

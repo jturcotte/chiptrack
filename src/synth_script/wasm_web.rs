@@ -67,68 +67,118 @@ impl HostFunction for HostFunctionS {
     }
 }
 
-pub struct HostFunctionSIINNNN {
-    native_closure: Option<Closure<dyn FnMut(*const i8, i32, i32, u32, u32, u32, u32)>>,
+pub struct HostFunctionSIINNN {
+    native_closure: Option<Closure<dyn FnMut(*const i8, i32, i32, u32, u32, u32) -> i32>>,
     name: String,
 }
-impl HostFunctionSIINNNN {
-    pub fn new<F>(name: &str, mut closure: F) -> HostFunctionSIINNNN
+impl HostFunctionSIINNN {
+    pub fn new<F>(name: &str, mut closure: F) -> HostFunctionSIINNN
     where
-        F: FnMut(
-                &CStr,
-                i32,
-                i32,
-                Option<WasmIndirectFunction>,
-                Option<WasmIndirectFunction>,
-                Option<WasmIndirectFunction>,
-                Option<WasmIndirectFunction>,
-            ) + 'static,
+        F: FnMut(&CStr, i32, i32, WasmIndirectFunction, WasmIndirectFunction, WasmIndirectFunction) -> i32 + 'static,
     {
         let native_closure = Closure::new(
-            move |v1: *const i8, v2: i32, v3: i32, v4: u32, v5: u32, v6: u32, v7: u32| unsafe {
-                CURRENT_INSTANCE.with(|current_instance| {
-                    let maybe_instance = current_instance.borrow();
-                    let exports = maybe_instance
-                        .as_ref()
-                        .expect("CURRENT_INSTANCE hasn't been initialized yet, async race condition?")
-                        .exports();
-                    let mem = Reflect::get(exports.as_ref(), &"memory".into())
-                        .unwrap()
-                        .dyn_into::<WebAssembly::Memory>()
-                        .unwrap();
-                    let typebuf = js_sys::Int8Array::new(&mem.buffer());
-                    // FIXME: This copies the whole WebAssembly instance's memory on each call, just to be able to
-                    //        return null-terminated CStrs. Possible alternatives:
-                    //        - Asking the instruments to provide the string size would be the safest, but closures
-                    //          in wasm-bindgen are currently limited to 8 parameters, so we'd bust that limit
-                    //          and it would probably add an unnecessary overhead for the WAMR ports, which maps the
-                    //          instance's memory into the host's.
-                    //        - If Int8Array was wrapping the native indexOf we could find the NULL ourselves to only
-                    //          copy that part of the memory, but it's not exposed.
-                    // In our case it's going to be one 64kb page most of the time, so for the web port to only do at
-                    // startup it should be OK for now.
-                    let vec = typebuf.to_vec();
+            move |v1: *const i8, v2: i32, v3: i32, v4: u32, v5: u32, v6: u32| -> i32 {
+                unsafe {
+                    CURRENT_INSTANCE.with(|current_instance| {
+                        let maybe_instance = current_instance.borrow();
+                        let exports = maybe_instance
+                            .as_ref()
+                            .expect("CURRENT_INSTANCE hasn't been initialized yet, async race condition?")
+                            .exports();
+                        let mem = Reflect::get(exports.as_ref(), &"memory".into())
+                            .unwrap()
+                            .dyn_into::<WebAssembly::Memory>()
+                            .unwrap();
+                        let typebuf = js_sys::Int8Array::new(&mem.buffer());
+                        // FIXME: This copies the whole WebAssembly instance's memory on each call, just to be able to
+                        //        return null-terminated CStrs. Possible alternatives:
+                        //        - Asking the instruments to provide the string size would be the safest, but closures
+                        //          in wasm-bindgen are currently limited to 8 parameters, so we'd bust that limit
+                        //          and it would probably add an unnecessary overhead for the WAMR ports, which maps the
+                        //          instance's memory into the host's.
+                        //        - If Int8Array was wrapping the native indexOf we could find the NULL ourselves to only
+                        //          copy that part of the memory, but it's not exposed.
+                        // In our case it's going to be one 64kb page most of the time, so for the web port to only do at
+                        // startup it should be OK for now.
+                        let vec = typebuf.to_vec();
 
-                    closure(
-                        CStr::from_ptr(vec.as_ptr().offset(v1 as isize)),
-                        v2,
-                        v3,
-                        WasmModuleInst::lookup_indirect_function(v4),
-                        WasmModuleInst::lookup_indirect_function(v5),
-                        WasmModuleInst::lookup_indirect_function(v6),
-                        WasmModuleInst::lookup_indirect_function(v7),
-                    );
-                });
+                        closure(
+                            CStr::from_ptr(vec.as_ptr().offset(v1 as isize)),
+                            v2,
+                            v3,
+                            WasmModuleInst::lookup_indirect_function(v4),
+                            WasmModuleInst::lookup_indirect_function(v5),
+                            WasmModuleInst::lookup_indirect_function(v6),
+                        )
+                    })
+                }
             },
         );
 
-        HostFunctionSIINNNN {
+        HostFunctionSIINNN {
             native_closure: Some(native_closure),
             name: name.to_owned(),
         }
     }
 }
-impl HostFunction for HostFunctionSIINNNN {
+impl HostFunction for HostFunctionSIINNN {
+    fn move_into_import(&mut self, env: &Object) -> () {
+        Reflect::set(
+            &env,
+            &mem::take(&mut self.name).into(),
+            &self.native_closure.take().unwrap().into_js_value(),
+        )
+        .unwrap();
+    }
+}
+
+pub struct HostFunctionIISIIIN {
+    native_closure: Option<Closure<dyn FnMut(i32, i32, *const i8, i32, i32, i32, u32)>>,
+    name: String,
+}
+impl HostFunctionIISIIIN {
+    pub fn new<F>(name: &str, mut closure: F) -> HostFunctionIISIIIN
+    where
+        F: FnMut(i32, i32, &CStr, i32, i32, i32, WasmIndirectFunction) + 'static,
+    {
+        let native_closure = Closure::new(
+            move |v1: i32, v2: i32, v3: *const i8, v4: i32, v5: i32, v6: i32, v7: u32| {
+                unsafe {
+                    CURRENT_INSTANCE.with(|current_instance| {
+                        let maybe_instance = current_instance.borrow();
+                        let exports = maybe_instance
+                            .as_ref()
+                            .expect("CURRENT_INSTANCE hasn't been initialized yet, async race condition?")
+                            .exports();
+                        let mem = Reflect::get(exports.as_ref(), &"memory".into())
+                            .unwrap()
+                            .dyn_into::<WebAssembly::Memory>()
+                            .unwrap();
+                        let typebuf = js_sys::Int8Array::new(&mem.buffer());
+                        // FIXME: This copies the whole WebAssembly instance's memory on each call.
+                        let vec = typebuf.to_vec();
+
+                        closure(
+                            v1,
+                            v2,
+                            CStr::from_ptr(vec.as_ptr().offset(v3 as isize)),
+                            v4,
+                            v5,
+                            v6,
+                            WasmModuleInst::lookup_indirect_function(v7),
+                        )
+                    })
+                }
+            },
+        );
+
+        HostFunctionIISIIIN {
+            native_closure: Some(native_closure),
+            name: name.to_owned(),
+        }
+    }
+}
+impl HostFunction for HostFunctionIISIIIN {
     fn move_into_import(&mut self, env: &Object) -> () {
         Reflect::set(
             &env,
@@ -211,9 +261,15 @@ impl HostFunction for HostFunctionA {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct WasmIndirectFunction {
-    function: Function,
+    function: Option<Function>,
+}
+
+impl WasmIndirectFunction {
+    pub fn is_defined(&self) -> bool {
+        self.function.is_some()
+    }
 }
 
 pub struct WasmRuntime {
@@ -284,7 +340,7 @@ impl WasmModuleInst {
         Ok(WasmModuleInst { _module: module })
     }
 
-    fn lookup_indirect_function(table_index: u32) -> Option<WasmIndirectFunction> {
+    fn lookup_indirect_function(table_index: u32) -> WasmIndirectFunction {
         if table_index != 0 {
             let function = CURRENT_INSTANCE.with(|current_instance| {
                 let maybe_instance = current_instance.borrow();
@@ -298,20 +354,28 @@ impl WasmModuleInst {
                     .expect("The function table for instrument callbacks should be exported as __indirect_function_table from the WebAssembly module. Pass --export-table to zig build-exe or set export_table = true in build.zig.");
                 table.get(table_index).expect("Table.get failed")
             });
-            Some(WasmIndirectFunction { function })
+            WasmIndirectFunction {
+                function: Some(function),
+            }
         } else {
-            None
+            WasmIndirectFunction { function: None }
         }
     }
 
-    pub fn call_indirect_ii(&self, function: &WasmIndirectFunction, a1: i32, a2: i32) -> Result<(), JsValue> {
-        function.function.call2(&JsValue::undefined(), &a1.into(), &a2.into())?;
+    pub fn call_indirect_i(&self, function: &WasmIndirectFunction, a1: i32) -> Result<(), JsValue> {
+        function
+            .function
+            .as_ref()
+            .expect("Attempted to call an undefined function")
+            .call1(&JsValue::undefined(), &a1.into())?;
         Ok(())
     }
 
     pub fn call_indirect_iii(&self, function: &WasmIndirectFunction, a1: i32, a2: i32, a3: i32) -> Result<(), JsValue> {
         function
             .function
+            .as_ref()
+            .expect("Attempted to call an undefined function")
             .call3(&JsValue::undefined(), &a1.into(), &a2.into(), &a3.into())?;
         Ok(())
     }
@@ -329,7 +393,11 @@ impl WasmModuleInst {
         array.push(&a2.into());
         array.push(&a3.into());
         array.push(&a4.into());
-        function.function.apply(&JsValue::undefined(), &array)?;
+        function
+            .function
+            .as_ref()
+            .expect("Attempted to call an undefined function")
+            .apply(&JsValue::undefined(), &array)?;
         Ok(())
     }
 }

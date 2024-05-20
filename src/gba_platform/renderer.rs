@@ -4,10 +4,10 @@
 extern crate alloc;
 
 use crate::gba_platform::WINDOW;
+use crate::utils::MidiNote;
 use crate::FocusedPanel;
 use crate::GlobalEngine;
 use crate::GlobalUI;
-use crate::MidiNote;
 
 use alloc::boxed::Box;
 use core::cell::RefCell;
@@ -306,7 +306,7 @@ impl MainScreen {
 
         if sequencer_song_pattern_active.dirty() || sequencer_song_patterns_dirty {
             let pattern_model = global_engine.get_sequencer_song_patterns();
-            draw_ascii_ref(tsb.get_row(0).unwrap(), 0.., b"Song", NORMAL_TEXT);
+            draw_ascii_ref(tsb.get_row(0).unwrap(), 0.., b"Sng", NORMAL_TEXT);
 
             // sequencer_song_patterns_tracker will be dirty and trigger a redraw any time this is changed.
             let sequencer_song_pattern_selected = global_engine.get_sequencer_song_pattern_selected() as usize;
@@ -350,7 +350,27 @@ impl MainScreen {
             || focused_panel.dirty()
         {
             let displayed_instrument = global_engine.get_displayed_instrument() as usize;
+
+            // == Header ==
             let vid_row = tsb.get_row(0).unwrap();
+
+            // Don't check for dirtiness, assume this changes together with sequencer_steps_dirty.
+            let param_0_def = global_engine.get_instrument_param_0();
+            let param_1_def = global_engine.get_instrument_param_1();
+            draw_ascii_chars(
+                vid_row,
+                PARAMS_START_X..PARAMS_START_X + 3,
+                param_0_def.name.chars().chain(repeat(' ')),
+                NORMAL_TEXT,
+            );
+            draw_ascii_byte(vid_row, PARAMS_START_X + 2, b'/', FADED_TEXT);
+            draw_ascii_chars(
+                vid_row,
+                PARAMS_START_X + 3..PARAMS_START_X + 5,
+                param_1_def.name.chars().chain(repeat(' ')),
+                NORMAL_TEXT,
+            );
+
             let displayed_instrument_id = global_engine
                 .get_instruments()
                 .row_data(displayed_instrument)
@@ -363,6 +383,7 @@ impl MainScreen {
                 NORMAL_TEXT,
             );
 
+            // == Steps ==
             let sequencer_steps = global_engine.get_sequencer_steps();
             for i in 0..sequencer_steps.row_count() {
                 let vid_row = tsb.get_row(i + 1).unwrap();
@@ -432,6 +453,7 @@ impl MainScreen {
                     );
                 }
 
+                // Draw note
                 if row_data.press {
                     draw_ascii(
                         vid_row,
@@ -448,12 +470,15 @@ impl MainScreen {
                     );
                 }
 
+                // "current" indicator
                 draw_ascii_byte(
                     vid_row,
                     PARAMS_START_X - 1,
                     (i == sequencer_step_active.current) as u8 * Cga8x8Thick::BULLET,
                     NORMAL_TEXT,
                 );
+
+                // Press and release brackets
                 draw_ascii_byte(vid_row, STEPS_START_X - 1, row_data.press as u8 * b'[', press_bank);
                 draw_ascii_byte(vid_row, STEPS_START_X + 3, row_data.release as u8 * b']', release_bank);
             }

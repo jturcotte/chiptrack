@@ -60,8 +60,8 @@ export component StepsFocusScope inherits FocusScope {
         else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.LeftArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(false, false); }
         else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.RightArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(true, false); }
         else if GlobalUI.selected_column == 3 /*release*/ && e.text == "x" { if !e.repeat { GlobalUI.toggle_step_release(); } }
-        else if e.text == Key.LeftArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_step_column(false); }
-        else if e.text == Key.RightArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_step_column(true); }
+        else if e.text == Key.LeftArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_selected_column(false); }
+        else if e.text == Key.RightArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_selected_column(true); }
         else if e.text == Key.UpArrow && !GlobalUI.z_pressed { GlobalUI.select_next_step(false); }
         else if e.text == Key.DownArrow && !GlobalUI.z_pressed { GlobalUI.select_next_step(true); }
         else {

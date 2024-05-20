@@ -5,6 +5,7 @@
 mod markdown;
 
 use crate::sound_engine::NUM_INSTRUMENTS;
+use crate::sound_engine::NUM_INSTRUMENT_PARAMS;
 use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
 use crate::utils::MidiNote;
@@ -12,9 +13,11 @@ use crate::utils::WeakWindowWrapper;
 use crate::GlobalEngine;
 use crate::GlobalSettings;
 use crate::GlobalUI;
+use crate::ParamData;
 use crate::SongPatternData;
 use crate::SongSettings;
 use core::fmt;
+use core::primitive::i8;
 use serde::de::{self, Deserializer, SeqAccess, Visitor};
 use serde::ser::{SerializeStruct, Serializer};
 
@@ -345,10 +348,7 @@ impl Pattern {
                 .position(|s| instrument.id.as_str() == s.as_str());
             instrument.synth_index = index.map(|p| p as u8);
             if instrument.synth_index.is_none() {
-                elog!(
-                    "Some song pattern refers to instrument id [{}], but the instruments didn't register it, ignoring.",
-                    instrument.id
-                );
+                elog!("Unknown instrument id [{}] in pattern, ignoring.", instrument.id);
             }
         }
     }
@@ -390,6 +390,30 @@ impl Default for SequencerSong {
     }
 }
 
+#[derive(Clone)]
+pub struct InstrumentParamDef {
+    pub name: SharedString,
+    pub default: i8,
+    pub min: i8,
+    pub max: i8,
+}
+
+impl InstrumentParamDef {
+    pub fn has_min_or_max(&self) -> bool {
+        self.min != i8::MIN || self.max != i8::MAX
+    }
+}
+impl Default for InstrumentParamDef {
+    fn default() -> Self {
+        InstrumentParamDef {
+            name: Default::default(),
+            default: 0,
+            min: i8::MIN,
+            max: i8::MAX,
+        }
+    }
+}
+
 struct NoteClipboard {
     note: u8,
     release: bool,
@@ -426,7 +450,9 @@ pub struct Sequencer {
     // FIXME: Use a bitset
     muted_instruments: BTreeSet<u8>,
     synth_instrument_ids: Vec<SharedString>,
-    instrument_params: Vec<(i8, i8)>,
+    synth_instrument_param_defs: Vec<[Option<InstrumentParamDef>; NUM_INSTRUMENT_PARAMS]>,
+    /// Current instrument parameters used for recording.
+    instrument_params: Vec<[i8; NUM_INSTRUMENT_PARAMS]>,
     /// The note that will be used when an empty step is press-toggled.
     default_note_clipboard: NoteClipboard,
     /// The pattern that will be used when a new song pattern slot is added.
@@ -455,7 +481,8 @@ impl Sequencer {
             just_recorded_over_next_step: false,
             muted_instruments: BTreeSet::new(),
             synth_instrument_ids: vec![SharedString::new(); NUM_INSTRUMENTS],
-            instrument_params: vec![(0, 0); NUM_INSTRUMENTS],
+            synth_instrument_param_defs: vec![[None, None]; NUM_INSTRUMENTS],
+            instrument_params: vec![[0; NUM_INSTRUMENT_PARAMS]; NUM_INSTRUMENTS],
             default_note_clipboard: NoteClipboard {
                 note: DEFAULT_NOTE,
                 release: true,
@@ -470,7 +497,7 @@ impl Sequencer {
         self.active_frame.unwrap_or(0)
     }
 
-    // Pattern number in a given `song_pattern_idx`.
+    /// Pattern number in a given `song_pattern_idx`.
     fn pattern_idx(&self, song_pattern_idx: usize) -> usize {
         self.song.song_patterns[song_pattern_idx]
     }
@@ -572,9 +599,28 @@ impl Sequencer {
 
         self.update_steps();
 
+        let param_0 = self.synth_instrument_param_defs[instrument as usize][0]
+            .as_ref()
+            .map(|def| ParamData {
+                name: def.name.clone(),
+                defined: true,
+            })
+            .unwrap_or_default();
+        let param_1 = self.synth_instrument_param_defs[instrument as usize][1]
+            .as_ref()
+            .map(|def| ParamData {
+                name: def.name.clone(),
+                defined: true,
+            })
+            .unwrap_or_default();
         self.main_window
             .upgrade_in_event_loop(move |handle| {
-                GlobalEngine::get(&handle).set_displayed_instrument(instrument as i32);
+                let engine = &GlobalEngine::get(&handle);
+                engine.set_displayed_instrument(instrument as i32);
+                engine.set_instrument_param_0(param_0);
+                engine.set_instrument_param_1(param_1);
+
+                GlobalUI::get(&handle).invoke_adjust_user_selected_column();
             })
             .unwrap();
     }
@@ -815,6 +861,18 @@ impl Sequencer {
             self.commit_stub_song_pattern();
         }
 
+        // Filter out the params that are undefined so that they stay None in the song.
+        // When a note is pressed, a param is always set to the clipboard or default value.
+        // A param can also come from the clipboard of a different instrument.
+        // It could make sense to try to be smart about this, but for now it's simpler to just allow the
+        // user to set or paste anything and just remove it here when a target parameter is undefined.
+        let adjusted_set_params = set_params.map(|(p0, p1)| {
+            (
+                p0.filter(|_| self.synth_instrument_param_defs[self.displayed_instrument as usize][0].is_some()),
+                p1.filter(|_| self.synth_instrument_param_defs[self.displayed_instrument as usize][1].is_some()),
+            )
+        });
+
         let pattern = self.pattern_idx(song_pattern);
         let instrument_id = &self.synth_instrument_ids[self.displayed_instrument as usize];
         let previous = self.song.patterns[pattern].set_step_events(
@@ -823,7 +881,7 @@ impl Sequencer {
             step,
             set_press_note,
             set_release,
-            set_params,
+            adjusted_set_params,
         );
 
         if song_pattern == self.displayed_song_pattern {
@@ -838,7 +896,7 @@ impl Sequencer {
                     if let Some(release) = set_release {
                         step_row_data.release = release;
                     }
-                    if let Some((param0, param1)) = set_params {
+                    if let Some((param0, param1)) = adjusted_set_params {
                         match param0 {
                             Some(v) => {
                                 step_row_data.param0_set = true;
@@ -910,9 +968,19 @@ impl Sequencer {
                 .map(|ss| ss[self.active_step])
             {
                 if let Some(note) = step.press_note() {
-                    // Use the default if the sequencer didn't have any param set for that press.
-                    let p0 = step.param0.unwrap_or(DEFAULT_PARAM_VAL);
-                    let p1 = step.param1.unwrap_or(DEFAULT_PARAM_VAL);
+                    let param_defs = &self.synth_instrument_param_defs[i as usize];
+                    // Use the param's default if the sequencer didn't have any param set for that press
+                    // (which should only happens if the serialized song didn't define them).
+                    // Or pass DEFAULT_PARAM_VAL but in the latter case the instrument will normally
+                    // won't care as it didn't define the parameter.
+                    let p0 = step
+                        .param0
+                        .or(param_defs[0].as_ref().map(|p| p.default))
+                        .unwrap_or(DEFAULT_PARAM_VAL);
+                    let p1 = step
+                        .param1
+                        .or(param_defs[1].as_ref().map(|p| p.default))
+                        .unwrap_or(DEFAULT_PARAM_VAL);
                     log!(
                         "➕ PRS {} note {} params {} / {}",
                         self.synth_instrument_ids[i as usize],
@@ -1116,7 +1184,7 @@ impl Sequencer {
     }
 
     pub fn record_press(&mut self, note: u8) -> (i8, i8) {
-        let (p0, p1) = self.displayed_instrument_params();
+        let [p0, p1] = self.displayed_instrument_params();
         self.record_key_event(
             KeyEvent::Press,
             Some(note),
@@ -1171,7 +1239,7 @@ impl Sequencer {
         let (set_release, set_params) = if maybe_selected_note.is_none() {
             (
                 Some(self.default_note_clipboard.release),
-                Some((Some(instrument_params.0), Some(instrument_params.1))),
+                Some((Some(instrument_params[0]), Some(instrument_params[1]))),
             )
         } else {
             (None, None)
@@ -1186,40 +1254,48 @@ impl Sequencer {
 
         (
             new_note,
-            p0.unwrap_or(instrument_params.0),
-            p1.unwrap_or(instrument_params.1),
+            p0.unwrap_or(instrument_params[0]),
+            p1.unwrap_or(instrument_params[1]),
         )
     }
 
-    pub fn displayed_instrument_params(&self) -> (i8, i8) {
+    pub fn displayed_instrument_params(&self) -> [i8; NUM_INSTRUMENT_PARAMS] {
         let instrument = self.displayed_instrument as usize;
         self.instrument_params[instrument]
     }
 
-    pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) -> (i8, i8) {
+    pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) -> [i8; NUM_INSTRUMENT_PARAMS] {
         let instrument = self.displayed_instrument as usize;
         let instrument_params = &mut self.instrument_params[instrument];
-        let val = if param_num == 0 {
-            &mut instrument_params.0
-        } else {
-            &mut instrument_params.1
-        };
+        let v = &mut instrument_params[param_num as usize];
 
-        if forward && *val < 127 {
-            *val += 1;
-        } else if !forward && *val > -128 {
-            *val -= 1;
+        let param_def = self.synth_instrument_param_defs[self.displayed_instrument as usize][param_num as usize]
+            .as_ref()
+            .expect("Caller attempted to cycle a non-defined parameter");
+
+        if forward {
+            if *v < param_def.max - 1 {
+                *v += 1;
+            } else {
+                *v = param_def.max;
+            }
+        } else {
+            if *v > param_def.min + 1 {
+                *v -= 1;
+            } else {
+                *v = param_def.min;
+            }
         }
 
-        let val2 = *val as i32;
+        let v_ui = *v as i32;
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let instruments_model = GlobalEngine::get(&handle).get_instruments();
                 let mut row_data = instruments_model.row_data(instrument).unwrap();
                 if param_num == 0 {
-                    row_data.param0 = val2;
+                    row_data.param0 = v_ui;
                 } else {
-                    row_data.param1 = val2;
+                    row_data.param1 = v_ui;
                 }
                 instruments_model.set_row_data(instrument, row_data);
             })
@@ -1249,7 +1325,7 @@ impl Sequencer {
                 if on_empty == OnEmpty::EmptyOnEmpty {
                     return (0, 0, 0);
                 }
-                step_parameters.0 = Some(instrument_params.0);
+                step_parameters.0 = Some(instrument_params[0]);
             }
             &mut step_parameters.0
         } else {
@@ -1257,30 +1333,43 @@ impl Sequencer {
                 if on_empty == OnEmpty::EmptyOnEmpty {
                     return (0, 0, 0);
                 }
-                step_parameters.1 = Some(instrument_params.1);
+                step_parameters.1 = Some(instrument_params[1]);
             }
             &mut step_parameters.1
         };
-        if large_inc {
-            let inc = if forward.unwrap_or(false) { 0x10 } else { -0x10 };
-            let v = val.as_mut().unwrap();
+
+        let param_def = self.synth_instrument_param_defs[self.displayed_instrument as usize][param_num as usize]
+            .as_ref()
+            .expect("UI attempted to cycle a non-defined parameter");
+        let inc = if large_inc { 0x10 } else { 0x01 };
+
+        let v = val.as_mut().unwrap();
+        if !param_def.has_min_or_max() && large_inc {
             // Do it with wrapping here in case the instrument wants to split parameters
             // in two and have the 4 most significant bits do something else.
             // The signed integer however gets in the way of this, but it's still nice
             // to have it for the full value, so wrap the 0x10 increments but cap the 0x01 ones.
-            *v = v.wrapping_add(inc);
-        } else if forward.unwrap_or(false) && val.unwrap() < 127 {
-            *val.as_mut().unwrap() += 0x01;
-        } else if forward.map(|f| !f).unwrap_or(false) && val.unwrap() > -128 {
-            *val.as_mut().unwrap() -= 0x01;
+            *v = v.wrapping_add(if forward.unwrap_or(false) { inc } else { -inc });
+        } else if forward.unwrap_or(false) {
+            if *v < param_def.max - inc {
+                *v += inc;
+            } else {
+                *v = param_def.max;
+            }
+        } else if forward.map(|f| !f).unwrap_or(false) {
+            if *v > param_def.min + inc {
+                *v -= inc;
+            } else {
+                *v = param_def.min;
+            }
         }
 
         self.set_pattern_step_events(step, self.displayed_song_pattern, None, None, Some(step_parameters));
 
         (
             maybe_selected_note.unwrap_or(self.default_note_clipboard.note),
-            step_parameters.0.unwrap_or(instrument_params.0),
-            step_parameters.1.unwrap_or(instrument_params.1),
+            step_parameters.0.unwrap_or(instrument_params[0]),
+            step_parameters.1.unwrap_or(instrument_params[1]),
         )
     }
 
@@ -1297,15 +1386,25 @@ impl Sequencer {
         let instrument_params = &mut self.instrument_params[instrument];
         if only_param_num.map_or(true, |p| p == 0) {
             if let Some(p) = step_parameters.0 {
-                // FIXME: This needs to update the instruments param model if I keep it.
-                instrument_params.0 = p;
+                instrument_params[0] = p;
             }
         }
         if only_param_num.map_or(true, |p| p == 1) {
             if let Some(p) = step_parameters.1 {
-                instrument_params.1 = p;
+                instrument_params[1] = p;
             }
         }
+
+        let ui_copy = *instrument_params;
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                let instruments_model = &GlobalEngine::get(&handle).get_instruments();
+                let mut row_data = instruments_model.row_data(instrument).unwrap();
+                row_data.param0 = ui_copy[0] as i32;
+                row_data.param1 = ui_copy[1] as i32;
+                instruments_model.set_row_data(instrument, row_data);
+            })
+            .unwrap();
 
         step_parameters
     }
@@ -1647,7 +1746,11 @@ impl Sequencer {
         Ok(())
     }
 
-    pub fn set_synth_instrument_ids(&mut self, instrument_ids: Vec<SharedString>) {
+    pub fn set_instrument_def(
+        &mut self,
+        instrument_ids: Vec<SharedString>,
+        synth_instrument_param_defs: Vec<[Option<InstrumentParamDef>; NUM_INSTRUMENT_PARAMS]>,
+    ) {
         // Playback can start
         self.received_instruments_ids_after_load = true;
 
@@ -1656,15 +1759,50 @@ impl Sequencer {
         }
         self.update_steps();
 
+        let default_param_values = synth_instrument_param_defs
+            .iter()
+            .map(|p| {
+                (
+                    p[0].as_ref().map_or(-2147483648, |p| p.default as i32),
+                    p[1].as_ref().map_or(-2147483648, |p| p.default as i32),
+                )
+            })
+            .collect::<Vec<_>>();
+
         self.synth_instrument_ids = instrument_ids;
+        self.synth_instrument_param_defs = synth_instrument_param_defs;
+
+        // When the instrument is updated, overwrite the instrument params with new default values.
+        for (i, param_defs) in self.synth_instrument_param_defs.iter().enumerate() {
+            let param0 = param_defs[0].as_ref().map_or(0, |p| p.default);
+            let param1 = param_defs[1].as_ref().map_or(0, |p| p.default);
+            self.instrument_params[i] = [param0, param1];
+        }
+
         let ui_copy = self.synth_instrument_ids.clone();
         self.main_window
             .upgrade_in_event_loop(move |handle| {
-                let model = GlobalEngine::get(&handle).get_script_instrument_ids();
+                let engine = &GlobalEngine::get(&handle);
+                let model = engine.get_script_instrument_ids();
                 let vec_model = model.as_any().downcast_ref::<VecModel<SharedString>>().unwrap();
                 vec_model.set_vec(ui_copy);
+
+                let instruments_model = engine.get_instruments();
+                for (i, (p0, p1)) in default_param_values.iter().enumerate() {
+                    let mut row_data = instruments_model.row_data(i).unwrap();
+                    row_data.param0 = *p0;
+                    row_data.param1 = *p1;
+                    instruments_model.set_row_data(i, row_data);
+                }
             })
             .unwrap();
+
+        // Re-display the instrument to update the UI with the new param defs.
+        self.display_instrument(self.displayed_instrument);
+    }
+
+    pub fn instrument_has_param_defined(&mut self, instrument: u8, param_num: u8) -> bool {
+        self.synth_instrument_param_defs[instrument as usize][param_num as usize].is_some()
     }
 
     fn snap_at_step_frame(&self) -> u32 {

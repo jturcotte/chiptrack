@@ -12,13 +12,15 @@ const fmt = std.fmt;
 pub const press_fn = *const fn (freq: u32, note: u8, param0: i8, param1: i8) callconv(.C) void;
 pub const release_fn = *const fn (freq: u32, note: u8, t: u32) callconv(.C) void;
 pub const frame_fn = *const fn (freq: u32, note: u8, t: u32) callconv(.C) void;
-pub const set_param_fn = *const fn (param_num: u8, value: i8) callconv(.C) void;
+pub const set_param_fn = *const fn (value: i8) callconv(.C) void;
 
 // These few functions defines the WebAssembly interface between the guest (instruments) and the host (Chiptrack).
 extern fn print([*:0]const u8) void;
 extern fn gba_set_sound_reg(addr: u32, value: u32) void;
 extern fn gba_set_wave_table(table: [*]const u8, table_len: u32) void;
-extern fn set_instrument_at_column(id: [*:0]const u8, col: u32, frames_after_release: u32, press: ?press_fn, release: ?release_fn, frame: ?frame_fn, set_param: ?set_param_fn) void;
+/// returns the host's instrument handle.
+extern fn set_instrument_at_column(id: [*:0]const u8, col: u32, frames_after_release: u32, press: ?press_fn, release: ?release_fn, frame: ?frame_fn) u8;
+extern fn define_param(instrument_handle: u8, param_num: u8, name: [*:0]const u8, default: i8, min: i8, max: i8, set_param: ?set_param_fn) void;
 
 /// Instructs Chiptrack to log a message to the console during an instrument's callback function.
 /// This is useful for debugging the instrument's behavior and can be used like this:
@@ -30,7 +32,7 @@ pub fn debug(comptime f: []const u8, args: anytype) void {
     print(@ptrCast(&b));
 }
 
-const Instrument = struct {
+pub const Instrument = struct {
     press: ?press_fn = null,
     release: ?release_fn = null,
     frame: ?frame_fn = null,
@@ -38,9 +40,17 @@ const Instrument = struct {
     frames_after_release: u32 = 0,
 };
 
+pub const Parameter = struct {
+    name: [*:0]const u8,
+    default: i8 = 0,
+    min: i8 = std.math.minInt(i8),
+    max: i8 = std.math.maxInt(i8),
+    set_param: ?set_param_fn = null,
+};
+
 /// Registers an instrument using parameters and function pointers provided through an Instrument struct instance.
 pub fn setInstrument(id: [*:0]const u8, col: u32, instrument: Instrument) void {
-    set_instrument_at_column(id, col, instrument.frames_after_release, instrument.press, instrument.release, instrument.frame, instrument.set_param);
+    _ = set_instrument_at_column(id, col, instrument.frames_after_release, instrument.press, instrument.release, instrument.frame, instrument.set_param);
 }
 
 /// Registers an instrument struct that has the following mandatory public static declaration (not field):
@@ -49,16 +59,22 @@ pub fn setInstrument(id: [*:0]const u8, col: u32, instrument: Instrument) void {
 /// - press: a function called at the start of each sequencer press step
 /// - release: a function called at the end of each sequencer release step
 /// - frame: a function called on every frame between press and release
-/// - set_param: a function called on every step between press and release (exclusively) where the instrument parameters are changed
 /// - frames_after_release: a u32 that can extend the number of frames for which the frame function is called after the release step
+/// - param_0: a Parameter struct defining the first parameter
+/// - param_1: a Parameter struct defining the second parameter
 /// If any optional declaration is mis-spelled or non-public, it will be silently ignored.
 pub fn registerInstrument(comptime instrument: anytype, col: u32) void {
     const press: ?press_fn = if (@hasDecl(instrument, "press")) instrument.press else null;
     const release: ?release_fn = if (@hasDecl(instrument, "release")) instrument.release else null;
     const frame: ?frame_fn = if (@hasDecl(instrument, "frame")) instrument.frame else null;
-    const set_param: ?set_param_fn = if (@hasDecl(instrument, "set_param")) instrument.set_param else null;
     const far: u32 = if (@hasDecl(instrument, "frames_after_release")) instrument.frames_after_release else 0;
-    set_instrument_at_column(instrument.id, col, far, press, release, frame, set_param);
+    const handle = set_instrument_at_column(instrument.id, col, far, press, release, frame);
+    if (@hasDecl(instrument, "param_0")) {
+        define_param(handle, 0, instrument.param_0.name, instrument.param_0.default, instrument.param_0.min, instrument.param_0.max, instrument.param_0.set_param);
+    }
+    if (@hasDecl(instrument, "param_1")) {
+        define_param(handle, 1, instrument.param_1.name, instrument.param_1.default, instrument.param_1.min, instrument.param_1.max, instrument.param_1.set_param);
+    }
 }
 
 /// See the following resources for more information on the GB's and GBA's PSG

@@ -3,7 +3,8 @@
 
 import {
     InstrumentData,
-    GlobalEngine
+    GlobalEngine,
+    GlobalUtils
 } from "globals.slint";
 
 import { ScrollableSelection } from "widgets.slint";
@@ -28,7 +29,9 @@ component InstrumentButton inherits Rectangle {
             color: i.muted ? #a0a0a0 : black;
         }
         Text {
-            text: i.param0 + " / " + i.param1;
+            text: (i.param0 != -2147483648 ? GlobalUtils.to_signed_hex(i.param0) : "- ")
+                + "/"
+                + (i.param1 != -2147483648 ? GlobalUtils.to_signed_hex(i.param1) : " -");
             width: 100%;
             font_size: parent.height / 5;
             horizontal_alignment: center;

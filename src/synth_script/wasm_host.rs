@@ -52,30 +52,21 @@ impl<F: FnMut(&CStr)> HostFunction for HostFunctionS<F> {
         }
     }
 }
-
-pub struct HostFunctionSIINNNN<F> {
+pub struct HostFunctionSIINNN<F> {
     closure: F,
     name: CString,
 }
-impl<F> HostFunctionSIINNNN<F> {
-    pub fn new(name: &str, closure: F) -> HostFunctionSIINNNN<F> {
-        HostFunctionSIINNNN {
+impl<F> HostFunctionSIINNN<F> {
+    pub fn new(name: &str, closure: F) -> HostFunctionSIINNN<F> {
+        HostFunctionSIINNN {
             closure,
             name: CString::new(name).unwrap(),
         }
     }
 }
-const SIINNNN_SIG: &str = "($iiiiii)\0";
-unsafe extern "C" fn trampoline_siisss_<
-    F: FnMut(
-        &CStr,
-        i32,
-        i32,
-        Option<WasmIndirectFunction>,
-        Option<WasmIndirectFunction>,
-        Option<WasmIndirectFunction>,
-        Option<WasmIndirectFunction>,
-    ),
+const SIINNN_I_SIG: &str = "($iiiii)i\0";
+unsafe extern "C" fn trampoline_siinnn_i<
+    F: FnMut(&CStr, i32, i32, WasmIndirectFunction, WasmIndirectFunction, WasmIndirectFunction) -> i32,
 >(
     exec_env: wasm_exec_env_t,
     v1: *const i8,
@@ -84,37 +75,63 @@ unsafe extern "C" fn trampoline_siisss_<
     v4: u32,
     v5: u32,
     v6: u32,
-    v7: u32,
-) {
+) -> i32 {
     let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
 
     f(
         CStr::from_ptr(v1),
         v2,
         v3,
-        WasmModuleInst::lookup_indirect_function(v4),
-        WasmModuleInst::lookup_indirect_function(v5),
-        WasmModuleInst::lookup_indirect_function(v6),
-        WasmModuleInst::lookup_indirect_function(v7),
-    );
+        WasmIndirectFunction::new(v4),
+        WasmIndirectFunction::new(v5),
+        WasmIndirectFunction::new(v6),
+    )
 }
-impl<
-        F: FnMut(
-            &CStr,
-            i32,
-            i32,
-            Option<WasmIndirectFunction>,
-            Option<WasmIndirectFunction>,
-            Option<WasmIndirectFunction>,
-            Option<WasmIndirectFunction>,
-        ),
-    > HostFunction for HostFunctionSIINNNN<F>
+impl<F: FnMut(&CStr, i32, i32, WasmIndirectFunction, WasmIndirectFunction, WasmIndirectFunction) -> i32> HostFunction
+    for HostFunctionSIINNN<F>
 {
     fn to_native_symbol(&mut self) -> NativeSymbol {
         NativeSymbol {
             symbol: self.name.as_ptr(),
-            func_ptr: trampoline_siisss_::<F> as *mut c_void,
-            signature: SIINNNN_SIG.as_ptr() as *const i8,
+            func_ptr: trampoline_siinnn_i::<F> as *mut c_void,
+            signature: SIINNN_I_SIG.as_ptr() as *const i8,
+            attachment: &mut self.closure as *mut _ as *mut c_void,
+        }
+    }
+}
+
+pub struct HostFunctionIISIIIN<F> {
+    closure: F,
+    name: CString,
+}
+impl<F> HostFunctionIISIIIN<F> {
+    pub fn new(name: &str, closure: F) -> HostFunctionIISIIIN<F> {
+        HostFunctionIISIIIN {
+            closure,
+            name: CString::new(name).unwrap(),
+        }
+    }
+}
+const IISIIIN_I_SIG: &str = "(ii$iiii)\0";
+unsafe extern "C" fn trampoline_iisiiin_i<F: FnMut(i32, i32, &CStr, i32, i32, i32, WasmIndirectFunction)>(
+    exec_env: wasm_exec_env_t,
+    v1: i32,
+    v2: i32,
+    v3: *const i8,
+    v4: i32,
+    v5: i32,
+    v6: i32,
+    v7: u32,
+) {
+    let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
+    f(v1, v2, CStr::from_ptr(v3), v4, v5, v6, WasmIndirectFunction::new(v7))
+}
+impl<F: FnMut(i32, i32, &CStr, i32, i32, i32, WasmIndirectFunction)> HostFunction for HostFunctionIISIIIN<F> {
+    fn to_native_symbol(&mut self) -> NativeSymbol {
+        NativeSymbol {
+            symbol: self.name.as_ptr(),
+            func_ptr: trampoline_iisiiin_i::<F> as *mut c_void,
+            signature: IISIIIN_I_SIG.as_ptr() as *const i8,
             attachment: &mut self.closure as *mut _ as *mut c_void,
         }
     }
@@ -176,9 +193,20 @@ impl<F: FnMut(&[u8])> HostFunction for HostFunctionA<F> {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct WasmIndirectFunction {
     table_index: u32,
+}
+
+impl WasmIndirectFunction {
+    pub fn new(table_index: u32) -> WasmIndirectFunction {
+        WasmIndirectFunction { table_index }
+    }
+    pub fn is_defined(&self) -> bool {
+        // Zig and others seems to leave the offset 0 of the table empty in generated WASM,
+        // which errors out on calls and is convenient to represent null.
+        self.table_index != 0
+    }
 }
 
 pub struct WasmRuntime {
@@ -343,16 +371,6 @@ impl WasmModuleInst {
         }
     }
 
-    fn lookup_indirect_function(table_index: u32) -> Option<WasmIndirectFunction> {
-        // Zig and others seems to leave the offset 0 of the table empty in generated WASM,
-        // which errors out on calls and is convenient to represent null.
-        if table_index != 0 {
-            Some(WasmIndirectFunction { table_index })
-        } else {
-            None
-        }
-    }
-
     fn lookup_function(&self, name: &CStr) -> Option<wasm_function_inst_t> {
         unsafe {
             let f = wasm_runtime_lookup_function(self.module_inst, name.as_ptr(), ptr::null());
@@ -364,8 +382,8 @@ impl WasmModuleInst {
         }
     }
 
-    pub fn call_indirect_ii(&self, function: &WasmIndirectFunction, a1: i32, a2: i32) -> Result<(), String> {
-        let argv: [u32; 2] = [a1 as u32, a2 as u32];
+    pub fn call_indirect_i(&self, function: &WasmIndirectFunction, a1: i32) -> Result<(), String> {
+        let argv: [u32; 1] = [a1 as u32];
         self.call_indirect_argv(function, argv)
     }
 

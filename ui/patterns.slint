@@ -110,10 +110,9 @@ component SequencerStep {
             horizontal_alignment: right;
         }
         StepSelectableText {
-            // width: 5%;
+            width: 10%;
             text: "/";
             text_color: step.press ? black : #a0a0a0;
-            // horizontal_stretch: 0;
         }
         StepSelectableText {
             selected: step_selected && root.show_selection && GlobalUI.selected_column == 1 /*param1*/;
@@ -206,6 +205,22 @@ component PatternsList {
     @children
 }
 
+component ScalableText {
+    in property text <=> t.text;
+    in property horizontal_alignment <=> t.horizontal_alignment;
+    t := Text {
+        // Setting the position also prevents the text to be in the parent's layout,
+        // which allows setting its size to the parent and remove the relationship of
+        // the font-size with it.
+        x: 0px;
+        font_size: self.height * 0.75;
+        width: 100%;
+        height: 100%;
+        horizontal_alignment: center;
+        vertical_alignment: center;
+    }
+}
+
 export component PatternsPanel inherits HorizontalLayout {
     out property<FocusedPanel> focused_panel: steps;
     callback root_key_pressed(KeyEvent) -> EventResult;
@@ -272,39 +287,49 @@ export component PatternsPanel inherits HorizontalLayout {
         width: patterns_list.height_of_cell * 6.5;
         VerticalLayout {
             spacing: 1px;
-            label := Rectangle {
-                Text {
-                    x: 0px;
+            HorizontalLayout {
+                x: 0px;
+                spacing: 1px;
+                ScalableText {
+                    // Those dimensions should match what is used inside SequencerStep.
+                    width: 25%;
+                    text: (GlobalEngine.instrument_param_0.defined ? GlobalEngine.instrument_param_0.name : "");
+                    horizontal_alignment: right;
+                }
+                ScalableText {
+                    width: 10%;
+                    text: "/";
+                }
+                ScalableText {
+                    width: 25%;
+                    text: (GlobalEngine.instrument_param_1.defined ? GlobalEngine.instrument_param_1.name : "");
+                    horizontal_alignment: left;
+                }
+                ScalableText {
                     text: GlobalEngine.script_instrument_ids[GlobalEngine.displayed_instrument];
-                    height: 100%;
-                    width: 100%;
-                    font_size: self.height * 0.8;
-                    horizontal-alignment: center;
                 }
             }
 
             for step[idx] in GlobalEngine.sequencer_steps:
-            HorizontalLayout {
-                SequencerStep {
-                    step_selected: idx == GlobalUI.selected_step
-                        || (GlobalUI.selected_step_range_first > GlobalUI.selected_step
-                            && GlobalUI.selected_step <= idx
-                            && idx <= GlobalUI.selected_step_range_first)
-                        || (GlobalUI.selected_step_range_first != -1
-                            && GlobalUI.selected_step_range_first <= idx
-                            && idx <= GlobalUI.selected_step);
-                    highlighted: idx == GlobalEngine.sequencer_step_active;
-                    show_selection: focused_panel == FocusedPanel.steps;
-                    step: step;
-                    name: GlobalUtils.get_midi_note_name(step.note);
-                    pressed => {
-                        GlobalEngine.toggle_step(idx);
-                        GlobalUI.select_step(idx);
-                    }
-                    right_pressed => {
-                        GlobalEngine.toggle_step_release(idx);
-                        GlobalUI.select_step(idx);
-                    }
+            SequencerStep {
+                step_selected: idx == GlobalUI.selected_step
+                    || (GlobalUI.selected_step_range_first > GlobalUI.selected_step
+                        && GlobalUI.selected_step <= idx
+                        && idx <= GlobalUI.selected_step_range_first)
+                    || (GlobalUI.selected_step_range_first != -1
+                        && GlobalUI.selected_step_range_first <= idx
+                        && idx <= GlobalUI.selected_step);
+                highlighted: idx == GlobalEngine.sequencer_step_active;
+                show_selection: focused_panel == FocusedPanel.steps;
+                step: step;
+                name: GlobalUtils.get_midi_note_name(step.note);
+                pressed => {
+                    GlobalEngine.toggle_step(idx);
+                    GlobalUI.select_step(idx);
+                }
+                right_pressed => {
+                    GlobalEngine.toggle_step_release(idx);
+                    GlobalUI.select_step(idx);
                 }
             }
         }

@@ -10,6 +10,7 @@ use crate::sequencer::StepEvent;
 #[cfg(feature = "desktop")]
 use crate::sound_renderer::emulated::invoke_on_sound_engine;
 use crate::sound_renderer::Synth;
+use crate::synth_script::SequencerInstrumentDef;
 use crate::synth_script::SynthScript;
 use crate::utils::WeakWindowWrapper;
 use crate::GlobalEngine;
@@ -20,7 +21,6 @@ use crate::SongSettings;
 use native_dialog::FileDialog;
 use slint::Global;
 use slint::Model;
-use slint::SharedString;
 
 use alloc::rc::Rc;
 use alloc::vec::Vec;
@@ -32,6 +32,7 @@ use std::path::{Path, PathBuf};
 
 pub const NUM_INSTRUMENTS: usize = 64;
 pub const NUM_INSTRUMENT_COLS: usize = 4;
+pub const NUM_INSTRUMENT_PARAMS: usize = 2;
 pub const NUM_STEPS: usize = 16;
 pub const NUM_PATTERNS: usize = 64;
 
@@ -66,13 +67,16 @@ impl SoundEngine {
     fn apply_instrument_ids_callback(
         sequencer: Rc<RefCell<Sequencer>>,
         main_window: WeakWindowWrapper,
-    ) -> impl Fn(Vec<SharedString>) {
-        move |instrument_ids: Vec<SharedString>| {
-            sequencer.borrow_mut().set_synth_instrument_ids(instrument_ids.clone());
+    ) -> impl Fn(SequencerInstrumentDef) {
+        move |instrument_def: SequencerInstrumentDef| {
+            let ids = instrument_def.ids.clone();
+            sequencer
+                .borrow_mut()
+                .set_instrument_def(instrument_def.ids, instrument_def.params);
             main_window
                 .upgrade_in_event_loop(move |handle| {
                     let model = GlobalEngine::get(&handle).get_instruments();
-                    for (i, id) in instrument_ids.iter().enumerate() {
+                    for (i, id) in ids.iter().enumerate() {
                         let mut row_data = model.row_data(i).unwrap();
                         row_data.id = id.clone();
                         model.set_row_data(i, row_data);
@@ -263,7 +267,7 @@ impl SoundEngine {
     pub fn cycle_instrument_param_start(&mut self) {
         let seq = self.sequencer.borrow();
         let note = seq.clipboard_note();
-        let (p0, p1) = seq.displayed_instrument_params();
+        let [p0, p1] = seq.displayed_instrument_params();
         self.script
             .press_instrument_note(self.frame_number, seq.displayed_instrument, note, p0, p1);
     }
@@ -273,18 +277,24 @@ impl SoundEngine {
     }
     pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) {
         let mut seq = self.sequencer.borrow_mut();
-        let (p0, p1) = seq.cycle_instrument_param(param_num, forward);
+        let instrument = seq.displayed_instrument;
+
+        if !seq.instrument_has_param_defined(instrument, param_num) {
+            // Make sure not to update the param and play the note
+            return;
+        }
+
+        let ps = seq.cycle_instrument_param(param_num, forward);
         let note = seq.clipboard_note();
 
-        let instrument = seq.displayed_instrument;
-        if self.script.instrument_has_set_param_fn(instrument) {
+        if self.script.instrument_has_set_param_fn(instrument, param_num) {
             // The instrument will get the new value without a press.
             self.script
-                .set_instrument_param(instrument, param_num, if param_num == 0 { p0 } else { p1 })
+                .set_instrument_param(instrument, param_num, ps[param_num as usize])
         } else {
             // There is no set param function set by the instrument, trigger a press as feedback like we do in cycle_step_note.
             self.script
-                .press_instrument_note(self.frame_number, instrument, note, p0, p1);
+                .press_instrument_note(self.frame_number, instrument, note, ps[0], ps[1]);
         }
     }
 
@@ -316,7 +326,7 @@ impl SoundEngine {
         if !self.sequencer.borrow().playing() {
             let instrument = self.sequencer.borrow().displayed_instrument;
 
-            if self.script.instrument_has_set_param_fn(instrument) {
+            if self.script.instrument_has_set_param_fn(instrument, param_num) {
                 // The instrument will get the new value without a press.
                 self.script
                     .set_instrument_param(instrument, param_num, if param_num == 0 { p0 } else { p1 })

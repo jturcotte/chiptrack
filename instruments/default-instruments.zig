@@ -197,24 +197,24 @@ const square1_1 = struct {
 };
 
 /// A square instrument with a vibrato effect.
-/// `p0`: duty (0-3)
-/// `p1`: vibrato period
 const square1_2 = struct {
     pub const id: [*:0]const u8 = "S2";
+    pub const param_0 = ct.Parameter{ .name = "Duty", .default = 2, .min = 0, .max = 3, .set_param = set_duty };
+    pub const param_1 = ct.Parameter{ .name = "VP Vibrato Period", .default = 12, .min = 2, .set_param = set_p };
     pub const frames_after_release: u32 = adsr_template.frames_after_release();
 
     var env_duty = gba.EnvDutyLen{ .duty = gba.dut_1_4 };
     var p: u16 = 8;
-    fn set_duty(val: i8) void {
+    fn set_duty(val: i8) callconv(.C) void {
         env_duty.duty = @intCast(val);
     }
-    fn set_p(val: i8) void {
+    fn set_p(val: i8) callconv(.C) void {
         p = @max(1, @as(u16, @intCast(val)));
     }
 
     pub fn press(_: u32, _: u8, duty_val: i8, p_val: i8) callconv(.C) void {
         set_duty(duty_val);
-        set_p(if (p_val != 0) p_val else 12);
+        set_p(p_val);
         square1_adsr = adsr_template;
 
         gba.Sweep.init().writeTo(gba.square1);
@@ -234,18 +234,12 @@ const square1_2 = struct {
             .withTrigger(1)
             .writeTo(gba.square1);
     }
-    pub fn set_param(param_num: u8, val: i8) callconv(.C) void {
-        if (param_num == 0)
-            set_duty(val)
-        else
-            set_p(if (val != 0) val else 12);
-    }
 };
 
 /// Using the length counter for a short bleep.
-/// `p0`: duty (0-3)
 const square1_3 = struct {
     pub const id: [*:0]const u8 = "S3";
+    pub const param_0 = ct.Parameter{ .name = "Duty", .default = 2, .min = 0, .max = 3 };
 
     pub fn press(freq: u32, _: u8, p0: i8, _: i8) callconv(.C) void {
         gba.Sweep.init().writeTo(gba.square1);
@@ -319,15 +313,15 @@ const square1_5 = struct {
 };
 
 /// Example of an instrument that uses both square channels and applies a vibrato effect to both.
-/// `p0`: semitones detune
 const square2_1 = struct {
     pub const id: [*:0]const u8 = "T1";
+    pub const param_0 = ct.Parameter{ .name = "Detune (semitones)", .default = 4 };
     // Keep calling frame until the envelope is finished
     pub const frames_after_release: u32 = 13;
 
     var steps: i8 = 0;
     pub fn press(freq: u32, _: u8, p0: i8, _: i8) callconv(.C) void {
-        steps = if (p0 == 0) 4 else p0;
+        steps = p0;
 
         gba.Sweep.init().writeTo(gba.square1);
         (gba.EnvDutyLen{ .duty = gba.dut_3_4, .env_start = 10 })
@@ -373,18 +367,18 @@ const square2_1 = struct {
 };
 
 /// Arpeggio effect alternating between 3 tones based on the sequenced note.
-/// `p0`: arpeggio note 1 semitones
-/// `p1`: arpeggio note 2 semitones
 const square2_2 = struct {
     pub const id: [*:0]const u8 = "T2";
+    pub const param_0 = ct.Parameter{ .name = "A1 Arp 1. (semitones)", .default = 4 };
+    pub const param_1 = ct.Parameter{ .name = "A2 Arp 2. (semitones)", .default = 7 };
     pub const frames_after_release: u32 = 24;
     var semitones = [_]i8{ 0, 4, 7, 12 };
 
     pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
         square2_adsr = adsr_template;
 
-        semitones[1] = if (p0 == 0) 4 else p0;
-        semitones[2] = if (p1 == 0) 7 else p1;
+        semitones[1] = p0;
+        semitones[2] = p1;
     }
     pub fn frame(freq: u32, _: u8, t: u32) callconv(.C) void {
         gba.EnvDutyLen.init()
@@ -402,16 +396,16 @@ const square2_2 = struct {
 };
 
 /// Square instrument with a switch effect between the left and right channels.
-/// `p0`: left channel switch period
-/// `p1`: right channel switch period
 const square2_3 = struct {
     pub const id: [*:0]const u8 = "T3";
+    pub const param_0 = ct.Parameter{ .name = "LP (left pan period)", .default = 4 };
+    pub const param_1 = ct.Parameter{ .name = "RP (right pan period)", .default = 5 };
 
     var left_p: u7 = 0;
     var right_p: u7 = 0;
     pub fn press(freq: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
-        left_p = if (p0 == 0) 4 else @intCast(p0);
-        right_p = if (p1 == 0) 5 else @intCast(p1);
+        left_p = @intCast(p0);
+        right_p = @intCast(p1);
 
         (gba.EnvDutyLen{ .duty = gba.dut_2_4, .env_start = 13 })
             .writeTo(gba.square2);
@@ -526,14 +520,16 @@ const wave_2 = struct {
 /// Arpeggio effect on a ramp-up wave shape.
 const wave_3 = struct {
     pub const id: [*:0]const u8 = "W3";
+    pub const param_0 = ct.Parameter{ .name = "A1 Arp 1. (semitones)", .default = 4 };
+    pub const param_1 = ct.Parameter{ .name = "A2 Arp 2. (semitones)", .default = 7 };
     pub const frames_after_release: u32 = 4;
     var semitones = [_]i8{ 0, 4, 7, 12 };
 
     const table = gba.wav(0xdedcba98765432100000000011111111);
     pub fn press(freq: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
         wave_p(freq, &table);
-        semitones[1] = if (p0 == 0) 4 else p0;
-        semitones[2] = if (p1 == 0) 7 else p1;
+        semitones[1] = p0;
+        semitones[2] = p1;
     }
     pub fn frame(freq: u32, _: u8, t: u32) callconv(.C) void {
         gba.CtrlFreq.init()
