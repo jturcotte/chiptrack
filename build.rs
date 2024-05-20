@@ -14,6 +14,7 @@ fn main() {
         .arg(format!("{}/default-instruments.wasm", out_dir))
         .output()
         .expect("Failed to run wat2wasm command");
+    println!("cargo:rerun-if-changed=instruments/default-instruments.wat");
 
     let config = slint_build::CompilerConfiguration::new()
         .embed_resources(slint_build::EmbedResourcesKind::EmbedForSoftwareRenderer);
