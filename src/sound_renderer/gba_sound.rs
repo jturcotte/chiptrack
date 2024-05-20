@@ -3,11 +3,11 @@
 
 use gba::prelude::*;
 
-use crate::sound_engine::SoundEngine;
-use crate::utils::WeakWindowWrapper;
-use crate::MainWindow;
-use crate::Settings;
 use super::SoundRendererTrait;
+use crate::sound_engine::SoundEngine;
+use crate::ui::MainWindow;
+use crate::ui::Settings;
+use crate::utils::WeakWindowWrapper;
 
 use slint::ComponentHandle;
 

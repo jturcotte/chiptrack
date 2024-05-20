@@ -19,7 +19,7 @@ pub trait SoundRendererTrait {
         F: FnOnce(&mut SoundEngine) + Send + 'static;
 
     fn force(&mut self);
-        // fn invoke_on_sound_engine_no_force<F>(&mut self, f: F)
+    // fn invoke_on_sound_engine_no_force<F>(&mut self, f: F)
     // where
     //     F: FnOnce(&mut SoundEngine) + Send + 'static;
     // fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>;
@@ -27,6 +27,4 @@ pub trait SoundRendererTrait {
     // fn set_song_path(&mut self, path: PathBuf);
     // #[cfg(feature = "desktop")]
     // fn update_waveform(&mut self, tick: f32, width: f32, height: f32) -> SharedString;
-
 }
-

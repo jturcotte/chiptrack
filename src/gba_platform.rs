@@ -9,7 +9,7 @@ use crate::elog;
 use crate::gba_platform::renderer::MainScreen;
 use crate::log;
 use crate::sound_renderer::SoundRenderer;
-use crate::MainWindow;
+use crate::ui::MainWindow;
 
 use alloc::boxed::Box;
 use alloc::rc::Rc;

@@ -1,7 +1,7 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-use crate::MainWindow;
+use crate::ui::MainWindow;
 use alloc::format;
 use alloc::string::String;
 use slint::EventLoopError;

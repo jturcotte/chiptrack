@@ -12,10 +12,10 @@ use crate::sound_renderer::emulated::invoke_on_sound_engine;
 use crate::sound_renderer::Synth;
 use crate::synth_script::SequencerInstrumentDef;
 use crate::synth_script::SynthScript;
+use crate::ui::GlobalEngine;
+use crate::ui::Settings;
+use crate::ui::SongSettings;
 use crate::utils::WeakWindowWrapper;
-use crate::GlobalEngine;
-use crate::Settings;
-use crate::SongSettings;
 
 #[cfg(feature = "desktop_native")]
 use native_dialog::FileDialog;

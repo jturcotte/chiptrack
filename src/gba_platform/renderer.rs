@@ -4,10 +4,10 @@
 extern crate alloc;
 
 use crate::gba_platform::WINDOW;
+use crate::ui::FocusedPanel;
+use crate::ui::GlobalEngine;
+use crate::ui::GlobalUI;
 use crate::utils::MidiNote;
-use crate::FocusedPanel;
-use crate::GlobalEngine;
-use crate::GlobalUI;
 
 use alloc::boxed::Box;
 use core::cell::RefCell;

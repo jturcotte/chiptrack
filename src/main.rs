@@ -26,8 +26,8 @@ use wasm_bindgen::prelude::*;
 use crate::midi::Midi;
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_STEPS;
-use crate::sound_renderer::SoundRendererTrait;
 use crate::sound_renderer::new_sound_renderer;
+use crate::sound_renderer::SoundRendererTrait;
 
 #[cfg(feature = "desktop")]
 use url::Url;
@@ -39,12 +39,12 @@ use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec;
 use core::cell::RefCell;
+use slint::ComponentHandle;
+use slint::Global;
 #[cfg(feature = "desktop")]
 use std::env;
 #[cfg(feature = "desktop")]
 use std::path::PathBuf;
-
-slint::include_modules!();
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 #[cfg(not(feature = "gba"))]
@@ -101,15 +101,16 @@ fn run_main() {
         (None::<PathBuf>, search_params.get("gist"))
     };
 
-    let sequencer_step_model = Rc::new(slint::VecModel::<_>::from(vec![StepData::default(); NUM_STEPS]));
+    let sequencer_step_model = Rc::new(slint::VecModel::<_>::from(vec![ui::StepData::default(); NUM_STEPS]));
     let instruments_model = Rc::new(slint::VecModel::<_>::from(vec![
-        InstrumentData::default();
+        ui::InstrumentData::default();
         NUM_INSTRUMENTS
     ]));
 
-    let window = MainWindow::new().unwrap();
+    let window = ui::MainWindow::new().unwrap();
     let sound_renderer = Rc::new(RefCell::new(new_sound_renderer(&window)));
 
+    // This is where UI callbacks gets a native handler attached.
     ui::set_window_handlers(&window, sound_renderer.clone());
     ui::set_global_engine_handlers(&window, sound_renderer.clone());
     ui::set_global_ui_handlers(&window);
@@ -122,7 +123,7 @@ fn run_main() {
         cloned_sound_renderer.borrow_mut().update_waveform(tick, width, height)
     });
 
-    let global_engine = GlobalEngine::get(&window);
+    let global_engine = ui::GlobalEngine::get(&window);
     // The model set in the UI are only for development.
     // Rewrite the models and use that version.
     global_engine.set_sequencer_song_patterns(slint::ModelRc::from(Rc::new(slint::VecModel::default())));

@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 use crate::sound_engine::SoundEngine;
+use crate::ui::ChannelActiveNote;
+use crate::ui::ChannelTraceNote;
+use crate::ui::GlobalEngine;
+use crate::ui::GlobalSettings;
+use crate::ui::MainWindow;
+use crate::ui::Settings;
 use crate::utils::MidiNote;
 use crate::utils::WeakWindowWrapper;
-use crate::ChannelActiveNote;
-use crate::ChannelTraceNote;
-use crate::GlobalEngine;
-use crate::GlobalSettings;
-use crate::MainWindow;
-use crate::Settings;
 use core::iter::repeat;
 
 use alloc::collections::VecDeque;
@@ -444,7 +444,7 @@ impl<LazyF: FnOnce() -> Context> SoundRendererTrait for SoundRenderer<LazyF> {
 
     fn force(&mut self) {
         Lazy::force(&*self.context);
-    }    
+    }
 }
 
 impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {

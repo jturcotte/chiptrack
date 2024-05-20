@@ -3,22 +3,19 @@
 
 use core::cell::RefCell;
 
-use crate::GlobalEngine;
-use crate::GlobalSettings;
-use crate::GlobalUI;
-use crate::MainWindow;
 use crate::sound_renderer::SoundRendererTrait;
 
 use alloc::rc::Rc;
-use slint::ComponentHandle;
-use slint::Global;
 #[cfg(feature = "desktop")]
 use slint::Model;
 
-pub fn set_window_handlers<SR: SoundRendererTrait + 'static>(window: &MainWindow, sound_renderer: Rc<RefCell<SR>>) {
+// By putting this here, every generated Slint type is imported into crate::ui.
+slint::include_modules!();
+
+pub fn set_window_handlers<SR: SoundRendererTrait + 'static>(window: &MainWindow, _sound_renderer: Rc<RefCell<SR>>) {
     #[cfg(feature = "gba")]
     {
-        let cloned_sound_renderer = sound_renderer.clone();
+        let cloned_sound_renderer = _sound_renderer.clone();
         window.on_save_to_sram(move || {
             cloned_sound_renderer
                 .borrow_mut()
@@ -49,7 +46,10 @@ pub fn set_window_handlers<SR: SoundRendererTrait + 'static>(window: &MainWindow
     });
 }
 
-pub fn set_global_engine_handlers<SR: SoundRendererTrait + 'static>(window: &MainWindow, sound_renderer: Rc<RefCell<SR>>) {
+pub fn set_global_engine_handlers<SR: SoundRendererTrait + 'static>(
+    window: &MainWindow,
+    sound_renderer: Rc<RefCell<SR>>,
+) {
     let global_engine = GlobalEngine::get(window);
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -449,7 +449,10 @@ pub fn set_global_ui_handlers(window: &MainWindow) {
     });
 }
 
-pub fn set_global_settings_handlers<SR: SoundRendererTrait + 'static>(window: &MainWindow, sound_renderer: Rc<RefCell<SR>>) {
+pub fn set_global_settings_handlers<SR: SoundRendererTrait + 'static>(
+    window: &MainWindow,
+    sound_renderer: Rc<RefCell<SR>>,
+) {
     let global_settings = GlobalSettings::get(window);
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -460,18 +463,17 @@ pub fn set_global_settings_handlers<SR: SoundRendererTrait + 'static>(window: &M
             .invoke_on_sound_engine(move |se| se.apply_settings(&settings));
     });
     let cloned_sound_renderer = sound_renderer.clone();
-    global_settings
-        .on_song_settings_changed(move |settings| {
-            log!("SET {:?}", settings);
-            cloned_sound_renderer
-                .borrow_mut()
-                .invoke_on_sound_engine(move |se| se.apply_song_settings(&settings));
-        });
+    global_settings.on_song_settings_changed(move |settings| {
+        log!("SET {:?}", settings);
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.apply_song_settings(&settings));
+    });
 }
 
 #[cfg(feature = "desktop")]
 pub fn set_global_utils_handlers(window: &MainWindow) {
-    let global = &window.global::<crate::GlobalUtils>();
+    let global = &window.global::<GlobalUtils>();
 
     global.on_get_midi_note_name(|note| crate::utils::MidiNote(note).name().into());
     global.on_get_midi_note_short_name(|note| crate::utils::MidiNote(note).short_name());
