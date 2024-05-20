@@ -7,6 +7,7 @@ use crate::sound_engine::SoundEngine;
 use crate::utils::WeakWindowWrapper;
 use crate::MainWindow;
 use crate::Settings;
+use super::SoundRendererTrait;
 
 use slint::ComponentHandle;
 
@@ -91,13 +92,13 @@ pub fn new_sound_renderer(window: &MainWindow) -> SoundRenderer {
     SoundRenderer { sound_engine }
 }
 
-impl SoundRenderer {
-    pub fn invoke_on_sound_engine<F>(&mut self, f: F)
+impl SoundRendererTrait for SoundRenderer {
+    fn invoke_on_sound_engine<F>(&mut self, f: F)
     where
         F: FnOnce(&mut SoundEngine) + Send + 'static,
     {
         f(&mut self.sound_engine)
     }
 
-    pub fn force(&mut self) {}
+    fn force(&mut self) {}
 }

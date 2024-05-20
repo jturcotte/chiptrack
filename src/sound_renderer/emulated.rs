@@ -29,6 +29,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use super::SoundRendererTrait;
+
 thread_local! {static SOUND_ENGINE: RefCell<Option<SoundEngine>> = RefCell::new(None);}
 thread_local! {static SOUND_SENDER: RefCell<Option<std::sync::mpsc::Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>>> = RefCell::new(None);}
 
@@ -431,8 +433,8 @@ pub struct SoundRenderer<LazyF: FnOnce() -> Context> {
     last_viz_chunk_tick: f32,
 }
 
-impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
-    pub fn invoke_on_sound_engine<F>(&mut self, f: F)
+impl<LazyF: FnOnce() -> Context> SoundRendererTrait for SoundRenderer<LazyF> {
+    fn invoke_on_sound_engine<F>(&mut self, f: F)
     where
         F: FnOnce(&mut SoundEngine) + Send + 'static,
     {
@@ -440,6 +442,12 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
         self.sound_send.send(Box::new(f)).unwrap();
     }
 
+    fn force(&mut self) {
+        Lazy::force(&*self.context);
+    }    
+}
+
+impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
     pub fn invoke_on_sound_engine_no_force<F>(&mut self, f: F)
     where
         F: FnOnce(&mut SoundEngine) + Send + 'static,
@@ -449,10 +457,6 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
 
     pub fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>> {
         self.sound_send.clone()
-    }
-
-    pub fn force(&mut self) {
-        Lazy::force(&*self.context);
     }
 
     pub fn set_song_path(&mut self, path: PathBuf) {
