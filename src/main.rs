@@ -49,6 +49,11 @@ use std::path::PathBuf;
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 #[cfg(not(feature = "gba"))]
 pub fn main() {
+    // This provides better error messages in debug mode.
+    // It's disabled in release mode so it doesn't bloat up the file size.
+    #[cfg(all(debug_assertions, target_arch = "wasm32"))]
+    console_error_panic_hook::set_once();
+
     run_main()
 }
 
@@ -62,44 +67,8 @@ extern "C" fn main() -> ! {
 }
 
 fn run_main() {
-    // This provides better error messages in debug mode.
-    // It's disabled in release mode so it doesn't bloat up the file size.
-    #[cfg(all(debug_assertions, target_arch = "wasm32"))]
-    console_error_panic_hook::set_once();
-
-    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-    let (maybe_file_path, maybe_gist_path) = match env::args().nth(1).map(|u| Url::parse(&u)) {
-        None => (None, None),
-        Some(Ok(url)) => {
-            if url.host_str().map_or(false, |h| h == "gist.github.com") {
-                (None, Some(url.path().trim_start_matches('/').to_owned()))
-            } else {
-                elog!(
-                    "Found a URL parameter but it wasn't for gist.github.com: {:?}",
-                    url.to_string()
-                );
-                (None, None)
-            }
-        }
-        Some(Err(_)) =>
-        // This isn't a URL, assume it's a file path.
-        {
-            let song_path = PathBuf::from(env::args().nth(1).unwrap());
-            if !song_path.exists() {
-                elog!("Error: the provided song path doesn't exist [{:?}]", song_path);
-                std::process::exit(1);
-            }
-            (Some(song_path), None)
-        }
-    };
-    #[cfg(target_arch = "wasm32")]
-    let (maybe_file_path, maybe_gist_path) = {
-        let window = web_sys::window().unwrap();
-        let query_string = window.location().search().unwrap();
-        let search_params = web_sys::UrlSearchParams::new_with_str(&query_string).unwrap();
-
-        (None::<PathBuf>, search_params.get("gist"))
-    };
+    #[cfg(feature = "desktop")]
+    let (maybe_file_path, maybe_gist_path) = parse_command_arguments();
 
     let sequencer_step_model = Rc::new(slint::VecModel::<_>::from(vec![ui::StepData::default(); NUM_STEPS]));
     let instruments_model = Rc::new(slint::VecModel::<_>::from(vec![
@@ -139,46 +108,7 @@ fn run_main() {
     }
 
     #[cfg(feature = "desktop")]
-    if let Some(gist_path) = maybe_gist_path {
-        let api_url = "https://api.github.com/gists/".to_owned() + gist_path.splitn(2, '/').last().unwrap();
-        log!("Loading the project from gist API URL {}", api_url.to_string());
-        let cloned_sound_send = sound_renderer.borrow().sender();
-        ehttp::fetch(
-            ehttp::Request::get(&api_url),
-            move |result: ehttp::Result<ehttp::Response>| {
-                result
-                    .and_then(|res| {
-                        if res.ok {
-                            let decoded: serde_json::Value =
-                                serde_json::from_slice(&res.bytes).expect("JSON was not well-formatted");
-                            cloned_sound_send
-                                .send(Box::new(move |se| se.load_gist(decoded)))
-                                .unwrap();
-                            Ok(())
-                        } else {
-                            Err(format!("{} - {}", res.status, res.status_text))
-                        }
-                    })
-                    .unwrap_or_else(|err| {
-                        elog!(
-                            "Error fetching the project from {}: {}. Exiting.",
-                            api_url.to_string(),
-                            err
-                        );
-                        std::process::exit(1);
-                    });
-            },
-        );
-    } else if let Some(file_path) = maybe_file_path {
-        #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-        sound_renderer
-            .borrow_mut()
-            .invoke_on_sound_engine_no_force(move |se| se.load_file(&file_path));
-    } else {
-        sound_renderer
-            .borrow_mut()
-            .invoke_on_sound_engine_no_force(|se| se.load_default());
-    }
+    load_song_from_command_arguments(maybe_file_path, maybe_gist_path, &mut sound_renderer.borrow_mut());
     #[cfg(feature = "gba")]
     sound_renderer
         .borrow_mut()
@@ -219,4 +149,86 @@ fn run_main() {
     gba_platform::set_main_window(window.as_weak());
 
     window.run().unwrap();
+}
+
+#[cfg(feature = "desktop")]
+fn parse_command_arguments() -> (Option<PathBuf>, Option<String>) {
+    #[cfg(not(target_arch = "wasm32"))]
+    match env::args().nth(1).map(|u| Url::parse(&u)) {
+        None => (None, None),
+        Some(Ok(url)) => {
+            if url.host_str().map_or(false, |h| h == "gist.github.com") {
+                (None, Some(url.path().trim_start_matches('/').to_owned()))
+            } else {
+                elog!(
+                    "Found a URL parameter but it wasn't for gist.github.com: {:?}",
+                    url.to_string()
+                );
+                (None, None)
+            }
+        }
+        Some(Err(_)) =>
+        // This isn't a URL, assume it's a file path.
+        {
+            let song_path = PathBuf::from(env::args().nth(1).unwrap());
+            if !song_path.exists() {
+                elog!("Error: the provided song path doesn't exist [{:?}]", song_path);
+                std::process::exit(1);
+            }
+            (Some(song_path), None)
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let window = web_sys::window().unwrap();
+        let query_string = window.location().search().unwrap();
+        let search_params = web_sys::UrlSearchParams::new_with_str(&query_string).unwrap();
+
+        (None::<PathBuf>, search_params.get("gist"))
+    }
+}
+
+#[cfg(feature = "desktop")]
+fn load_song_from_command_arguments<LazyF: FnOnce() -> sound_renderer::Context>(
+    maybe_file_path: Option<PathBuf>,
+    maybe_gist_path: Option<String>,
+    sound_renderer: &mut sound_renderer::SoundRenderer<LazyF>,
+) {
+    if let Some(gist_path) = maybe_gist_path {
+        let api_url = "https://api.github.com/gists/".to_owned() + gist_path.splitn(2, '/').last().unwrap();
+        log!("Loading the project from gist API URL {}", api_url.to_string());
+        let cloned_sound_send = sound_renderer.sender();
+        ehttp::fetch(
+            ehttp::Request::get(&api_url),
+            move |result: ehttp::Result<ehttp::Response>| {
+                result
+                    .and_then(|res| {
+                        if res.ok {
+                            let decoded: serde_json::Value =
+                                serde_json::from_slice(&res.bytes).expect("JSON was not well-formatted");
+                            cloned_sound_send
+                                .send(Box::new(move |se| se.load_gist(decoded)))
+                                .unwrap();
+                            Ok(())
+                        } else {
+                            Err(format!("{} - {}", res.status, res.status_text))
+                        }
+                    })
+                    .unwrap_or_else(|err| {
+                        elog!(
+                            "Error fetching the project from {}: {}. Exiting.",
+                            api_url.to_string(),
+                            err
+                        );
+                        std::process::exit(1);
+                    });
+            },
+        );
+    } else if let Some(file_path) = maybe_file_path {
+        #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
+        sound_renderer.invoke_on_sound_engine_no_force(move |se| se.load_file(&file_path));
+    } else {
+        sound_renderer.invoke_on_sound_engine_no_force(|se| se.load_default());
+    }
 }
