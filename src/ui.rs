@@ -310,12 +310,10 @@ pub fn set_global_engine_handlers<SR: SoundRendererTrait + 'static>(
     #[cfg(feature = "desktop")]
     {
         let cloned_sound_renderer = sound_renderer.clone();
-        let window_weak = window.as_weak();
         global_engine.on_record_clicked(move |toggled| {
             cloned_sound_renderer
                 .borrow_mut()
                 .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().set_recording(toggled));
-            window_weak.unwrap().global::<GlobalUI>().set_recording(toggled);
         });
     }
 

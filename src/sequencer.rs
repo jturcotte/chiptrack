@@ -963,6 +963,12 @@ impl Sequencer {
     }
     pub fn set_recording(&mut self, val: bool) {
         self.recording = val;
+
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                GlobalUI::get(&handle).set_recording(val);
+            })
+            .unwrap();
     }
     pub fn set_erasing(&mut self, val: bool) {
         self.erasing = val;
@@ -1729,6 +1735,8 @@ impl Sequencer {
     pub fn load_str(&mut self, markdown: &str) -> Result<String, Box<dyn Error>> {
         let song = parse_markdown_song(markdown)?;
 
+        self.set_recording(false);
+
         let instruments_file = song.instruments_file.clone();
         self.set_song(song);
         Ok(instruments_file)
@@ -1739,6 +1747,9 @@ impl Sequencer {
         if song_path.exists() {
             let md = std::fs::read_to_string(song_path)?;
             let song = parse_markdown_song(&md)?;
+
+            // Disable recording when loading a song to make the playback stick to nearest instruments.
+            self.set_recording(false);
 
             let instruments_file = song.instruments_file.clone();
             self.set_song(song);
@@ -1772,6 +1783,9 @@ impl Sequencer {
     #[cfg(feature = "gba")]
     pub fn load_postcard_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
         let song: SequencerSong = from_bytes(bytes).unwrap();
+
+        self.set_recording(false);
+
         self.set_song(song);
         Ok(())
     }
