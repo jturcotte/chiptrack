@@ -338,9 +338,9 @@ pub const gba = struct {
             gba_set_sound_reg(address(channel), @as(u16, @bitCast(self)));
         }
         pub fn setTable(table: *const WavTable) void {
-            (WaveRam{ .playing = 0 }).writeTo(wave);
+            (WaveRam{ .playing = 0, .bank = 0 }).writeTo(wave);
             gba_set_wave_table(&table.v, table.v.len);
-            (WaveRam{ .playing = 1 }).writeTo(wave);
+            (WaveRam{ .playing = 1, .bank = 1 }).writeTo(wave);
         }
     };
 
