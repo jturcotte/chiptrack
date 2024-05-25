@@ -329,6 +329,15 @@ pub fn set_global_engine_handlers<SR: SoundRendererTrait + 'static>(
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_display_song_pattern_with_nearest_instrument(move |song_pattern_idx| {
+        cloned_sound_renderer.borrow_mut().invoke_on_sound_engine(move |se| {
+            se.sequencer
+                .borrow_mut()
+                .display_song_pattern_with_nearest_instrument(song_pattern_idx as usize)
+        });
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_remove_last_song_pattern(move || {
         cloned_sound_renderer
             .borrow_mut()

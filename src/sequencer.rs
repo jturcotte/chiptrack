@@ -196,7 +196,7 @@ impl Pattern {
     }
 
     fn next_instrument(&self, current_instrument: u8, forward: bool) -> Option<u8> {
-        match self.find_nearest_instrument_pos(current_instrument, forward) {
+        match self.find_nearest_instrument(current_instrument, forward) {
             // current_instrument is already in the pattern, cycle once forward
             Some((ii, i)) if i == current_instrument && forward => self
                 .instruments
@@ -230,7 +230,8 @@ impl Pattern {
         ai
     }
 
-    fn find_nearest_instrument_pos(&self, instrument: u8, forward: bool) -> Option<(usize, u8)> {
+    /// Returns the index and instrument ID of the nearest instrument to the given instrument ID.
+    fn find_nearest_instrument(&self, instrument: u8, forward: bool) -> Option<(usize, u8)> {
         let cmp = if forward { |t, b| t < b } else { |t, b| t > b };
         let mut best = None;
 
@@ -436,6 +437,8 @@ pub struct Sequencer {
     active_frame: Option<u32>,
     active_step: usize,
     active_song_pattern: usize,
+    /// Keeps track of which instrument was explicitly selected by the user and not snapped to during song playback.
+    user_displayed_instrument: u8,
     pub displayed_instrument: u8,
     displayed_song_pattern: usize,
     playing: bool,
@@ -468,6 +471,7 @@ impl Sequencer {
             active_frame: None,
             active_step: 0,
             active_song_pattern: 0,
+            user_displayed_instrument: 0,
             displayed_instrument: 0,
             displayed_song_pattern: 0,
             playing: false,
@@ -523,7 +527,13 @@ impl Sequencer {
 
                 engine.set_sequencer_song_pattern_active(song_pattern as i32);
                 if ui.get_playing() && ui.get_pin_selection_to_active() {
-                    engine.invoke_display_song_pattern(song_pattern as i32);
+                    if ui.get_recording() {
+                        // When recording, keep displaying the current instrument to allow recording
+                        // an instrument over patterns that don't have notes for it yet.
+                        engine.invoke_display_song_pattern(song_pattern as i32);
+                    } else {
+                        engine.invoke_display_song_pattern_with_nearest_instrument(song_pattern as i32);
+                    }
                 }
             })
             .unwrap();
@@ -540,7 +550,8 @@ impl Sequencer {
                 ui.get_playing() && ui.get_pin_selection_to_active()
             });
             if should_display {
-                self.display_song_pattern(song_pattern);
+                // TODO: No recording yet happen on the GBA, always use the nearest instrument here instead of tweaking self.recording.
+                self.display_song_pattern_with_nearest_instrument(song_pattern);
             }
         }
     }
@@ -564,6 +575,18 @@ impl Sequencer {
 
     pub fn apply_song_settings(&mut self, settings: &SongSettings) {
         self.song.frames_per_step = settings.frames_per_step as u32;
+    }
+
+    pub fn display_song_pattern_with_nearest_instrument(&mut self, song_pattern: usize) {
+        // Check if the new pattern contains the user-displayed instrument, or display the nearest if not.
+        let pattern = &self.song.patterns[self.pattern_idx(song_pattern)];
+        if let Some((_, i)) = pattern.find_nearest_instrument(self.user_displayed_instrument, true) {
+            if i != self.displayed_instrument {
+                self.display_instrument_but_do_not_update_steps(i);
+            }
+        }
+
+        self.display_song_pattern(song_pattern);
     }
 
     pub fn display_song_pattern(&mut self, song_pattern: usize) {
@@ -594,10 +617,17 @@ impl Sequencer {
         self.update_steps();
     }
 
-    pub fn display_instrument(&mut self, instrument: u8) {
-        self.displayed_instrument = instrument;
+    /// This will pin the instrument so that instruments around it remain displayed as pattern without it begin their playback.
+    /// A bit like a text editor remembering which column the cursor is even when moving it up/down to rows that have less columns.
+    pub fn user_display_instrument(&mut self, instrument: u8) {
+        self.user_displayed_instrument = instrument;
+        self.display_instrument_but_do_not_update_steps(instrument);
 
         self.update_steps();
+    }
+
+    pub fn display_instrument_but_do_not_update_steps(&mut self, instrument: u8) {
+        self.displayed_instrument = instrument;
 
         let param_0 = self.synth_instrument_param_defs[instrument as usize][0]
             .as_ref()
@@ -630,14 +660,14 @@ impl Sequencer {
         let col = (self.displayed_instrument as i32 + 4 + col_delta) % 4;
         // Don't wrap
         let row = (self.displayed_instrument as i32 / 4 + row_delta).max(0).min(15);
-        self.display_instrument((col + row * 4) as u8)
+        self.user_display_instrument((col + row * 4) as u8)
     }
 
     pub fn cycle_pattern_instrument(&mut self, forward: bool) {
         let maybe_next =
             self.song.patterns[self.displayed_pattern_idx()].next_instrument(self.displayed_instrument, forward);
         if let Some(instrument) = maybe_next {
-            self.display_instrument(instrument)
+            self.user_display_instrument(instrument)
         }
     }
 
@@ -674,7 +704,7 @@ impl Sequencer {
         let instruments = pattern.instruments().clone();
 
         let (instruments_to_skip, instruments_len) =
-            match pattern.find_nearest_instrument_pos(self.displayed_instrument, true) {
+            match pattern.find_nearest_instrument(self.displayed_instrument, true) {
                 // Advance once more to not show the found instrument both in the patterns and pattern_instruments models
                 Some((ii, i)) if i == self.displayed_instrument => (ii + 1, instruments.len() - 1),
                 Some((ii, _)) => (ii, instruments.len()),
@@ -1688,7 +1718,7 @@ impl Sequencer {
 
         self.activate_song_pattern(0);
         self.display_song_pattern(0);
-        self.display_instrument(self.displayed_instrument);
+        self.user_display_instrument(self.displayed_instrument);
     }
 
     pub fn load_default(&mut self) {
@@ -1798,7 +1828,7 @@ impl Sequencer {
             .unwrap();
 
         // Re-display the instrument to update the UI with the new param defs.
-        self.display_instrument(self.displayed_instrument);
+        self.user_display_instrument(self.displayed_instrument);
     }
 
     pub fn instrument_has_param_defined(&mut self, instrument: u8, param_num: u8) -> bool {

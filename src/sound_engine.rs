@@ -230,7 +230,7 @@ impl SoundEngine {
     }
 
     pub fn display_instrument(&mut self, instrument: u8) {
-        self.sequencer.borrow_mut().display_instrument(instrument);
+        self.sequencer.borrow_mut().user_display_instrument(instrument);
 
         self.pressed_note = None;
 
