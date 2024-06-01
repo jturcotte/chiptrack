@@ -64,7 +64,7 @@ export component MainWindow inherits Window {
     ];
 
     callback octave_increased(int);
-    pure callback animate_waveform(float, float, float) -> string;
+    pure callback animate_waveform(float, float, float) -> [string];
 
     preferred_width: 800px;
     preferred_height: 480px;
@@ -186,15 +186,23 @@ export component MainWindow inherits Window {
             }
             Rectangle {
                 height: 10%;
+                property<float> viewbox-width: (self.width - self.stroke-width) / 1px;
+                property<float> viewbox-height: (self.height - self.stroke-width) / 1px;
+                property<length> stroke-width: 1px;
+                property<[color]> colors: [ #ddd, #ccc, #bbb, #fff ];
+                property<[color]> strokes: [ #ccc, #bbb, #aaa, #000 ];
+                property<[string]> waveforms: root.animate_waveform(animation_tick() / 1ms, self.viewbox-width, self.viewbox-height);
 
+                for idx in waveforms.length:
                 Path {
-                    commands: root.animate_waveform(animation_tick() / 1ms, self.viewbox-width, self.viewbox-height);
-                    viewbox-width: (self.width - self.stroke-width) / 1px;
-                    viewbox-height: (self.height - self.stroke-width) / 1px;
-                    stroke: #333;
-                    stroke-width: 1px;
+                    property<string> waveform: waveforms[waveforms.length - 1 - idx];
+                    commands: waveform;
+                    viewbox-width: parent.viewbox-width;
+                    viewbox-height: parent.viewbox-height;
+                    stroke-width: parent.stroke-width;
+                    stroke: strokes[strokes.length - waveforms.length + idx];
+                    fill: colors[colors.length - waveforms.length + idx];
                 }
-
             }
             Piano {
                 height: 30%;

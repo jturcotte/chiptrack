@@ -2930,7 +2930,7 @@ dependencies = [
 [[package]]
 name = "rboy"
 version = "0.1.0"
-source = "git+https://github.com/jturcotte/rboy.git?rev=efbec416ff598da1debf0c216059299901a75f61#efbec416ff598da1debf0c216059299901a75f61"
+source = "git+https://github.com/jturcotte/rboy.git?rev=e9c0075d3e6b20419c011b271b4f70a968291678#e9c0075d3e6b20419c011b271b4f70a968291678"
 dependencies = [
  "blip_buf",
  "clap",

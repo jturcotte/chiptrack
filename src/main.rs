@@ -89,7 +89,9 @@ fn run_main() {
     let cloned_sound_renderer = sound_renderer.clone();
     #[cfg(feature = "desktop")]
     window.on_animate_waveform(move |tick, width, height| {
-        cloned_sound_renderer.borrow_mut().update_waveform(tick, width, height)
+        slint::ModelRc::from(Rc::new(
+            cloned_sound_renderer.borrow_mut().update_waveform(tick, width, height),
+        ))
     });
 
     let global_engine = ui::GlobalEngine::get(&window);

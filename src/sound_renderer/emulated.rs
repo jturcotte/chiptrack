@@ -475,7 +475,7 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
     }
 
     #[cfg(feature = "desktop")]
-    pub fn update_waveform(&mut self, tick: f32, width: f32, height: f32) -> SharedString {
+    pub fn update_waveform(&mut self, tick: f32, width: f32, height: f32) -> VecModel<SharedString> {
         let sample_rate = match Lazy::get(&*self.context) {
             Some(context) => context.sample_rate,
             None => return Default::default(),
@@ -492,7 +492,7 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
         // The mid point is half a screen past the viz_tail_len, starting from the most recent (but buffered) sample.
         let render_mid_offset = *viz_tail_len + render_mid_len;
 
-        let find_wave_start_at_mid_offset = |viz_chunks: &VecDeque<VizChunk>, chan_num: usize| -> usize {
+        let find_wave_start_at_mid_offset_fn = |viz_chunks: &VecDeque<VizChunk>, chan_num: usize| -> Option<usize> {
             // Iterate chunks backwards, from the freshest to the oldest
             viz_chunks
                 .iter()
@@ -518,16 +518,80 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
                 // TODO: I should probably base this decision on the lowest supported frequency (32hz vs sample rate)
                 .take_while(|o| *o < render_mid_offset + render_len)
                 // Take the first offset past the mid-point, we want to align that offset of the waveform to the screen's middle.
+                // If the channel is silent or that the wave start is too far before or after, return None and don't render the waveform.
                 .find(|o| *o > render_mid_offset)
-                // If the channel is silent or that the wave start is too far before or after, don't offset the waveform.
-                .unwrap_or(render_mid_offset)
         };
 
-        let chan0_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 0);
-        let chan1_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 1);
-        let chan2_render_midpoint = find_wave_start_at_mid_offset(&viz_chunks, 2);
+        let mut accum_amplitude = vec![0.0; render_len];
+        let accum_amplitude_ref = &mut accum_amplitude;
+        let mut render_samples_mut_fn = |samples: Box<dyn Iterator<Item = f32>>| {
+            const INTRO_OUTRO_LEN: usize = 75;
 
-        let aligned_chan_samples = |chan_num: usize, chan_render_midpoint| {
+            // Unfortunately for now we can only dynamically update a Path by constructing a string SVG command list.
+            // https://github.com/slint-ui/slint/issues/754
+            // With around 3-digits integer x and y coordinates, SVG commands will be on average around 8 chars each.
+            let mut commands = String::with_capacity(INTRO_OUTRO_LEN + render_len * 8);
+            let mid_height = (height / 2.0).floor();
+            let radius = (height / 8.0).floor();
+            let wave_width = width - radius * 2.0;
+
+            use std::fmt::Write;
+            // Start on the right of the waveform, at mid-height to give room above and under for the waveform.
+            write!(
+                commands,
+                "M{right_of_wave},{mid_height}",
+                right_of_wave = width - radius
+            )
+            .unwrap();
+
+            for (i, source) in samples.enumerate() {
+                // "Mix" the current channel to the accumulated amplitude of channel shapes rendered behind
+                // so that they seem to stack onto each other.
+                accum_amplitude_ref[i] += source;
+                let accum = accum_amplitude_ref[i];
+
+                // Start from the right
+                let normalized_pos = (render_len - 1 - i) as f32 / render_len as f32;
+                let x = (radius + normalized_pos * wave_width) as u32;
+
+                let side_factor = if normalized_pos < 0.05 {
+                    normalized_pos / 0.05
+                } else if normalized_pos > 0.95 {
+                    (1.0 - normalized_pos) / 0.05
+                } else {
+                    1.0
+                };
+                // Input samples are in the range [-1.0, 1.0].
+                // The gameboy emulator mixer however just use a gain of 0.25
+                // per channel to avoid clipping when all channels are playing.
+                // So multiply by 1.5 to amplify the visualization of single
+                // channels a bit.
+                let y = ((accum * 1.5 * side_factor + 1.0) * mid_height) as u32;
+                write!(commands, "H{x}V{y}").unwrap();
+            }
+            // - Line to the left of the waveform (in case there were no samples)
+            // - Left rounded corner
+            write!(
+                commands,
+                " L{left_of_wave},{mid_height} A{radius},{radius} 0 0 0 0,{under_rounded_corner}",
+                left_of_wave = radius,
+                under_rounded_corner = mid_height + radius
+            )
+            .unwrap();
+            // - Line down by mid-height past the bottom by an extra radius to avoid gaps
+            // - Line up to the start of the right rounded corner
+            // - Right rounded corner
+            // - Close the counter-clockwise waveform shape (but we don't fill it anyway)
+            write!(
+                commands,
+                " v{mid_height} H{width} v-{mid_height} a{radius},{radius} 0 0 0 -{radius},-{radius} z"
+            )
+            .unwrap();
+
+            commands.into()
+        };
+
+        let aligned_chan_samples_fn = |chan_num: usize, chan_render_midpoint| {
             viz_chunks
                 .iter()
                 .flat_map(move |vc| vc.channels[chan_num].iter().copied())
@@ -537,77 +601,30 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
                 .take(render_len)
         };
 
-        let chan0_samples = aligned_chan_samples(0, chan0_render_midpoint);
-        let chan1_samples = aligned_chan_samples(1, chan1_render_midpoint);
-        let chan2_samples = aligned_chan_samples(2, chan2_render_midpoint);
+        // Use the wave channel as the base frequency, then pulse 1, then pulse 0.
+        // Those could be sorted by frequency, but having those move around probably wouldn't look so nice either.
+        let mut chan_svg_commands: Vec<SharedString> = [2, 1, 0]
+            .into_iter()
+            .map(|chan_num| {
+                let maybe_chan_render_midpoint = find_wave_start_at_mid_offset_fn(&viz_chunks, chan_num);
+                if let Some(chan_render_midpoint) = maybe_chan_render_midpoint {
+                    let samples = aligned_chan_samples_fn(chan_num, chan_render_midpoint);
+                    render_samples_mut_fn(Box::new(samples))
+                } else {
+                    Default::default()
+                }
+            })
+            .collect();
+
+        // Channel 3 doesn't have alignment info and will often have the highest frequency, render it
+        // at the end with every other accumulated frequency with it.
         let chan3_samples = viz_chunks
             .iter()
             .flat_map(|vc| vc.channels[3].iter().copied())
             .rev()
             .skip(*viz_tail_len)
             .take(render_len);
-
-        const INTRO_OUTRO_LEN: usize = 75;
-
-        // Unfortunately for now we can only dynamically update a Path by constructing a string SVG command list.
-        // https://github.com/slint-ui/slint/issues/754
-        // With around 3-digits integer x and y coordinates, SVG commands will be on average around 8 chars each.
-        let mut commands = String::with_capacity(INTRO_OUTRO_LEN + render_len * 8);
-        let iters = chan0_samples.zip(chan1_samples).zip(chan2_samples).zip(chan3_samples);
-        let mid_height = (height / 2.0).floor();
-        let radius = (height / 8.0).floor();
-        let wave_width = width - radius * 2.0;
-
-        use std::fmt::Write;
-        // Start on the right of the waveform, at mid-height to give room above and under for the waveform.
-        write!(
-            commands,
-            "M{right_of_wave},{mid_height}",
-            right_of_wave = width - radius
-        )
-        .unwrap();
-
-        for (i, (((s0, s1), s2), s3)) in iters.enumerate() {
-            // "Mix" all channels
-            let source = s0 + s1 + s2 + s3;
-
-            // Start from the right
-            let normalized_pos = (render_len - 1 - i) as f32 / render_len as f32;
-            let x = (radius + normalized_pos * wave_width) as u32;
-
-            let side_factor = if normalized_pos < 0.05 {
-                normalized_pos / 0.05
-            } else if normalized_pos > 0.95 {
-                (1.0 - normalized_pos) / 0.05
-            } else {
-                1.0
-            };
-            // Input samples are in the range [-1.0, 1.0].
-            // The gameboy emulator mixer however just use a gain of 0.25
-            // per channel to avoid clipping when all channels are playing.
-            // So multiply by 1.5 to amplify the visualization of single
-            // channels a bit.
-            let y = ((source * 1.5 * side_factor + 1.0) * mid_height) as u32;
-            write!(commands, "H{x}V{y}").unwrap();
-        }
-        // - Line to the left of the waveform (in case there were no samples)
-        // - Left rounded corner
-        write!(
-            commands,
-            " L{left_of_wave},{mid_height} A{radius},{radius} 0 0 0 0,{under_rounded_corner}",
-            left_of_wave = radius,
-            under_rounded_corner = mid_height + radius
-        )
-        .unwrap();
-        // - Line down by mid-height past the bottom by an extra radius to avoid gaps
-        // - Line up to the start of the right rounded corner
-        // - Right rounded corner
-        // - Close the counter-clockwise waveform shape (but we don't fill it anyway)
-        write!(
-            commands,
-            " v{mid_height} H{width} v-{mid_height} a{radius},{radius} 0 0 0 -{radius},-{radius} z"
-        )
-        .unwrap();
+        chan_svg_commands.push(render_samples_mut_fn(Box::new(chan3_samples)));
 
         // The sound thread might buffer more than one frame (e.g. in WASM), so we have to advance our position
         // within the visualization samples that it produced so that the next frame shows where we expect the sound
@@ -616,7 +633,10 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
         *viz_tail_len = viz_tail_len.saturating_sub(offset_advance);
         self.last_viz_chunk_tick = tick;
 
-        commands.into()
+        // We have to accumulate from the base, but the UI is somewhat flexible regarding the number of channels to render
+        // and wants the channel in front-to-back order, so reverse it here.
+        chan_svg_commands.reverse();
+        VecModel::from(chan_svg_commands)
     }
 }
 
