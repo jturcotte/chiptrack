@@ -474,7 +474,7 @@ dependencies = [
 
 [[package]]
 name = "chiptrack"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "cpal",
  "critical-section",
