@@ -15,6 +15,7 @@ use alloc::rc::Rc;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use core::ffi::c_char;
 use core::ffi::c_void;
 use core::ffi::CStr;
 use core::mem;
@@ -38,7 +39,7 @@ impl<F> HostFunctionS<F> {
     }
 }
 const S_SIG: &str = "($)\0";
-unsafe extern "C" fn trampoline_s_<F: FnMut(&CStr)>(exec_env: wasm_exec_env_t, v1: *const i8) {
+unsafe extern "C" fn trampoline_s_<F: FnMut(&CStr)>(exec_env: wasm_exec_env_t, v1: *const c_char) {
     let f = &mut *(wasm_runtime_get_function_attachment(exec_env) as *mut F);
     f(CStr::from_ptr(v1));
 }
@@ -47,7 +48,7 @@ impl<F: FnMut(&CStr)> HostFunction for HostFunctionS<F> {
         NativeSymbol {
             symbol: self.name.as_ptr(),
             func_ptr: trampoline_s_::<F> as *mut c_void,
-            signature: S_SIG.as_ptr() as *const i8,
+            signature: S_SIG.as_ptr() as *const c_char,
             attachment: &mut self.closure as *mut _ as *mut c_void,
         }
     }
@@ -78,7 +79,7 @@ unsafe extern "C" fn trampoline_siisss_<
     ),
 >(
     exec_env: wasm_exec_env_t,
-    v1: *const i8,
+    v1: *const c_char,
     v2: i32,
     v3: i32,
     v4: u32,
@@ -114,7 +115,7 @@ impl<
         NativeSymbol {
             symbol: self.name.as_ptr(),
             func_ptr: trampoline_siisss_::<F> as *mut c_void,
-            signature: SIINNNN_SIG.as_ptr() as *const i8,
+            signature: SIINNNN_SIG.as_ptr() as *const c_char,
             attachment: &mut self.closure as *mut _ as *mut c_void,
         }
     }
@@ -142,7 +143,7 @@ impl<F: FnMut(i32, i32)> HostFunction for HostFunctionII<F> {
         NativeSymbol {
             symbol: self.name.as_ptr(),
             func_ptr: trampoline_ii_::<F> as *mut c_void,
-            signature: II_SIG.as_ptr() as *const i8,
+            signature: II_SIG.as_ptr() as *const c_char,
             attachment: &mut self.closure as *mut _ as *mut c_void,
         }
     }
@@ -170,7 +171,7 @@ impl<F: FnMut(&[u8])> HostFunction for HostFunctionA<F> {
         NativeSymbol {
             symbol: self.name.as_ptr(),
             func_ptr: trampoline_a_::<F> as *mut c_void,
-            signature: A_SIG.as_ptr() as *const i8,
+            signature: A_SIG.as_ptr() as *const c_char,
             attachment: &mut self.closure as *mut _ as *mut c_void,
         }
     }
@@ -331,7 +332,7 @@ impl WasmModuleInst {
                 _module: Some(module),
             };
 
-            let maybe_start = module_inst.lookup_function(CStr::from_ptr("_start\0".as_ptr() as *const i8));
+            let maybe_start = module_inst.lookup_function(CStr::from_ptr("_start\0".as_ptr() as *const c_char));
             if let Some(start) = maybe_start {
                 let argv: [u32; 0] = [];
                 module_inst.call_argv(start, argv)?;
