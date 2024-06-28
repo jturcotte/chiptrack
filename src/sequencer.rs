@@ -16,6 +16,7 @@ use crate::ui::SongPatternData;
 use crate::ui::SongSettings;
 use crate::utils::MidiNote;
 use crate::utils::WeakWindowWrapper;
+use alloc::rc::Rc;
 use core::fmt;
 use core::primitive::i8;
 use serde::de::{self, Deserializer, SeqAccess, Visitor};
@@ -605,9 +606,10 @@ impl Sequencer {
             .upgrade_in_event_loop(move |handle| {
                 GlobalEngine::get(&handle).set_sequencer_song_pattern_selected(song_pattern as i32);
                 let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let mut row_data = model.row_data(prev_selected).unwrap();
-                row_data.selected = false;
-                model.set_row_data(prev_selected, row_data);
+                if let Some(mut row_data) = model.row_data(prev_selected) {
+                    row_data.selected = false;
+                    model.set_row_data(prev_selected, row_data);
+                }
                 let mut row_data = model.row_data(song_pattern).unwrap();
                 row_data.selected = true;
                 model.set_row_data(song_pattern, row_data);
@@ -960,6 +962,12 @@ impl Sequencer {
         // steps and that record_press would record any key while
         // stopped to the current frame and not the next.
         self.active_frame = None;
+
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                GlobalUI::get(&handle).set_playing(val);
+            })
+            .unwrap();
     }
     pub fn set_recording(&mut self, val: bool) {
         self.recording = val;
@@ -1695,14 +1703,18 @@ impl Sequencer {
     }
 
     fn set_song(&mut self, song: SequencerSong) {
+        // Disable recording when loading a song to make the playback stick to nearest instruments.
+        self.set_recording(false);
+        self.set_playing(false, false);
+
         self.song = song;
 
         let song_patterns = self.song.song_patterns.clone();
         let frames_per_step = self.song.frames_per_step;
         self.main_window
             .upgrade_in_event_loop(move |handle| {
-                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
-                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                let engine = &GlobalEngine::get(&handle);
+                let vec_model = Rc::new(slint::VecModel::default());
                 for number in song_patterns.iter() {
                     vec_model.push(SongPatternData {
                         number: *number as i32,
@@ -1714,6 +1726,7 @@ impl Sequencer {
                     number: -1,
                     selected: false,
                 });
+                engine.set_sequencer_song_patterns(slint::ModelRc::from(vec_model));
 
                 let settings = SongSettings {
                     frames_per_step: frames_per_step as i32,
@@ -1727,15 +1740,13 @@ impl Sequencer {
         self.user_display_instrument(self.displayed_instrument);
     }
 
-    pub fn load_default(&mut self) {
+    pub fn clear_song(&mut self) {
         self.set_song(Default::default());
     }
 
     #[cfg(feature = "desktop")]
     pub fn load_str(&mut self, markdown: &str) -> Result<String, Box<dyn Error>> {
         let song = parse_markdown_song(markdown)?;
-
-        self.set_recording(false);
 
         let instruments_file = song.instruments_file.clone();
         self.set_song(song);
@@ -1747,9 +1758,6 @@ impl Sequencer {
         if song_path.exists() {
             let md = std::fs::read_to_string(song_path)?;
             let song = parse_markdown_song(&md)?;
-
-            // Disable recording when loading a song to make the playback stick to nearest instruments.
-            self.set_recording(false);
 
             let instruments_file = song.instruments_file.clone();
             self.set_song(song);

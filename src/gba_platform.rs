@@ -6,7 +6,6 @@ extern crate alloc;
 pub mod renderer;
 
 use crate::elog;
-use crate::gba_platform::renderer::MainScreen;
 use crate::log;
 use crate::sound_renderer::SoundRenderer;
 use crate::ui::MainWindow;
@@ -15,6 +14,7 @@ use alloc::boxed::Box;
 use alloc::rc::Rc;
 use core::cell::RefCell;
 use core::fmt::Write;
+use renderer::ScreenController;
 
 use embedded_alloc::Heap;
 use gba::{
@@ -176,8 +176,8 @@ impl slint::platform::Platform for GbaPlatform {
         let slint_key_l: SharedString = slint::platform::Key::Alt.into();
 
         let window = self.window.clone();
-        let mut main_screen = MainScreen::new();
-        main_screen.attach_trackers();
+        let mut screen_controller = ScreenController::new();
+        screen_controller.attach_trackers();
 
         log!("--- Memory used before loop: {}kb", ALLOCATOR.used());
 
@@ -216,7 +216,7 @@ impl slint::platform::Platform for GbaPlatform {
                 TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
                 TIMER0_RELOAD.write(0);
                 TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
-                main_screen.draw();
+                screen_controller.draw_active_screen();
                 let time = TIMER0_COUNT.read() as u32 * 1000 / cps;
                 if time > 0 {
                     log!("--- main_screen.draw(ms) {}", time);

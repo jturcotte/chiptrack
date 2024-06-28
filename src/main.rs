@@ -30,11 +30,6 @@ use crate::sound_renderer::new_sound_renderer;
 use crate::sound_renderer::SoundRendererTrait;
 
 #[cfg(feature = "desktop")]
-use url::Url;
-
-#[cfg(feature = "desktop")]
-use alloc::borrow::ToOwned;
-#[cfg(feature = "desktop")]
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use alloc::vec;
@@ -68,7 +63,7 @@ extern "C" fn main() -> ! {
 
 fn run_main() {
     #[cfg(feature = "desktop")]
-    let (maybe_file_path, maybe_gist_path) = parse_command_arguments();
+    let parsed_arguments = parse_command_arguments();
 
     let sequencer_step_model = Rc::new(slint::VecModel::<_>::from(vec![ui::StepData::default(); NUM_STEPS]));
     let instruments_model = Rc::new(slint::VecModel::<_>::from(vec![
@@ -86,13 +81,15 @@ fn run_main() {
     ui::set_global_settings_handlers(&window, sound_renderer.clone());
     ui::set_global_utils_handlers(&window);
 
-    let cloned_sound_renderer = sound_renderer.clone();
     #[cfg(feature = "desktop")]
-    window.on_animate_waveform(move |tick, width, height| {
-        slint::ModelRc::from(Rc::new(
-            cloned_sound_renderer.borrow_mut().update_waveform(tick, width, height),
-        ))
-    });
+    {
+        let cloned_sound_renderer = sound_renderer.clone();
+        window.on_animate_waveform(move |tick, width, height| {
+            slint::ModelRc::from(Rc::new(
+                cloned_sound_renderer.borrow_mut().update_waveform(tick, width, height),
+            ))
+        });
+    }
 
     let global_engine = ui::GlobalEngine::get(&window);
     // The model set in the UI are only for development.
@@ -104,17 +101,18 @@ fn run_main() {
     global_engine.set_synth_active_notes(slint::ModelRc::from(Rc::new(slint::VecModel::default())));
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-    if let Some(ref file_path) = maybe_file_path {
+    if let ParsedCommandArguments::File(ref file_path) = parsed_arguments {
         // FIXME: Update it when saving as.
         sound_renderer.borrow_mut().set_song_path(file_path.to_path_buf());
     }
 
     #[cfg(feature = "desktop")]
-    load_song_from_command_arguments(maybe_file_path, maybe_gist_path, &mut sound_renderer.borrow_mut());
+    load_song_from_command_arguments(parsed_arguments, &mut sound_renderer.borrow_mut());
     #[cfg(feature = "gba")]
-    sound_renderer
-        .borrow_mut()
-        .invoke_on_sound_engine(|se| se.load_gba_sram().unwrap_or_else(|| se.load_default()));
+    sound_renderer.borrow_mut().invoke_on_sound_engine(|se| {
+        se.load_gba_sram()
+            .unwrap_or_else(|| se.clear_song_and_load_default_instruments())
+    });
 
     // The midir web backend needs to be asynchronously initialized, but midir doesn't tell
     // us when that initialization is done and that we can start querying the list of midi
@@ -154,30 +152,32 @@ fn run_main() {
 }
 
 #[cfg(feature = "desktop")]
-fn parse_command_arguments() -> (Option<PathBuf>, Option<String>) {
+enum ParsedCommandArguments {
+    None,
+    File(PathBuf),
+    Gist(String),
+}
+
+#[cfg(feature = "desktop")]
+fn parse_command_arguments() -> ParsedCommandArguments {
     #[cfg(not(target_arch = "wasm32"))]
-    match env::args().nth(1).map(|u| Url::parse(&u)) {
-        None => (None, None),
-        Some(Ok(url)) => {
-            if url.host_str().map_or(false, |h| h == "gist.github.com") {
-                (None, Some(url.path().trim_start_matches('/').to_owned()))
-            } else {
-                elog!(
-                    "Found a URL parameter but it wasn't for gist.github.com: {:?}",
-                    url.to_string()
-                );
-                (None, None)
+    {
+        match env::args().nth(1).as_deref().map(utils::parse_gist_url) {
+            None => ParsedCommandArguments::None,
+            Some(Ok(gist_url_path)) => ParsedCommandArguments::Gist(gist_url_path),
+            Some(Err(utils::ParseGistUrlError::InvalidUrl(_))) => {
+                // This isn't a gist URL, check if it's a file path.
+                let song_path = PathBuf::from(env::args().nth(1).unwrap());
+                if !song_path.exists() {
+                    elog!("Error: the provided song path doesn't exist [{:?}]", song_path);
+                    std::process::exit(1);
+                }
+                ParsedCommandArguments::File(song_path)
             }
-        }
-        Some(Err(_)) =>
-        // This isn't a URL, assume it's a file path.
-        {
-            let song_path = PathBuf::from(env::args().nth(1).unwrap());
-            if !song_path.exists() {
-                elog!("Error: the provided song path doesn't exist [{:?}]", song_path);
+            Some(Err(e)) => {
+                elog!("Error: a gist URL was provided but it was invalid: {}", e);
                 std::process::exit(1);
             }
-            (Some(song_path), None)
         }
     }
 
@@ -193,44 +193,29 @@ fn parse_command_arguments() -> (Option<PathBuf>, Option<String>) {
 
 #[cfg(feature = "desktop")]
 fn load_song_from_command_arguments<LazyF: FnOnce() -> sound_renderer::Context>(
-    maybe_file_path: Option<PathBuf>,
-    maybe_gist_path: Option<String>,
+    parsed_arguments: ParsedCommandArguments,
     sound_renderer: &mut sound_renderer::SoundRenderer<LazyF>,
 ) {
-    if let Some(gist_path) = maybe_gist_path {
-        let api_url = "https://api.github.com/gists/".to_owned() + gist_path.splitn(2, '/').last().unwrap();
-        log!("Loading the project from gist API URL {}", api_url.to_string());
-        let cloned_sound_send = sound_renderer.sender();
-        ehttp::fetch(
-            ehttp::Request::get(&api_url),
-            move |result: ehttp::Result<ehttp::Response>| {
-                result
-                    .and_then(|res| {
-                        if res.ok {
-                            let decoded: serde_json::Value =
-                                serde_json::from_slice(&res.bytes).expect("JSON was not well-formatted");
-                            cloned_sound_send
-                                .send(Box::new(move |se| se.load_gist(decoded)))
-                                .unwrap();
-                            Ok(())
-                        } else {
-                            Err(format!("{} - {}", res.status, res.status_text))
-                        }
-                    })
-                    .unwrap_or_else(|err| {
-                        elog!(
-                            "Error fetching the project from {}: {}. Exiting.",
-                            api_url.to_string(),
-                            err
-                        );
-                        std::process::exit(1);
-                    });
-            },
-        );
-    } else if let Some(file_path) = maybe_file_path {
-        #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-        sound_renderer.invoke_on_sound_engine_no_force(move |se| se.load_file(&file_path));
-    } else {
-        sound_renderer.invoke_on_sound_engine_no_force(|se| se.load_default());
+    match parsed_arguments {
+        ParsedCommandArguments::None => {
+            sound_renderer.invoke_on_sound_engine_no_force(|se| se.clear_song_and_load_default_instruments());
+        }
+        ParsedCommandArguments::File(file_path) => {
+            #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
+            sound_renderer.invoke_on_sound_engine_no_force(move |se| se.load_file(&file_path));
+        }
+        ParsedCommandArguments::Gist(gist_path) => {
+            let cloned_sound_send = sound_renderer.sender();
+            let handler = move |decode_result: Result<serde_json::Value, String>| match decode_result {
+                Ok(_) => cloned_sound_send
+                    .send(Box::new(move |se| se.clear_song_and_load_default_instruments()))
+                    .unwrap(),
+                Err(err) => {
+                    elog!("{}. Exiting.", err);
+                    std::process::exit(1);
+                }
+            };
+            utils::fetch_gist(gist_path, handler);
+        }
     }
 }

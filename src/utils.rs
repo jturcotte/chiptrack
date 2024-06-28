@@ -1,12 +1,17 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
+#[cfg(feature = "desktop")]
+use core::fmt;
+
 use crate::ui::MainWindow;
 use alloc::format;
 use alloc::string::String;
 use slint::EventLoopError;
 use slint::SharedString;
 use slint::Weak;
+#[cfg(feature = "desktop")]
+use url::Url;
 
 #[rustfmt::skip]
 // MIDI note number frequencies multiplied by 256 (8 bits fixed point).
@@ -151,4 +156,61 @@ impl WeakWindowWrapper {
     pub fn run_direct<R>(&self, func: impl FnOnce(MainWindow) -> R) -> R {
         func(self.inner.upgrade().unwrap())
     }
+}
+
+#[cfg(feature = "desktop")]
+pub enum ParseGistUrlError {
+    InvalidUrl(url::ParseError),
+    InvalidHost,
+}
+#[cfg(feature = "desktop")]
+impl fmt::Display for ParseGistUrlError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParseGistUrlError::InvalidUrl(e) => write!(f, "Invalid URL: {}", e),
+            ParseGistUrlError::InvalidHost => write!(f, "Invalid host"),
+        }
+    }
+}
+
+#[cfg(feature = "desktop")]
+pub fn parse_gist_url(u: &str) -> Result<String, ParseGistUrlError> {
+    Url::parse(&u)
+        .map_err(|e| e.into())
+        .map_err(ParseGistUrlError::InvalidUrl)
+        .and_then(|url| {
+            if url.host_str().map_or(false, |h| h == "gist.github.com") {
+                Ok(url.path().trim_start_matches('/').to_owned())
+            } else {
+                Err(ParseGistUrlError::InvalidHost)
+            }
+        })
+}
+
+#[cfg(feature = "desktop")]
+pub fn fetch_gist(gist_url_path: String, handler: impl Fn(Result<serde_json::Value, String>) + Send + 'static) {
+    let api_url = "https://api.github.com/gists/".to_owned() + gist_url_path.splitn(2, '/').last().unwrap();
+    log!("Loading the project from gist API URL {}", api_url.to_string());
+    ehttp::fetch(
+        ehttp::Request::get(&api_url),
+        move |result: ehttp::Result<ehttp::Response>| {
+            result
+                .map(|res| {
+                    if res.ok {
+                        let decoded: serde_json::Value =
+                            serde_json::from_slice(&res.bytes).expect("JSON was not well-formatted");
+                        handler(Ok(decoded));
+                    } else {
+                        handler(Err(format!("{} - {}", res.status, res.status_text)));
+                    }
+                })
+                .unwrap_or_else(|err| {
+                    handler(Err(format!(
+                        "Error fetching the project from {}: {}.",
+                        api_url.to_string(),
+                        err
+                    )));
+                });
+        },
+    );
 }

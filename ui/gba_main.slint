@@ -20,20 +20,29 @@ export {
     GlobalUI
 }
 
-export component MainWindow inherits Window {
-    out property<FocusedPanel> focused_panel: steps;
+export enum FocusedScreen { main, menu }
 
-    callback save_to_sram();
+export component MainWindow inherits Window {
+    out property<FocusedScreen> focused_screen: main;
+    out property<FocusedPanel> focused_panel: steps;
+    out property<int> focused_menu_row: 0;
+
+    // Menu UI values
+    out property<int> frames_per_step: 7;
+    out property<bool> sync_enabled: false;
+
     callback clear_status_text();
 
     function root_key_pressed(e: KeyEvent) -> EventResult {
         if e.modifiers.shift && e.text == Key.LeftArrow { cycle_focus_panel(false); }
         else if e.modifiers.shift && e.text == Key.RightArrow { cycle_focus_panel(true); }
+        else if e.modifiers.shift && e.text == Key.UpArrow { cycle_focus_screen(false); }
+        else if e.modifiers.shift && e.text == Key.DownArrow { cycle_focus_screen(true); }
         else if e.text == Key.LeftArrow { GlobalEngine.cycle_pattern_instrument(false); }
         else if e.text == Key.RightArrow { GlobalEngine.cycle_pattern_instrument(true); }
         else if e.text == Key.UpArrow { GlobalUI.select_next_song_pattern(false); }
         else if e.text == Key.DownArrow { GlobalUI.select_next_song_pattern(true); }
-        else if e.text == Key.Return && e.modifiers.alt { save_to_sram(); }
+        else if e.text == Key.Return && e.modifiers.alt { GlobalEngine.save_project(); }
         else if e.text == Key.Return && e.modifiers.control { GlobalUI.toggle_play(false); }
         else if e.text == Key.Return { GlobalUI.toggle_play(true); }
         else if e.text == Key.Control {
@@ -65,7 +74,83 @@ export component MainWindow inherits Window {
         }
     }
 
+    function cycle_focus_screen(down: bool) {
+        if down {
+            if focused_screen == FocusedScreen.menu {
+                focused_screen = FocusedScreen.main;
+                focused_panel = FocusedPanel.steps;
+                steps_key_handler.focus();
+            }
+        } else {
+            if (focused_screen == FocusedScreen.main){
+                focused_screen = FocusedScreen.menu;
+                // focused_menu_row = 0;
+                menu_key_handler.focus();
+            }
+        }
+    }
+
+    function cycle_focus_menu_row(down: bool) {
+        if down {
+            if focused_menu_row < 3 {
+                focused_menu_row += 1;
+            }
+        } else {
+            if focused_menu_row > 0 {
+                focused_menu_row -= 1;
+            }
+        }
+    }
+
+    function cycle_frames_per_step(forward: bool) {
+        if forward {
+            if frames_per_step < 99 {
+                frames_per_step += 1;
+            }
+        } else {
+            if frames_per_step > 1 {
+                frames_per_step -= 1;
+            }
+        }
+        GlobalSettings.song_settings.frames_per_step = frames_per_step;
+        GlobalSettings.song_settings_changed(GlobalSettings.song_settings);
+    }
+
+    function toggle_sync() {
+        sync_enabled = !sync_enabled;
+        // FIXME: Implement or remove
+        GlobalSettings.settings.sync_enabled = sync_enabled;
+        GlobalSettings.settings_changed(GlobalSettings.settings);
+    }
+
     forward_focus: steps_key_handler;
+    menu_key_handler := FocusScope {
+        key_pressed(e) => {
+            if e.text == Key.UpArrow && !e.modifiers.shift { cycle_focus_menu_row(false); }
+            else if e.text == Key.DownArrow && !e.modifiers.shift { cycle_focus_menu_row(true); }
+            else if focused_menu_row == 2 && e.text == Key.LeftArrow && GlobalUI.x_pressed { cycle_frames_per_step(false); }
+            else if focused_menu_row == 2 && e.text == Key.RightArrow && GlobalUI.x_pressed { cycle_frames_per_step(true); }
+            else if focused_menu_row == 3 && e.text == Key.LeftArrow && GlobalUI.x_pressed { toggle_sync(); }
+            else if focused_menu_row == 3 && e.text == Key.RightArrow && GlobalUI.x_pressed { toggle_sync(); }
+            else if e.text == "x" {
+                if focused_menu_row == 0 {
+                    GlobalEngine.save_project();
+                } else if focused_menu_row == 1 {
+                    GlobalEngine.clear_song_and_load_default_instruments();
+                }
+            }
+            else {
+                GlobalUI.update_press_states(e);
+                return root_key_pressed(e);
+            }
+            GlobalUI.update_press_states(e);
+            return accept;
+        }
+        key_released(e) => {
+            GlobalUI.update_release_states(e);
+            return accept;
+        }
+    }
     patterns_key_handler := PatternsFocusScope {
         root_key_pressed(e) => { root.root_key_pressed(e); }
     }

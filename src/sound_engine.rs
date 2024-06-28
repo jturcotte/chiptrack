@@ -42,12 +42,17 @@ enum NoteSource {
     Sequencer(u8),
 }
 
+#[derive(PartialEq)]
 enum ProjectSource {
     New,
     #[cfg(feature = "desktop_native")]
+    /// Contains the path to the song file and the instruments file
     File((PathBuf, PathBuf)),
     #[cfg(feature = "desktop")]
-    Gist,
+    /// Contains a copy of the WASM/WAT instrument bytes for exporting
+    Gist(Vec<u8>),
+    #[cfg(feature = "gba")]
+    SRAM,
 }
 
 /// This component connects the sequencer, synth and synth scripting together.
@@ -64,6 +69,37 @@ pub struct SoundEngine {
 }
 
 impl SoundEngine {
+    pub fn new(synth: Synth, main_window: WeakWindowWrapper) -> SoundEngine {
+        let sequencer = Self::default_sequencer(&main_window);
+        let script = Self::default_synth_script(&synth, &sequencer, &main_window);
+
+        SoundEngine {
+            sequencer,
+            synth,
+            script,
+            frame_number: 0,
+            main_window,
+            pressed_note: None,
+            project_source: ProjectSource::New,
+        }
+    }
+
+    fn default_sequencer(main_window: &WeakWindowWrapper) -> Rc<RefCell<Sequencer>> {
+        Rc::new(RefCell::new(Sequencer::new(main_window.clone())))
+    }
+
+    fn default_synth_script(
+        synth: &Synth,
+        sequencer: &Rc<RefCell<Sequencer>>,
+        main_window: &WeakWindowWrapper,
+    ) -> SynthScript {
+        SynthScript::new(
+            synth.set_sound_reg_callback(),
+            synth.set_wave_table_callback(),
+            Self::apply_instrument_ids_callback(sequencer.clone(), main_window.clone()),
+        )
+    }
+
     fn apply_instrument_ids_callback(
         sequencer: Rc<RefCell<Sequencer>>,
         main_window: WeakWindowWrapper,
@@ -88,25 +124,6 @@ impl SoundEngine {
 
     pub fn is_ready(&self) -> bool {
         self.sequencer.borrow().received_instruments_ids_after_load
-    }
-
-    pub fn new(synth: Synth, main_window: WeakWindowWrapper) -> SoundEngine {
-        let sequencer = Rc::new(RefCell::new(Sequencer::new(main_window.clone())));
-        let script = SynthScript::new(
-            synth.set_sound_reg_callback(),
-            synth.set_wave_table_callback(),
-            Self::apply_instrument_ids_callback(sequencer.clone(), main_window.clone()),
-        );
-
-        SoundEngine {
-            sequencer,
-            synth,
-            script,
-            frame_number: 0,
-            main_window,
-            pressed_note: None,
-            project_source: ProjectSource::New,
-        }
     }
 
     pub fn apply_settings(&mut self, settings: &Settings) {
@@ -150,7 +167,7 @@ impl SoundEngine {
         for (instrument, event) in note_events {
             let is_selected_instrument = instrument == self.sequencer.borrow().displayed_instrument;
 
-            let (note_to_press, note_to_release) = match event {
+            let (_note_to_press, _note_to_release) = match event {
                 StepEvent::Press(note, p0, p1) => {
                     self.script
                         .press_instrument_note(self.frame_number, instrument, note, p0, p1);
@@ -191,12 +208,12 @@ impl SoundEngine {
                         for row in 0..notes_model.row_count() {
                             let mut row_data = notes_model.row_data(row).unwrap();
                             // A note release might not happen if a press happened in-between.
-                            if note_to_release.map_or(false, |n| n == row_data.note_number as u8) {
+                            if _note_to_release.map_or(false, |n| n == row_data.note_number as u8) {
                                 row_data.active = false;
                                 notes_model.set_row_data(row, row_data.clone());
                             }
 
-                            if note_to_press.map_or(false, |n| n == row_data.note_number as u8) {
+                            if _note_to_press.map_or(false, |n| n == row_data.note_number as u8) {
                                 row_data.active = true;
                                 notes_model.set_row_data(row, row_data);
                             }
@@ -468,9 +485,12 @@ impl SoundEngine {
             .unwrap();
     }
 
-    pub fn load_default(&mut self) {
-        self.sequencer.borrow_mut().load_default();
+    pub fn clear_song_and_load_default_instruments(&mut self) {
+        self.sequencer.borrow_mut().clear_song();
+        self.mute_instruments();
         self.script.load_default().expect("Default instruments couldn't load");
+
+        self.project_source = ProjectSource::New;
     }
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
@@ -479,7 +499,7 @@ impl SoundEngine {
             Ok(instruments_path) => self.project_source = ProjectSource::File((song_path.to_owned(), instruments_path)),
             Err(err) => {
                 elog!("Error extracting project from file [{:?}]: {}", song_path, err);
-                self.load_default();
+                self.clear_song_and_load_default_instruments();
             }
         }
     }
@@ -487,10 +507,10 @@ impl SoundEngine {
     #[cfg(feature = "desktop")]
     pub fn load_gist(&mut self, json: serde_json::Value) {
         match self.load_gist_internal(json) {
-            Ok(_) => self.project_source = ProjectSource::Gist,
+            Ok(instruments) => self.project_source = ProjectSource::Gist(instruments),
             Err(err) => {
                 elog!("Error extracting project from gist: {}", err);
-                self.load_default();
+                self.clear_song_and_load_default_instruments();
             }
         }
     }
@@ -501,12 +521,13 @@ impl SoundEngine {
         let instruments_file = self.sequencer.borrow_mut().load_file(song_path)?;
         let instruments_path = song_path.with_file_name(instruments_file);
         log!("Loading project instruments from file {:?}", instruments_path);
+        self.mute_instruments();
         self.script.load_file(instruments_path.as_path())?;
         Ok(instruments_path)
     }
 
     #[cfg(feature = "desktop")]
-    fn load_gist_internal(&mut self, json: serde_json::Value) -> Result<(), Box<dyn Error>> {
+    fn load_gist_internal(&mut self, json: serde_json::Value) -> Result<Vec<u8>, Box<dyn Error>> {
         let files = json
             .get("files")
             .ok_or("JSON should have a files property")?
@@ -534,16 +555,17 @@ impl SoundEngine {
             .as_bytes()
             .to_vec();
 
-        self.script.load_wasm_or_wat_bytes(instruments)?;
+        self.mute_instruments();
+        self.script.load_wasm_or_wat_bytes(&instruments)?;
 
-        Ok(())
+        Ok(instruments)
     }
 
     #[cfg(feature = "desktop_native")]
-    fn save_project_as(&mut self) {
+    pub fn save_project_as(&mut self) {
         // On some platforms the native dialog needs to be invoked from the
         // main thread, but the state needed to decide whether or not we need
-        // to show the dialog is on the sound engine thread.
+        // to show the dialog (e.g. save for new file) is on the sound engine thread.
         // So
         // - The UI asks the sound engine thread to save
         // - The sound engine thread might decide to show the native save dialog from the main thread
@@ -567,7 +589,7 @@ impl SoundEngine {
                     move || -> Result<(), Box<dyn Error>> {
                         // Songs shouldn't rely on the default instruments that will vary between versions,
                         // so save a copy of the instruments and make the saved song point to that file.
-                        let instruments_path = engine.script.save_copy_to(song_dir.as_path())?;
+                        let instruments_path = engine.script.save_default_instruments_as(song_dir.as_path())?;
                         engine
                             .sequencer
                             .borrow_mut()
@@ -582,9 +604,13 @@ impl SoundEngine {
         .unwrap();
     }
     #[cfg(not(feature = "desktop_native"))]
-    fn save_project_as(&mut self) {}
+    pub fn save_project_as(&mut self) {}
 
     pub fn save_project(&mut self) {
+        #[cfg(feature = "gba")]
+        self.save_song_to_gba_sram();
+
+        #[cfg(feature = "desktop")]
         match &self.project_source {
             ProjectSource::New => self.save_project_as(),
             #[cfg(feature = "desktop_native")]
@@ -593,16 +619,16 @@ impl SoundEngine {
                 .borrow()
                 .save(song_path.as_path())
                 .unwrap_or_else(|e| elog!("Error saving the project: {}", e)),
-            #[cfg(feature = "desktop")]
-            ProjectSource::Gist => elog!("Can't save a project loaded from a gist URL."),
+            ProjectSource::Gist(_) => elog!("Can't save a project loaded from a gist URL."),
         }
     }
 
     pub fn export_project_as_gba_sav(&self) {
         #[cfg(feature = "desktop_native")]
         || -> Result<(), Box<dyn Error>> {
+            // TODO: Show a save as dialog.
             let p = Path::new("chiptrack.sav");
-            let instruments = std::fs::read(self.instruments_path().unwrap())?;
+            let instruments = self.instruments_bytes();
             let instruments_wasm = wat::parse_bytes(&instruments).map_err(|e| e.to_string())?;
             let song = self.sequencer.borrow().serialize_to_postcard()?;
             println!(
@@ -633,13 +659,13 @@ impl SoundEngine {
     }
 
     #[cfg(feature = "gba")]
-    pub fn save_song_to_gba_sram(&mut self) {
+    fn save_song_to_gba_sram(&mut self) {
         unsafe {
             let mut buf = [0u8; 4];
             let sram = 0x0E00_0000 as *mut u8;
             gba::mem_fns::__aeabi_memcpy1(buf.as_mut_ptr(), sram, 4);
             let mut instruments_len = u32::from_le_bytes(buf) as usize;
-            if instruments_len == 0xffffffff {
+            if instruments_len == 0xffffffff || self.project_source == ProjectSource::New {
                 // SRAM is empty, copy the default instruments from ROM.
                 instruments_len = SynthScript::DEFAULT_INSTRUMENTS.len();
                 buf = (instruments_len as u32).to_le_bytes();
@@ -660,10 +686,11 @@ impl SoundEngine {
                         song_bytes.len(),
                     );
                     let song_len = u32::from_le_bytes(buf) as usize;
-                    gba_platform::renderer::draw_status_text(&alloc::format!("Saved {}B song to SRAM.", song_len));
+                    gba_platform::renderer::draw_menu_status_text(&alloc::format!("Saved {}B song to SRAM.", song_len));
                 }
                 Err(e) => elog!("save error: {}", e),
             }
+            self.project_source = ProjectSource::SRAM;
         }
     }
 
@@ -707,6 +734,8 @@ impl SoundEngine {
             if let Err(e) = self.script.load_bytes(instrument_bytes) {
                 elog!("load error: {}", e);
             }
+
+            self.project_source = ProjectSource::SRAM;
             Some(())
         }
     }
@@ -716,6 +745,17 @@ impl SoundEngine {
         match &self.project_source {
             ProjectSource::File((_, instruments_path)) => Some(instruments_path.as_path()),
             _ => None,
+        }
+    }
+
+    #[cfg(feature = "desktop_native")]
+    fn instruments_bytes(&self) -> Vec<u8> {
+        match &self.project_source {
+            ProjectSource::New => SynthScript::DEFAULT_INSTRUMENTS_TEXT.to_vec(),
+            ProjectSource::File((_, instruments_path)) => {
+                std::fs::read(instruments_path).expect("Error reading instruments file")
+            }
+            ProjectSource::Gist(instruments) => instruments.clone(),
         }
     }
 

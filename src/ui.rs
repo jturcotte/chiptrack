@@ -7,6 +7,8 @@ use crate::sound_renderer::SoundRendererTrait;
 
 use alloc::rc::Rc;
 #[cfg(feature = "desktop")]
+use native_dialog::FileDialog;
+#[cfg(feature = "desktop")]
 use slint::Model;
 
 // By putting this here, every generated Slint type is imported into crate::ui.
@@ -15,13 +17,6 @@ slint::include_modules!();
 pub fn set_window_handlers<SR: SoundRendererTrait + 'static>(window: &MainWindow, _sound_renderer: Rc<RefCell<SR>>) {
     #[cfg(feature = "gba")]
     {
-        let cloned_sound_renderer = _sound_renderer.clone();
-        window.on_save_to_sram(move || {
-            cloned_sound_renderer
-                .borrow_mut()
-                .invoke_on_sound_engine(move |se| se.save_song_to_gba_sram());
-        });
-
         window.on_clear_status_text(move || {
             crate::gba_platform::renderer::clear_status_text();
         });
@@ -358,11 +353,69 @@ pub fn set_global_engine_handlers<SR: SoundRendererTrait + 'static>(
         });
     });
 
+    #[cfg(feature = "desktop_native")]
+    {
+        let cloned_sound_renderer = sound_renderer.clone();
+        global_engine.on_open_file_dialog(move || {
+            let maybe_song_path = FileDialog::new()
+                .add_filter("Chiptrack song", &["ct.md"])
+                .add_filter("Chiptrack instruments", &["wasm", "wat"])
+                .show_open_single_file()
+                .expect("Error showing the open dialog.");
+
+            if let Some(song_path) = maybe_song_path {
+                // The show_open_single_file call above blocks the event loop but the sound thread
+                // continues posting UI updates while the user chooses a file.
+                // This means that any async calls made inside load_file will actually be posted
+                // at the end of the queue, after the accumulated calls. They might themselves again
+                // post something after the load_file async callback, but using the current state
+                // instead of the new file state.
+                // Long story short, this async mess is made less worse by waiting for the event
+                // queue to be empty again to post load_file to the sound thread.
+                let cloned_sound_send = cloned_sound_renderer.borrow().sender();
+                slint::invoke_from_event_loop(move || {
+                    cloned_sound_send
+                        .send(Box::new(move |se| se.load_file(&song_path)))
+                        .unwrap()
+                })
+                .unwrap();
+            }
+        });
+    }
+
+    #[cfg(feature = "desktop")]
+    {
+        let cloned_sound_send = sound_renderer.borrow().sender();
+        let gist_payload_handler = move |decode_result| match decode_result {
+            Ok(decoded) => cloned_sound_send
+                .send(Box::new(move |se| se.load_gist(decoded)))
+                .unwrap(),
+            Err(e) => {
+                elog!("Error loading the gist: {}", e);
+            }
+        };
+        global_engine.on_open_gist(move |url| match crate::utils::parse_gist_url(&url) {
+            Ok(gist_url_path) => {
+                crate::utils::fetch_gist(gist_url_path, gist_payload_handler.clone());
+            }
+            Err(e) => {
+                elog!("Error parsing the gist URL: {}", e);
+            }
+        });
+    }
+
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_save_project(move || {
         cloned_sound_renderer
             .borrow_mut()
             .invoke_on_sound_engine(|se| se.save_project())
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_save_project_as(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(|se| se.save_project_as())
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
@@ -372,52 +425,61 @@ pub fn set_global_engine_handlers<SR: SoundRendererTrait + 'static>(
             .invoke_on_sound_engine(|se| se.export_project_as_gba_sav())
     });
 
-    let window_weak = window.as_weak();
-    let mut maybe_previous_phasing: Option<f32> = None;
-    #[cfg(feature = "desktop")]
-    global_engine.on_phase_visualization_tick(move |animation_ms| {
-        // 4194304 Hz / 70224 Hz per frame = ~59.7 frames per second
-        let animation_synth_tick = animation_ms * (4194304.0 / 70224.0) / 1000.0;
-        let window = window_weak.clone().upgrade().unwrap();
-        let last_synth_tick = GlobalEngine::get(&window).get_last_synth_tick();
-        let cur_phasing = last_synth_tick as f32 - animation_synth_tick;
-
-        // The phasing will fluctuate depending on the timing of the sound and rendering loops,
-        // which would cause non-smooth scrolling if we'd rely on it for timing, so fix the phasing.
-        // But the refresh rates are slightly different, and thus the two drift apart slowly by one
-        // frame every few minutes, so we also need to slowly bring them back together from time to
-        // time to keep the timelines in sync.
-        let phasing = match maybe_previous_phasing {
-            // If the rendering and sound synthesis diverged too much, snap them back
-            Some(previous_phasing) if (previous_phasing - cur_phasing).abs() > 60.0 => {
-                maybe_previous_phasing = Some(cur_phasing);
-                cur_phasing
-            }
-            // If they diverged a little, bring them back little by little
-            Some(previous_phasing) if previous_phasing - cur_phasing > 2.0 => {
-                let new_phasing = previous_phasing - 0.5;
-                maybe_previous_phasing = Some(new_phasing);
-                new_phasing
-            }
-            Some(previous_phasing) if cur_phasing - previous_phasing > 2.0 => {
-                let new_phasing = previous_phasing + 0.5;
-                maybe_previous_phasing = Some(new_phasing);
-                new_phasing
-            }
-            // If it only diverged within the fluctuation range, keep the current phasing.
-            Some(previous_phasing) => previous_phasing,
-            // Still uninitialized
-            None => {
-                // Don't set in stone until the sound engine is ready.
-                if last_synth_tick != -1 {
-                    maybe_previous_phasing = Some(cur_phasing);
-                }
-                cur_phasing
-            }
-        };
-
-        animation_synth_tick + phasing
+    let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_clear_song_and_load_default_instruments(move || {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(|se| se.clear_song_and_load_default_instruments())
     });
+
+    #[cfg(feature = "desktop")]
+    {
+        let window_weak = window.as_weak();
+        let mut maybe_previous_phasing: Option<f32> = None;
+        global_engine.on_phase_visualization_tick(move |animation_ms| {
+            // 4194304 Hz / 70224 Hz per frame = ~59.7 frames per second
+            let animation_synth_tick = animation_ms * (4194304.0 / 70224.0) / 1000.0;
+            let window = window_weak.clone().upgrade().unwrap();
+            let last_synth_tick = GlobalEngine::get(&window).get_last_synth_tick();
+            let cur_phasing = last_synth_tick as f32 - animation_synth_tick;
+
+            // The phasing will fluctuate depending on the timing of the sound and rendering loops,
+            // which would cause non-smooth scrolling if we'd rely on it for timing, so fix the phasing.
+            // But the refresh rates are slightly different, and thus the two drift apart slowly by one
+            // frame every few minutes, so we also need to slowly bring them back together from time to
+            // time to keep the timelines in sync.
+            let phasing = match maybe_previous_phasing {
+                // If the rendering and sound synthesis diverged too much, snap them back
+                Some(previous_phasing) if (previous_phasing - cur_phasing).abs() > 60.0 => {
+                    maybe_previous_phasing = Some(cur_phasing);
+                    cur_phasing
+                }
+                // If they diverged a little, bring them back little by little
+                Some(previous_phasing) if previous_phasing - cur_phasing > 2.0 => {
+                    let new_phasing = previous_phasing - 0.5;
+                    maybe_previous_phasing = Some(new_phasing);
+                    new_phasing
+                }
+                Some(previous_phasing) if cur_phasing - previous_phasing > 2.0 => {
+                    let new_phasing = previous_phasing + 0.5;
+                    maybe_previous_phasing = Some(new_phasing);
+                    new_phasing
+                }
+                // If it only diverged within the fluctuation range, keep the current phasing.
+                Some(previous_phasing) => previous_phasing,
+                // Still uninitialized
+                None => {
+                    // Don't set in stone until the sound engine is ready.
+                    if last_synth_tick != -1 {
+                        maybe_previous_phasing = Some(cur_phasing);
+                    }
+                    cur_phasing
+                }
+            };
+
+            animation_synth_tick + phasing
+        });
+    }
 
     let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_mute_instruments(move || {

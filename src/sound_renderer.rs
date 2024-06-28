@@ -4,6 +4,9 @@
 #[cfg(feature = "desktop")]
 pub mod emulated;
 #[cfg(feature = "desktop")]
+use std::sync::mpsc::Sender;
+
+#[cfg(feature = "desktop")]
 pub use emulated::{new_sound_renderer, Context, SoundRenderer, Synth};
 
 #[cfg(feature = "gba")]
@@ -19,4 +22,7 @@ pub trait SoundRendererTrait {
         F: FnOnce(&mut SoundEngine) + Send + 'static;
 
     fn force(&mut self);
+
+    #[cfg(feature = "desktop")]
+    fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>>;
 }

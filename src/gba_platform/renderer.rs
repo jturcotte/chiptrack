@@ -5,8 +5,10 @@ extern crate alloc;
 
 use crate::gba_platform::WINDOW;
 use crate::ui::FocusedPanel;
+use crate::ui::FocusedScreen;
 use crate::ui::GlobalEngine;
 use crate::ui::GlobalUI;
+use crate::ui::MainWindow;
 use crate::utils::MidiNote;
 
 use alloc::boxed::Box;
@@ -31,6 +33,9 @@ const SELECTED_TEXT: u16 = 0b111;
 // Must not be mixed
 const ERROR_TEXT: u16 = 0b101;
 
+const MAIN_SCREENBLOCK: u16 = 31;
+const MENU_SCREENBLOCK: u16 = 30;
+
 // Cheap version of Slint's PropertyTracker that just compares values.
 struct ChangeChecker<T: PartialEq + Copy> {
     last_seen: T,
@@ -53,22 +58,6 @@ impl<T: PartialEq + Copy> ChangeCheckStatus<T> {
     fn dirty(&self) -> bool {
         self.current != self.previous
     }
-}
-
-pub struct MainScreen {
-    sequencer_song_patterns_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
-    sequencer_steps_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
-    sequencer_pattern_instruments_tracker:
-        Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
-    instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
-    focused_panel_checker: ChangeChecker<FocusedPanel>,
-    selected_column_checker: ChangeChecker<i32>,
-    selected_step_checker: ChangeChecker<i32>,
-    selected_step_range_first_checker: ChangeChecker<i32>,
-    sequencer_pattern_instruments_len_checker: ChangeChecker<usize>,
-    sequencer_song_pattern_active_checker: ChangeChecker<usize>,
-    sequencer_step_active_checker: ChangeChecker<usize>,
-    displayed_instrument_checker: ChangeChecker<usize>,
 }
 
 struct ModelDirtinessTracker {
@@ -121,6 +110,14 @@ fn to_dec(v: u8) -> [u8; 2] {
     [c1, c2]
 }
 
+fn to_dec3(v: u16) -> [u8; 3] {
+    let c3 = (v % 10) as u8 + b'0';
+    let tens = v / 10;
+    let c2 = (tens % 10) as u8 + b'0';
+    let c1 = (tens / 10) as u8 + b'0';
+    [c1, c2, c3]
+}
+
 /// Draw a single u8 `char` at the `index` position in the given `vid_row`.
 fn draw_ascii_byte<const C: usize>(vid_row: VolBlock<TextEntry, Safe, Safe, C>, index: usize, char: u8, palbank: u16) {
     vid_row
@@ -166,28 +163,36 @@ fn draw_ascii_chars<RB, U, const C: usize>(
 }
 
 pub fn clear_status_text() {
-    let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
+    let tsb = TEXT_SCREENBLOCKS.get_frame(MAIN_SCREENBLOCK as usize).unwrap();
+    draw_ascii_chars(tsb.get_row(19).unwrap(), 0.., repeat(' '), NORMAL_TEXT);
+    let tsb = TEXT_SCREENBLOCKS.get_frame(MENU_SCREENBLOCK as usize).unwrap();
     draw_ascii_chars(tsb.get_row(19).unwrap(), 0.., repeat(' '), NORMAL_TEXT);
 }
 
-pub fn draw_status_text(t: &str) {
-    let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
+pub fn draw_menu_status_text(t: &str) {
+    let tsb = TEXT_SCREENBLOCKS.get_frame(MENU_SCREENBLOCK as usize).unwrap();
     draw_ascii_chars(tsb.get_row(19).unwrap(), 0.., t.chars().chain(repeat(' ')), NORMAL_TEXT);
 }
 
 pub fn draw_error_text(t: &str) {
-    let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
+    let tsb = TEXT_SCREENBLOCKS.get_frame(MAIN_SCREENBLOCK as usize).unwrap();
     draw_ascii_chars(tsb.get_row(19).unwrap(), 0.., t.chars().chain(repeat(' ')), ERROR_TEXT);
 }
 
-impl MainScreen {
+pub struct ScreenController {
+    focused_screen_checker: ChangeChecker<FocusedScreen>,
+    main_screen: MainScreen,
+    menu_screen: MenuScreen,
+}
+
+impl ScreenController {
     pub fn new() -> Self {
         // Copy text data into the first tile indices, the tile index is then the ASCII code.
         // Set the offset to 1 (including transparent pixels) since I want the
         // background color to be set by the palette as well.
         Cga8x8Thick.bitunpack_4bpp(CHARBLOCK0_4BPP.as_region(), 0x80000001);
 
-        BG0CNT.write(BackgroundControl::new().with_screenblock(31));
+        BG0CNT.write(BackgroundControl::new().with_screenblock(MAIN_SCREENBLOCK));
         BACKDROP_COLOR.write(Color::WHITE);
         DISPCNT.write(DisplayControl::new().with_show_bg0(true));
 
@@ -211,6 +216,137 @@ impl MainScreen {
         );
         set_palette(ERROR_TEXT, [Color::WHITE, Color::RED]);
 
+        Self {
+            focused_screen_checker: ChangeChecker::new(FocusedScreen::Main),
+            main_screen: MainScreen::new(),
+            menu_screen: MenuScreen::new(),
+        }
+    }
+
+    pub fn attach_trackers(&self) {
+        self.main_screen.attach_trackers();
+    }
+
+    pub fn draw_active_screen(&mut self) {
+        let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
+        let focused_screen = self.focused_screen_checker.check(handle.get_focused_screen());
+        if focused_screen.dirty() {
+            match focused_screen.current {
+                FocusedScreen::Main => BG0CNT.write(BackgroundControl::new().with_screenblock(MAIN_SCREENBLOCK)),
+                FocusedScreen::Menu => BG0CNT.write(BackgroundControl::new().with_screenblock(MENU_SCREENBLOCK)),
+            }
+        }
+        match focused_screen.current {
+            FocusedScreen::Main => {
+                self.main_screen.draw(handle);
+            }
+            FocusedScreen::Menu => {
+                self.menu_screen.draw(handle);
+            }
+        }
+    }
+}
+
+pub struct MenuScreen {
+    focused_row_checker: ChangeChecker<i32>,
+    frames_per_step_checker: ChangeChecker<i32>,
+    sync_enabled_checker: ChangeChecker<bool>,
+}
+
+impl MenuScreen {
+    pub fn new() -> Self {
+        let tsb = TEXT_SCREENBLOCKS.get_frame(MENU_SCREENBLOCK as usize).unwrap();
+        draw_ascii_ref(tsb.get_row(1).unwrap(), 1.., b"File", NORMAL_TEXT);
+        draw_ascii_ref(tsb.get_row(2).unwrap(), 1.., b"----------------", NORMAL_TEXT);
+
+        draw_ascii_ref(tsb.get_row(7).unwrap(), 1.., b"Song Settings", NORMAL_TEXT);
+        draw_ascii_ref(tsb.get_row(8).unwrap(), 1.., b"----------------", NORMAL_TEXT);
+        draw_ascii_ref(tsb.get_row(9).unwrap(), 1.., b"Frames per step:", NORMAL_TEXT);
+        draw_ascii_ref(tsb.get_row(9).unwrap(), 20.., b"(    BPM)", NORMAL_TEXT);
+
+        draw_ascii_ref(tsb.get_row(12).unwrap(), 1.., b"Settings", NORMAL_TEXT);
+        draw_ascii_ref(tsb.get_row(13).unwrap(), 1.., b"----------------", NORMAL_TEXT);
+        draw_ascii_ref(tsb.get_row(14).unwrap(), 1.., b"Sync Mode:", NORMAL_TEXT);
+
+        Self {
+            focused_row_checker: ChangeChecker::new(-1),
+            frames_per_step_checker: ChangeChecker::new(0),
+            sync_enabled_checker: ChangeChecker::new(true),
+        }
+    }
+
+    pub fn draw(&mut self, window: MainWindow) {
+        let focused_row = self.focused_row_checker.check(window.get_focused_menu_row());
+        let frames_per_step = self.frames_per_step_checker.check(window.get_frames_per_step());
+        let sync_enabled = self.sync_enabled_checker.check(window.get_sync_enabled());
+        let tsb = TEXT_SCREENBLOCKS.get_frame(MENU_SCREENBLOCK as usize).unwrap();
+
+        if focused_row.dirty() {
+            let tsb = TEXT_SCREENBLOCKS.get_frame(MENU_SCREENBLOCK as usize).unwrap();
+            let palbank = if focused_row.current != 0 {
+                NORMAL_TEXT
+            } else {
+                SELECTED_TEXT
+            };
+            draw_ascii_ref(tsb.get_row(3).unwrap(), 1.., b"Save song", palbank);
+            let palbank = if focused_row.current != 1 {
+                NORMAL_TEXT
+            } else {
+                SELECTED_TEXT
+            };
+            draw_ascii_ref(tsb.get_row(4).unwrap(), 1.., b"Clear song (default instr.)", palbank);
+        }
+
+        if focused_row.dirty() || frames_per_step.dirty() {
+            let palbank = if focused_row.current != 2 {
+                NORMAL_TEXT
+            } else {
+                SELECTED_TEXT
+            };
+            draw_ascii(
+                tsb.get_row(9).unwrap(),
+                17..,
+                to_dec(frames_per_step.current as u8),
+                palbank,
+            );
+            let bpm = 60 /* s */ * 60 /* fps */ / 4 /* steps per beat */ / frames_per_step.current;
+            draw_ascii(tsb.get_row(9).unwrap(), 21.., to_dec3(bpm as u16), NORMAL_TEXT);
+        }
+
+        if focused_row.dirty() || sync_enabled.dirty() {
+            let palbank = if focused_row.current != 3 {
+                NORMAL_TEXT
+            } else {
+                SELECTED_TEXT
+            };
+            if sync_enabled.current {
+                draw_ascii_ref(tsb.get_row(14).unwrap(), 11.., b"PO SY1", palbank);
+            } else {
+                draw_ascii_ref(tsb.get_row(14).unwrap(), 11.., b"Off", palbank);
+                draw_ascii_chars(tsb.get_row(14).unwrap(), 14..17, repeat(' '), NORMAL_TEXT);
+            }
+        }
+    }
+}
+
+pub struct MainScreen {
+    sequencer_song_patterns_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
+    sequencer_steps_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
+    sequencer_pattern_instruments_tracker:
+        Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
+    instruments_tracker: Pin<Box<i_slint_core::model::ModelChangeListenerContainer<ModelDirtinessTracker>>>,
+    focused_panel_checker: ChangeChecker<FocusedPanel>,
+    selected_column_checker: ChangeChecker<i32>,
+    selected_step_checker: ChangeChecker<i32>,
+    selected_step_range_first_checker: ChangeChecker<i32>,
+    sequencer_pattern_instruments_len_checker: ChangeChecker<usize>,
+    sequencer_song_pattern_active_checker: ChangeChecker<usize>,
+    sequencer_step_active_checker: ChangeChecker<usize>,
+    displayed_instrument_checker: ChangeChecker<usize>,
+}
+
+impl MainScreen {
+    pub fn new() -> Self {
         Self {
             sequencer_song_patterns_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
             sequencer_steps_tracker: Box::pin(ModelChangeListenerContainer::<ModelDirtinessTracker>::default()),
@@ -249,11 +385,10 @@ impl MainScreen {
             .attach_peer(Pin::as_ref(&self.instruments_tracker).model_peer());
     }
 
-    pub fn draw(&mut self) {
-        let handle = unsafe { WINDOW.as_ref().unwrap().upgrade().unwrap() };
-        let global_engine = GlobalEngine::get(&handle);
-        let global_ui = GlobalUI::get(&handle);
-        let focused_panel = self.focused_panel_checker.check(handle.get_focused_panel());
+    pub fn draw(&mut self, window: MainWindow) {
+        let global_engine = GlobalEngine::get(&window);
+        let global_ui = GlobalUI::get(&window);
+        let focused_panel = self.focused_panel_checker.check(window.get_focused_panel());
         let selected_column = self.selected_column_checker.check(global_ui.get_selected_column());
         let selected_step = self.selected_step_checker.check(global_ui.get_selected_step());
         let selected_step_range_first = self
@@ -277,7 +412,7 @@ impl MainScreen {
         let sequencer_pattern_instruments_dirty = self.sequencer_pattern_instruments_tracker.take_dirtiness();
         let instruments_dirty = self.instruments_tracker.take_dirtiness();
 
-        let tsb = TEXT_SCREENBLOCKS.get_frame(31).unwrap();
+        let tsb = TEXT_SCREENBLOCKS.get_frame(MAIN_SCREENBLOCK as usize).unwrap();
         const PARAMS_START_X: usize = 4;
         const STEPS_START_X: usize = 10;
         const INSTR_START_X: usize = 14;

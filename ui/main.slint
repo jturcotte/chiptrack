@@ -20,7 +20,7 @@ import {
 
 import { ToolbarButton } from "widgets.slint";
 import { PatternsPanel } from "patterns.slint";
-import { SettingsDialog } from "settings_dialog.slint";
+import { MenuDialog } from "menu_dialog.slint";
 import { Piano } from "piano.slint";
 import { Visualization } from "visualization.slint";
 
@@ -74,6 +74,7 @@ export component MainWindow inherits Window {
     function root_key_pressed(e: KeyEvent) -> EventResult {
         if e.modifiers.control && e.text == "s" { if !e.repeat { GlobalEngine.save_project(); } }
         else if e.modifiers.control && e.text == "g" { if !e.repeat { GlobalEngine.export_project_as_gba_sav(); } }
+        else if e.modifiers.control && e.text == "o" { if !e.repeat { GlobalEngine.open_file_dialog(); } }
         else if e.text == "a" { if !e.repeat { GlobalEngine.note_pressed(first_note); } }
         else if e.text == "s" { if !e.repeat { GlobalEngine.note_pressed(first_note + 2); } }
         else if e.text == "d" { if !e.repeat { GlobalEngine.note_pressed(first_note + 4); } }
@@ -100,10 +101,10 @@ export component MainWindow inherits Window {
         else if e.text == Key.Backspace { if !e.repeat { GlobalEngine.set_erasing(true); } }
         else if e.text == "." { if !e.repeat { GlobalEngine.record_clicked(!GlobalUI.recording); } }
         else if e.text == Key.Escape { if !e.repeat { GlobalEngine.mute_instruments(); } }
-        else if e.modifiers.shift && e.text == Key.LeftArrow { patterns.cycle_focus_panel(false, false); }
-        else if e.modifiers.shift && e.text == Key.RightArrow { patterns.cycle_focus_panel(true, false); }
-        else if e.modifiers.shift && e.text == Key.Tab { patterns.cycle_focus_panel(false, true); }
-        else if e.text == Key.Tab { patterns.cycle_focus_panel(true, true); }
+        else if e.modifiers.shift && e.text == Key.LeftArrow { patterns.cycle_panel_focus(false, false); }
+        else if e.modifiers.shift && e.text == Key.RightArrow { patterns.cycle_panel_focus(true, false); }
+        else if e.modifiers.shift && e.text == Key.Tab { patterns.cycle_panel_focus(false, true); }
+        else if e.text == Key.Tab { patterns.cycle_panel_focus(true, true); }
         else if e.text == Key.LeftArrow { GlobalEngine.cycle_pattern_instrument(false); }
         else if e.text == Key.RightArrow { GlobalEngine.cycle_pattern_instrument(true); }
         else if e.text == Key.UpArrow { GlobalUI.select_next_song_pattern(false); }
@@ -212,9 +213,12 @@ export component MainWindow inherits Window {
     }
 
     property<bool> show_settings: false;
-    if show_settings: SettingsDialog {
+    if show_settings: MenuDialog {
         closed => {
             show_settings = false;
+            patterns.restore_panel_focus();
         }
+        width: 100%;
+        height: 100%;
     }
 }

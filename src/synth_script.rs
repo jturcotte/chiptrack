@@ -264,7 +264,7 @@ impl SynthScript {
         #[cfg(feature = "gba")]
         return self.load_bytes(SynthScript::DEFAULT_INSTRUMENTS.to_vec());
         #[cfg(not(feature = "gba"))]
-        return self.load_wasm_or_wat_bytes(SynthScript::DEFAULT_INSTRUMENTS_TEXT.to_vec());
+        return self.load_wasm_or_wat_bytes(SynthScript::DEFAULT_INSTRUMENTS_TEXT);
     }
 
     pub fn load_bytes(&mut self, encoded: Vec<u8>) -> Result<(), String> {
@@ -290,7 +290,7 @@ impl SynthScript {
     /// references either format.
     /// For a gist it's most likely that only WAT will work.
     #[cfg(feature = "desktop")]
-    pub fn load_wasm_or_wat_bytes(&mut self, wasm_or_wat: Vec<u8>) -> Result<(), String> {
+    pub fn load_wasm_or_wat_bytes(&mut self, wasm_or_wat: &[u8]) -> Result<(), String> {
         let cow = wat::parse_bytes(&wasm_or_wat).map_err(|e| e.to_string())?;
         self.load_bytes(cow.to_vec())
     }
@@ -301,14 +301,14 @@ impl SynthScript {
 
         if instruments_path.exists() {
             let buffer = std::fs::read(instruments_path)?;
-            Ok(self.load_wasm_or_wat_bytes(buffer)?)
+            Ok(self.load_wasm_or_wat_bytes(&buffer)?)
         } else {
             Err(format!("Project instruments file {:?} doesn't exist.", instruments_path).into())
         }
     }
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-    pub fn save_copy_to(
+    pub fn save_default_instruments_as(
         &mut self,
         instruments_dir: &std::path::Path,
     ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {

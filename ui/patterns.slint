@@ -226,7 +226,7 @@ export component PatternsPanel inherits HorizontalLayout {
     callback root_key_pressed(KeyEvent) -> EventResult;
     callback root_key_released(KeyEvent) -> EventResult;
 
-    public function cycle_focus_panel(forward: bool, wrap: bool) {
+    public function cycle_panel_focus(forward: bool, wrap: bool) {
         if forward {
             if focused_panel == FocusedPanel.patterns {
                 focused_panel = FocusedPanel.steps;
@@ -251,6 +251,17 @@ export component PatternsPanel inherits HorizontalLayout {
             }
         }
     }
+
+    public function restore_panel_focus() {
+        if focused_panel == FocusedPanel.patterns {
+            patterns_key_handler.focus();
+        } else if focused_panel == FocusedPanel.steps {
+            steps_key_handler.focus();
+        } else if focused_panel == FocusedPanel.instruments {
+            instruments_key_handler.focus();
+        }
+    }
+
     public function toggle_instruments_grid() {
         if focused_panel != FocusedPanel.instruments {
             focused_panel = FocusedPanel.instruments;

@@ -160,9 +160,7 @@ export global GlobalUI {
     }
 
     public function toggle_play(song_mode: bool) {
-        playing = !playing;
-
-        if playing {
+        if ! /*currently*/ playing {
             // In song mode pin the selection to the active pattern/step
             // so that the playback position is kept visible.
             pin_selection_to_active = song_mode;
@@ -178,7 +176,7 @@ export global GlobalUI {
             GlobalEngine.activate_step(selected_step);
         }
 
-        GlobalEngine.set_playing(playing, song_mode);
+        GlobalEngine.set_playing(!playing, song_mode);
     }
 
     public function cycle_step_note_start() {
@@ -468,8 +466,12 @@ export global GlobalEngine {
     callback remove_last_song_pattern();
     callback clone_displayed_song_pattern();
     callback activate_song_pattern(/*song_pattern*/ int);
+    callback open_file_dialog();
+    callback open_gist(/*url*/ string);
     callback save_project();
+    callback save_project_as();
     callback export_project_as_gba_sav();
+    callback clear_song_and_load_default_instruments();
     callback mute_instruments();
 }
 

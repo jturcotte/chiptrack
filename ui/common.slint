@@ -62,8 +62,8 @@ export component StepsFocusScope inherits FocusScope {
         else if GlobalUI.selected_column == 3 /*release*/ && e.text == "x" { if !e.repeat { GlobalUI.toggle_step_release(); } }
         else if e.text == Key.LeftArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_selected_column(false); }
         else if e.text == Key.RightArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_selected_column(true); }
-        else if e.text == Key.UpArrow && !GlobalUI.z_pressed { GlobalUI.select_next_step(false); }
-        else if e.text == Key.DownArrow && !GlobalUI.z_pressed { GlobalUI.select_next_step(true); }
+        else if e.text == Key.UpArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.select_next_step(false); }
+        else if e.text == Key.DownArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.select_next_step(true); }
         else {
             if (e.text == "z" || e.text == "Z") && !e.repeat {
                 // If no key press was handled, check if it was z.
@@ -101,8 +101,8 @@ export component InstrumentsFocusScope inherits FocusScope {
         else if e.text == Key.DownArrow && GlobalUI.x_pressed { GlobalEngine.cycle_instrument_param(1, false); }
         else if e.text == Key.LeftArrow && GlobalUI.x_pressed { GlobalEngine.cycle_instrument_param(0, false); }
         else if e.text == Key.RightArrow && GlobalUI.x_pressed { GlobalEngine.cycle_instrument_param(0, true); }
-        else if e.text == Key.UpArrow && !GlobalUI.z_pressed { GlobalEngine.cycle_instrument(0, -1); }
-        else if e.text == Key.DownArrow && !GlobalUI.z_pressed { GlobalEngine.cycle_instrument(0, 1); }
+        else if e.text == Key.UpArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalEngine.cycle_instrument(0, -1); }
+        else if e.text == Key.DownArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalEngine.cycle_instrument(0, 1); }
         else if e.text == Key.LeftArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalEngine.cycle_instrument(-1, 0); }
         else if e.text == Key.RightArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalEngine.cycle_instrument(1, 0); }
         else {

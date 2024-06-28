@@ -445,6 +445,10 @@ impl<LazyF: FnOnce() -> Context> SoundRendererTrait for SoundRenderer<LazyF> {
     fn force(&mut self) {
         Lazy::force(&*self.context);
     }
+
+    fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>> {
+        self.sound_send.clone()
+    }
 }
 
 impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
@@ -453,10 +457,6 @@ impl<LazyF: FnOnce() -> Context> SoundRenderer<LazyF> {
         F: FnOnce(&mut SoundEngine) + Send + 'static,
     {
         self.sound_send.send(Box::new(f)).unwrap();
-    }
-
-    pub fn sender(&self) -> Sender<Box<dyn FnOnce(&mut SoundEngine) + Send>> {
-        self.sound_send.clone()
     }
 
     pub fn set_song_path(&mut self, path: PathBuf) {
