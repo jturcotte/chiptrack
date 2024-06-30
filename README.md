@@ -25,6 +25,12 @@ commands.</br>**This gives almost complete control over the sound chip to each s
 
   It can also be run on the 3DS through [open_agb_firm](https://github.com/profi200/open_agb_firm)
 
+- Master Sync Mode to send clock signals to a Pocket Operator or Volca
+
+  On the GBA the output volume is too low and it won't trigger unless amplified.
+
+  On the 3DS this can be worked around with open_agb_firm by setting [`audioOut=2` and `volume=36`](https://github.com/profi200/open_agb_firm/blob/master/README.md#audio) to override the physical volume slider.
+
 ## Key / Button Mapping
 
 Function | Desktop | Game Boy Advance
