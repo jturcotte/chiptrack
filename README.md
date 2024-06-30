@@ -67,7 +67,7 @@ commands. **This gives almost complete control over the sound chip to each song.
 ...
 ```
 
-Songs are saved as Markdown and are human-readable and can be discovered by searching by using GitHub's search: https://gist.github.com/search?q=%23chiptrack
+Songs are saved as Markdown and are human-readable and can be discovered by searching by using GitHub's search: https://gist.github.com/search?l=WebAssembly&q=%23chiptrack
 
 ### Basic MIDI support in the desktop version
 
