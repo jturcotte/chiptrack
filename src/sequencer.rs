@@ -832,6 +832,11 @@ impl Sequencer {
     }
 
     pub fn paste_step_range_note(&mut self, at_step: usize) {
+        // If editing the stub pattern, commit it to a real pattern now.
+        if self.has_stub_pattern {
+            self.commit_stub_song_pattern();
+        }
+
         let instrument_id = &self.synth_instrument_ids[self.displayed_instrument as usize];
         let displayed_pattern_idx = self.displayed_pattern_idx();
         let steps = self.song.patterns[displayed_pattern_idx]
