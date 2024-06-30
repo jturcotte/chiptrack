@@ -42,7 +42,6 @@ export component MainWindow inherits Window {
         else if e.text == Key.RightArrow { GlobalEngine.cycle_pattern_instrument(true); }
         else if e.text == Key.UpArrow { GlobalUI.select_next_song_pattern(false); }
         else if e.text == Key.DownArrow { GlobalUI.select_next_song_pattern(true); }
-        else if e.text == Key.Return && e.modifiers.alt { GlobalEngine.save_project(); }
         else if e.text == Key.Return && e.modifiers.control { GlobalUI.toggle_play(false); }
         else if e.text == Key.Return { GlobalUI.toggle_play(true); }
         else if e.text == Key.Control {

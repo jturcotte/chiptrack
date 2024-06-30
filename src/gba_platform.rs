@@ -173,7 +173,7 @@ impl slint::platform::Platform for GbaPlatform {
         let slint_key_up: SharedString = slint::platform::Key::UpArrow.into();
         let slint_key_down: SharedString = slint::platform::Key::DownArrow.into();
         let slint_key_r: SharedString = slint::platform::Key::Shift.into();
-        let slint_key_l: SharedString = slint::platform::Key::Alt.into();
+        let slint_key_l: SharedString = slint::platform::Key::Shift.into();
 
         let window = self.window.clone();
         let mut screen_controller = ScreenController::new();

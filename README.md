@@ -78,7 +78,7 @@ An external MIDI keyboard can be used to play or record notes.
 Function | Desktop | Game Boy Advance
 ---------|---------|-----------------
 Move cursor | <kbd>&#8592;</kbd>\|<kbd>&#8593;</kbd>\|<kbd>&#8594;</kbd>\|<kbd>&#8595;</kbd> | <kbd>&#8592;</kbd>\|<kbd>&#8593;</kbd>\|<kbd>&#8594;</kbd>\|<kbd>&#8595;</kbd>
-Switch panel (Patterns, Steps, Instruments) | <kbd>Shift</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>) | <kbd>R</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>)
+Switch panel (Patterns, Steps, Instruments) | <kbd>Shift</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>) | (<kbd>L</kbd>\|<kbd>R</kbd>) + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>)
 Select previous/next song pattern | <kbd>B</kbd> + (<kbd>&#8593;</kbd>/<kbd>&#8595;</kbd>) | <kbd>B</kbd> + (<kbd>&#8593;</kbd>/<kbd>&#8595;</kbd>)
 Select previous/next pattern non-empty instruments | <kbd>Z</kbd> + (<kbd>&#8592;</kbd>\/<kbd>&#8594;</kbd>) | <kbd>B</kbd> + (<kbd>&#8592;</kbd>/<kbd>&#8594;</kbd>)
 Cycle the selected pattern/note/param value | <kbd>X</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>) | <kbd>A</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>)
@@ -88,7 +88,7 @@ Paste (on empty slot) | <kbd>X</kbd>  | <kbd>A</kbd>
 Play song | <kbd>Enter</kbd> | <kbd>Start</kbd>
 Play pattern | <kbd>Ctrl</kbd> + <kbd>Enter</kbd> | <kbd>Select</kbd> + <kbd>Start</kbd>
 Reset sound channels | <kbd>Esc</kbd>  | <kbd>Select</kbd>
-Save | <kbd>Ctrl</kbd> + <kbd>S</kbd> | <kbd>L</kbd> + <kbd>Start</kbd>
+Save | <kbd>Ctrl</kbd> + <kbd>S</kbd> | N/A
 Export song to GBA save file | <kbd>Ctrl</kbd> + <kbd>G</kbd> | N/A
 Toggle recording mode | <kbd>.</kbd> | N/A
 Black notes | <kbd>W</kbd>\|<kbd>E</kbd>\|<kbd>T</kbd>\|<kbd>Y</kbd><kbd>U</kbd> | N/A
@@ -101,7 +101,7 @@ Erase step (or hold during playback) | <kbd>Backspace</kbd> | N/A
 Function | Desktop | Game Boy Advance
 ---------|---------|-----------------
 Cycle pattern | <kbd>X</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>) | <kbd>A</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>)
-Duplicate pattern | <kbd>Shift</kbd> + (<kbd>Z</kbd>, <kbd>X</kbd>)  | <kbd>R</kbd> + (<kbd>B</kbd>, <kbd>A</kbd>)
+Duplicate pattern | <kbd>Shift</kbd> + (<kbd>Z</kbd>, <kbd>X</kbd>)  | (<kbd>L</kbd>\|<kbd>R</kbd>) + (<kbd>B</kbd>, <kbd>A</kbd>)
 Copy | <kbd>X</kbd>  | <kbd>A</kbd>
 Cut (only on the last non-empty slot ) | <kbd>Z</kbd> + <kbd>X</kbd>  | <kbd>B</kbd> + <kbd>A</kbd>
 Paste (only on the placeholder slot) | <kbd>X</kbd>  | <kbd>A</kbd>
@@ -113,12 +113,12 @@ Function | Desktop | Game Boy Advance
 ---------|---------|-----------------
 Cycle note/param | <kbd>X</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>) | <kbd>A</kbd> + (<kbd>&#8592;</kbd>\|<kbd>&#8594;</kbd>)
 Cycle note/param (large amount) | <kbd>X</kbd> + (<kbd>&#8595;</kbd>\|<kbd>&#8593;</kbd>) | <kbd>A</kbd> + (<kbd>&#8595;</kbd>\|<kbd>&#8593;</kbd>)
-Enter selection mode | <kbd>Shift</kbd> + <kbd>Z</kbd> | <kbd>R</kbd> + <kbd>B</kbd>
-Select all rows (in selection) | <kbd>Shift</kbd> + <kbd>Z</kbd> | <kbd>R</kbd> + <kbd>B</kbd>
+Enter selection mode | <kbd>Shift</kbd> + <kbd>Z</kbd> | (<kbd>L</kbd>\|<kbd>R</kbd>) + <kbd>B</kbd>
+Select all rows (in selection) | <kbd>Shift</kbd> + <kbd>Z</kbd> | (<kbd>L</kbd>\|<kbd>R</kbd>) + <kbd>B</kbd>
 Copy (in selection) | <kbd>Z</kbd>  | <kbd>B</kbd>
 Cut (in or not in selection) | <kbd>Z</kbd> + <kbd>X</kbd>  | <kbd>B</kbd> + <kbd>A</kbd>
-Cancel selection | <kbd>Shift</kbd> | <kbd>R</kbd>
-Paste selection clipboard | <kbd>Shift</kbd> + <kbd>X</kbd>  | <kbd>R</kbd> + <kbd>A</kbd>
+Cancel selection | <kbd>Shift</kbd> | <kbd>L</kbd>\|<kbd>R</kbd>
+Paste selection clipboard | <kbd>Shift</kbd> + <kbd>X</kbd>  | (<kbd>L</kbd>\|<kbd>R</kbd>) + <kbd>A</kbd>
 Paste edit clipboard (on empty slot) | <kbd>X</kbd>  | <kbd>A</kbd>
 
 Notes:
