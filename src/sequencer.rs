@@ -16,7 +16,6 @@ use crate::ui::SongPatternData;
 use crate::ui::SongSettings;
 use crate::utils::MidiNote;
 use crate::utils::WeakWindowWrapper;
-use alloc::rc::Rc;
 use core::fmt;
 use core::primitive::i8;
 use serde::de::{self, Deserializer, SeqAccess, Visitor};
@@ -1718,20 +1717,22 @@ impl Sequencer {
         let frames_per_step = self.song.frames_per_step;
         self.main_window
             .upgrade_in_event_loop(move |handle| {
-                let engine = &GlobalEngine::get(&handle);
-                let vec_model = Rc::new(slint::VecModel::default());
+                let mut vec = Vec::new();
                 for number in song_patterns.iter() {
-                    vec_model.push(SongPatternData {
+                    vec.push(SongPatternData {
                         number: *number as i32,
                         selected: false,
                     });
                 }
                 // Append a UI-only stub
-                vec_model.push(SongPatternData {
+                vec.push(SongPatternData {
                     number: -1,
                     selected: false,
                 });
-                engine.set_sequencer_song_patterns(slint::ModelRc::from(vec_model));
+
+                let model = GlobalEngine::get(&handle).get_sequencer_song_patterns();
+                let vec_model = model.as_any().downcast_ref::<VecModel<SongPatternData>>().unwrap();
+                vec_model.set_vec(vec);
 
                 let settings = SongSettings {
                     frames_per_step: frames_per_step as i32,
