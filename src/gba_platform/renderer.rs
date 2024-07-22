@@ -9,6 +9,7 @@ use crate::ui::FocusedScreen;
 use crate::ui::GlobalEngine;
 use crate::ui::GlobalUI;
 use crate::ui::MainWindow;
+use crate::ui::ReleasePos;
 use crate::utils::MidiNote;
 
 use alloc::boxed::Box;
@@ -615,7 +616,12 @@ impl MainScreen {
 
                 // Press and release brackets
                 draw_ascii_byte(vid_row, STEPS_START_X - 1, row_data.press as u8 * b'[', press_bank);
-                draw_ascii_byte(vid_row, STEPS_START_X + 3, row_data.release as u8 * b']', release_bank);
+                let release_char = match row_data.release_pos {
+                    ReleasePos::NotReleased => b' ',
+                    ReleasePos::Half => b'=',
+                    ReleasePos::Full => b']',
+                };
+                draw_ascii_byte(vid_row, STEPS_START_X + 3, release_char, release_bank);
             }
         }
 

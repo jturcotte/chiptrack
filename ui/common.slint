@@ -59,7 +59,10 @@ export component StepsFocusScope inherits FocusScope {
         else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.DownArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(false, true); }
         else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.LeftArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(false, false); }
         else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.RightArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(true, false); }
-        else if GlobalUI.selected_column == 3 /*release*/ && e.text == "x" { if !e.repeat { GlobalUI.toggle_step_release(); } }
+        else if GlobalUI.selected_column == 3 /*release*/ && e.text == Key.UpArrow && GlobalUI.x_pressed { GlobalEngine.cycle_step_release(GlobalUI.selected_step, true); }
+        else if GlobalUI.selected_column == 3 /*release*/ && e.text == Key.DownArrow && GlobalUI.x_pressed { GlobalEngine.cycle_step_release(GlobalUI.selected_step, false); }
+        else if GlobalUI.selected_column == 3 /*release*/ && e.text == Key.LeftArrow && GlobalUI.x_pressed { GlobalEngine.cycle_step_release(GlobalUI.selected_step, false); }
+        else if GlobalUI.selected_column == 3 /*release*/ && e.text == Key.RightArrow && GlobalUI.x_pressed { GlobalEngine.cycle_step_release(GlobalUI.selected_step, true); }
         else if e.text == Key.LeftArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_selected_column(false); }
         else if e.text == Key.RightArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.cycle_selected_column(true); }
         else if e.text == Key.UpArrow && !GlobalUI.z_pressed && !e.modifiers.shift { GlobalUI.select_next_step(false); }
@@ -83,6 +86,7 @@ export component StepsFocusScope inherits FocusScope {
         if GlobalUI.selected_column < 2 /*params*/ && e.text == "x" { GlobalUI.cycle_step_param_end(); }
         else if GlobalUI.selected_column == 2 /*press*/ && e.text == "x" { GlobalUI.cycle_step_note_end(); }
         else if !GlobalUI.z_press_handled && !GlobalUI.z_pressed_something && e.text == "z" { GlobalUI.copy_step_selection(); }
+        else if !GlobalUI.x_pressed_something && e.text == "x" { GlobalEngine.toggle_step_release(GlobalUI.selected_step); }
         else if !GlobalUI.shift_pressed_something && e.text == Key.Shift { GlobalUI.cancel_selection_mode(); }
         else {
             return root_key_released(e);

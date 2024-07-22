@@ -12,9 +12,12 @@ export struct PatternInstrumentData {
     synth_index: int,
     notes: [int],
 }
+
+export enum ReleasePos { not_released, half, full }
+
 export struct StepData {
     press: bool,
-    release: bool,
+    release_pos: ReleasePos,
     note: int,
     param0_set: bool,
     param0_val: int,
@@ -76,6 +79,7 @@ export global GlobalUI {
     in-out property<bool> z_pressed: false;
     in-out property<KeyEvent> last_pressed_key;
     out property<bool> shift_pressed_something: false;
+    out property<bool> x_pressed_something: false;
     out property<bool> z_pressed_something: false;
     in-out property<bool> z_press_handled: false;
 
@@ -103,6 +107,9 @@ export global GlobalUI {
     public function update_press_states(e: KeyEvent) {
         if (e.text == "x" || e.text == "X") && !e.repeat {
             x_pressed = true;
+            x_pressed_something = false;
+        } else if x_pressed && !e.repeat {
+            x_pressed_something = true;
         }
 
         if (e.text == "z" || e.text == "Z") && !e.repeat {
@@ -281,11 +288,6 @@ export global GlobalUI {
                 selected_column, forward, large_inc);
         }
     }
-    public function toggle_step_release() {
-        if selected_step_range_first == -1 {
-            GlobalEngine.toggle_step_release(selected_step);
-        } // Ignore when in selection mode since this doesn't "cycle", to be consistent.
-    }
 
     public function select_song_pattern(song_pattern: int) {
         if playing {
@@ -391,11 +393,11 @@ export global GlobalEngine {
     in-out property<[StepData]> sequencer_steps: [
         {press: true, note: 65},
         {press: false}, {press: false}, {press: false},
-        {press: true, release: true, note: 65},
+        {press: true, release_pos: ReleasePos.half, note: 65},
         {press: false}, {press: false}, {press: false},
         {press: true, note: 65},
         {press: false}, {press: false}, {press: false},
-        {press: false, release: true},
+        {press: false, release_pos: ReleasePos.full},
         {press: false}, {press: false}, {press: false}];
     in-out property<int> sequencer_step_active: 8;
 
@@ -457,6 +459,7 @@ export global GlobalEngine {
     callback cycle_song_pattern(/*forward*/ bool);
     callback toggle_mute_instrument(/*instrument*/ int);
     callback toggle_step(/*step*/ int);
+    callback cycle_step_release(/*step*/ int, /*forward*/ bool);
     callback toggle_step_release(/*step*/ int);
     callback activate_step(/*step*/ int);
     callback set_playing(/*playing*/ bool, /*song_mode*/ bool);

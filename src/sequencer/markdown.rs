@@ -21,6 +21,8 @@ use std::io::BufWriter;
 use std::io::Write;
 use std::path::Path;
 
+use super::ReleasePos;
+
 const INSTRUMENTS_FILE_SETTING: &str = "InstrumentsFile";
 const FRAMES_PER_STEP_SETTING: &str = "FramesPerStep";
 
@@ -149,10 +151,14 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                     } else if matches!(self.section, Section::Pattern(_)) && self.tag_stack.contains(&TableRow) {
                         if let Section::Pattern(pattern_idx) = self.section {
                             let trimmed = text.trim();
-                            let (text, ends_with_period) = trimmed
-                                .strip_suffix('.')
-                                .map(|prefix| (prefix.trim(), true))
-                                .unwrap_or((trimmed, false));
+                            let (text, ends_with_period, ends_with_equal) = match trimmed.strip_suffix('.') {
+                                Some(prefix) => (prefix.trim(), true, false),
+                                None => match trimmed.strip_suffix('=') {
+                                    Some(prefix) => (prefix.trim(), false, true),
+                                    None => (trimmed, false, false),
+                                },
+                            };
+
                             let instrument_id = &self.table_instrument_ids[self.table_column.unwrap()];
                             let step = &mut self.out.patterns[pattern_idx].get_steps_mut_or_insert(instrument_id, None)
                                 [self.table_row.unwrap()];
@@ -161,7 +167,9 @@ impl<'a, 'b> MarkdownSongParser<'a, 'b> {
                                 step.note = note as u8;
                             }
                             if ends_with_period {
-                                step.release = true;
+                                step.release_pos = ReleasePos::Full;
+                            } else if ends_with_equal {
+                                step.release_pos = ReleasePos::Half;
                             }
                         }
                     } else if self.section == Section::Settings && self.tag_stack.contains(&Item) {
@@ -249,7 +257,7 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
     for (pi, p) in song.patterns.iter().enumerate() {
         let mut non_empty = Vec::with_capacity(NUM_INSTRUMENTS);
         for (ii, i) in p.instruments.iter().enumerate() {
-            if i.steps.iter().any(|s| s.press() || s.release) {
+            if i.steps.iter().any(|s| s.press() || s.release_pos.non_empty()) {
                 non_empty.push(ii);
             }
         }
@@ -308,10 +316,10 @@ pub fn save_markdown_song(song: &SequencerSong, project_song_path: &Path) -> Res
                     } else {
                         write!(f, "| - ")?;
                     }
-                    if s.release {
-                        write!(f, ".")?;
-                    } else {
-                        write!(f, " ")?;
+                    match s.release_pos {
+                        ReleasePos::NotReleased => write!(f, " ")?,
+                        ReleasePos::Half => write!(f, "=")?,
+                        ReleasePos::Full => write!(f, ".")?,
                     }
                     write!(f, "{:width$}", params_string(&s), width = param_width)?;
                 }
@@ -451,10 +459,10 @@ fn note_parse() {
 |C#5.|
 |-  |
 |C#5. |
-|   |
-|   |
-|   |
-|   |
+|C#5=|
+|C#5= |
+| - =|
+| - = |
 |   |
 |   |
 |   |
@@ -467,28 +475,51 @@ fn note_parse() {
     )
     .unwrap();
     assert_eq!(song.patterns[0].instruments[0].steps[0].press_note(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[0].release, false);
+    assert_eq!(
+        song.patterns[0].instruments[0].steps[0].release_pos,
+        ReleasePos::NotReleased
+    );
 
     assert_eq!(song.patterns[0].instruments[0].steps[1].press_note(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[1].release, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[1].release_pos, ReleasePos::Full);
 
     assert_eq!(song.patterns[0].instruments[0].steps[2].press_note(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[2].release, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[2].release_pos, ReleasePos::Full);
 
     assert_eq!(song.patterns[0].instruments[0].steps[3].press_note(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[3].release, false);
+    assert_eq!(
+        song.patterns[0].instruments[0].steps[3].release_pos,
+        ReleasePos::NotReleased
+    );
 
     assert_eq!(song.patterns[0].instruments[0].steps[4].press_note(), Some(72));
-    assert_eq!(song.patterns[0].instruments[0].steps[4].release, false);
+    assert_eq!(
+        song.patterns[0].instruments[0].steps[4].release_pos,
+        ReleasePos::NotReleased
+    );
     assert_eq!(song.patterns[0].instruments[0].steps[4].note, 72);
 
     assert_eq!(song.patterns[0].instruments[0].steps[5].press_note(), Some(73));
-    assert_eq!(song.patterns[0].instruments[0].steps[5].release, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[5].release_pos, ReleasePos::Full);
     assert_eq!(song.patterns[0].instruments[0].steps[5].note, 73);
 
     assert_eq!(song.patterns[0].instruments[0].steps[7].press_note(), Some(73));
-    assert_eq!(song.patterns[0].instruments[0].steps[7].release, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[7].release_pos, ReleasePos::Full);
     assert_eq!(song.patterns[0].instruments[0].steps[7].note, 73);
+
+    assert_eq!(song.patterns[0].instruments[0].steps[8].press_note(), Some(73));
+    assert_eq!(song.patterns[0].instruments[0].steps[8].release_pos, ReleasePos::Half);
+    assert_eq!(song.patterns[0].instruments[0].steps[8].note, 73);
+
+    assert_eq!(song.patterns[0].instruments[0].steps[9].press_note(), Some(73));
+    assert_eq!(song.patterns[0].instruments[0].steps[9].release_pos, ReleasePos::Half);
+    assert_eq!(song.patterns[0].instruments[0].steps[9].note, 73);
+
+    assert_eq!(song.patterns[0].instruments[0].steps[10].press_note(), None);
+    assert_eq!(song.patterns[0].instruments[0].steps[10].release_pos, ReleasePos::Half);
+
+    assert_eq!(song.patterns[0].instruments[0].steps[11].press_note(), None);
+    assert_eq!(song.patterns[0].instruments[0].steps[11].release_pos, ReleasePos::Half);
 }
 
 #[test]
@@ -523,57 +554,75 @@ fn param_parse() {
     )
     .unwrap();
     assert_eq!(song.patterns[0].instruments[0].steps[3].press_note(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[3].release, false);
+    assert_eq!(
+        song.patterns[0].instruments[0].steps[3].release_pos,
+        ReleasePos::NotReleased
+    );
     assert_eq!(song.patterns[0].instruments[0].steps[3].param0, None);
     assert_eq!(song.patterns[0].instruments[0].steps[3].param1, None);
 
     assert_eq!(song.patterns[0].instruments[0].steps[4].press_note(), Some(72));
-    assert_eq!(song.patterns[0].instruments[0].steps[4].release, false);
+    assert_eq!(
+        song.patterns[0].instruments[0].steps[4].release_pos,
+        ReleasePos::NotReleased
+    );
     assert_eq!(song.patterns[0].instruments[0].steps[4].param0, Some(1));
     assert_eq!(song.patterns[0].instruments[0].steps[4].param1, Some(5));
 
     assert_eq!(song.patterns[0].instruments[0].steps[5].press_note(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[5].release, false);
+    assert_eq!(
+        song.patterns[0].instruments[0].steps[5].release_pos,
+        ReleasePos::NotReleased
+    );
     assert_eq!(song.patterns[0].instruments[0].steps[5].param0, Some(0));
     assert_eq!(song.patterns[0].instruments[0].steps[5].param1, Some(5));
 
     assert_eq!(song.patterns[0].instruments[0].steps[6].press_note(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[6].release, false);
+    assert_eq!(
+        song.patterns[0].instruments[0].steps[6].release_pos,
+        ReleasePos::NotReleased
+    );
     assert_eq!(song.patterns[0].instruments[0].steps[6].param0, Some(1));
     assert_eq!(song.patterns[0].instruments[0].steps[6].param1, Some(4));
 
     assert_eq!(song.patterns[0].instruments[0].steps[7].press_note(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[7].release, false);
+    assert_eq!(
+        song.patterns[0].instruments[0].steps[7].release_pos,
+        ReleasePos::NotReleased
+    );
     assert_eq!(song.patterns[0].instruments[0].steps[7].param0, Some(0));
     assert_eq!(song.patterns[0].instruments[0].steps[7].param1, None);
 
     assert_eq!(song.patterns[0].instruments[0].steps[8].press_note(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[8].release, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[8].release_pos, ReleasePos::Full);
     assert_eq!(song.patterns[0].instruments[0].steps[8].param0, None);
     assert_eq!(song.patterns[0].instruments[0].steps[8].param1, Some(3));
 
     assert_eq!(song.patterns[0].instruments[0].steps[9].press_note(), None);
-    assert_eq!(song.patterns[0].instruments[0].steps[9].release, false);
+    assert_eq!(
+        song.patterns[0].instruments[0].steps[9].release_pos,
+        ReleasePos::NotReleased
+    );
     assert_eq!(song.patterns[0].instruments[0].steps[9].param0, Some(1));
     assert_eq!(song.patterns[0].instruments[0].steps[9].param1, None);
 
     assert_eq!(song.patterns[0].instruments[0].steps[10].press_note(), Some(72));
-    assert_eq!(song.patterns[0].instruments[0].steps[10].release, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[10].release_pos, ReleasePos::Full);
     assert_eq!(song.patterns[0].instruments[0].steps[10].param0, Some(1));
     assert_eq!(song.patterns[0].instruments[0].steps[10].param1, Some(5));
 
     assert_eq!(song.patterns[0].instruments[0].steps[11].press_note(), Some(72));
-    assert_eq!(song.patterns[0].instruments[0].steps[11].release, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[11].release_pos, ReleasePos::Full);
     assert_eq!(song.patterns[0].instruments[0].steps[11].param0, Some(1));
     assert_eq!(song.patterns[0].instruments[0].steps[11].param1, Some(5));
 
     assert_eq!(song.patterns[0].instruments[0].steps[12].press_note(), Some(72));
-    assert_eq!(song.patterns[0].instruments[0].steps[12].release, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[12].release_pos, ReleasePos::Full);
     assert_eq!(song.patterns[0].instruments[0].steps[12].param0, Some(1));
     assert_eq!(song.patterns[0].instruments[0].steps[12].param1, Some(5));
 
     assert_eq!(song.patterns[0].instruments[0].steps[13].press_note(), Some(72));
-    assert_eq!(song.patterns[0].instruments[0].steps[13].release, true);
+    assert_eq!(song.patterns[0].instruments[0].steps[13].release_pos, ReleasePos::Full);
     assert_eq!(song.patterns[0].instruments[0].steps[13].param0, Some(1));
     assert_eq!(song.patterns[0].instruments[0].steps[13].param1, Some(5));
 }

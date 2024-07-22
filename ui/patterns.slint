@@ -13,6 +13,7 @@ import {
 import {
     SongPatternData,
     PatternInstrumentData,
+    ReleasePos,
     StepData,
     GlobalEngine,
     GlobalUI,
@@ -125,15 +126,21 @@ component SequencerStep {
             text: (step.press ? "[" : "-") + (step.press ? name : "---");
             selected: step_selected && root.show_selection && GlobalUI.selected_column == 2 /*press*/;
             y: (parent.height - self.height) / 2;
-            text_color: step.press || step.release ? black : #a0a0a0;
+            text_color: step.press || step.release_pos != ReleasePos.not_released ? black : #a0a0a0;
             horizontal_alignment: right;
             horizontal_stretch: 1;
         }
         StepSelectableText {
-            text: (step.release ? "]" : "-");
+            text:
+                step.release_pos == ReleasePos.half
+                ? "="
+                : step.release_pos == ReleasePos.full
+                    ? "]"
+                    : "-";
+
             selected: step_selected && root.show_selection && GlobalUI.selected_column >= 2/*press,release*/;
             y: (parent.height - self.height) / 2;
-            text_color: step.press || step.release ? black : #a0a0a0;
+            text_color: step.release_pos != ReleasePos.not_released ? black : #a0a0a0;
             horizontal_alignment: left;
         }
     }

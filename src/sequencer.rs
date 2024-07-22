@@ -8,6 +8,7 @@ use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_INSTRUMENT_PARAMS;
 use crate::sound_engine::NUM_PATTERNS;
 use crate::sound_engine::NUM_STEPS;
+use crate::ui;
 use crate::ui::GlobalEngine;
 use crate::ui::GlobalSettings;
 use crate::ui::GlobalUI;
@@ -16,6 +17,7 @@ use crate::ui::SongPatternData;
 use crate::ui::SongSettings;
 use crate::utils::MidiNote;
 use crate::utils::WeakWindowWrapper;
+use core::convert::TryFrom;
 use core::fmt;
 use core::primitive::i8;
 use serde::de::{self, Deserializer, SeqAccess, Visitor};
@@ -57,9 +59,45 @@ pub enum StepEvent {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(u8)]
+pub enum ReleasePos {
+    #[default]
+    NotReleased = 0x00,
+    Half = 0x08,
+    Full = 0x10,
+}
+
+impl ReleasePos {
+    pub fn to_ui(self) -> ui::ReleasePos {
+        match self {
+            ReleasePos::NotReleased => ui::ReleasePos::NotReleased,
+            ReleasePos::Half => ui::ReleasePos::Half,
+            ReleasePos::Full => ui::ReleasePos::Full,
+        }
+    }
+
+    pub fn non_empty(self) -> bool {
+        self != ReleasePos::NotReleased
+    }
+}
+
+impl TryFrom<u8> for ReleasePos {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(ReleasePos::NotReleased),
+            0x08 => Ok(ReleasePos::Half),
+            0x10 => Ok(ReleasePos::Full),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct InstrumentStep {
     note: u8,
-    release: bool,
+    release_pos: ReleasePos,
     param0: Option<i8>,
     param1: Option<i8>,
 }
@@ -68,7 +106,7 @@ impl InstrumentStep {
     const FIELDS: &'static [&'static str] = &["note", "flags", "param0", "param1"];
 
     pub fn is_empty(&self) -> bool {
-        self.note == 0 && !self.release && self.param0.is_none() && self.param1.is_none()
+        self.note == 0 && !self.release_pos.non_empty() && self.param0.is_none() && self.param1.is_none()
     }
     pub fn set_press_note(&mut self, note: Option<u8>) {
         match note {
@@ -102,12 +140,18 @@ impl Serialize for InstrumentStep {
         S: Serializer,
     {
         let num_params = self.param0.is_some() as usize + self.param1.is_some() as usize;
-        let note = (self.release as u8) << 7 | self.note;
+        let (release_bit, release_pos) = match self.release_pos as u8 {
+            0 => (false, 0),
+            // 0 represents an unreleased note, 16 represents a note released at 16/16 of the step, 8 a note released at 8/16 of the step, etc.
+            // To encode the release pos in 4 bits, remove the unreleased state by subtracting 1 when it's not 0.
+            pos => (true, pos - 1),
+        };
+
         let flags = (self.param1.is_some() as u8) << 1 | self.param0.is_some() as u8;
 
         let mut rgb = serializer.serialize_struct("InstrumentStep", 2 + num_params)?;
-        rgb.serialize_field(InstrumentStep::FIELDS[0], &note)?;
-        rgb.serialize_field(InstrumentStep::FIELDS[1], &flags)?;
+        rgb.serialize_field(InstrumentStep::FIELDS[0], &((release_bit as u8) << 7 | self.note))?;
+        rgb.serialize_field(InstrumentStep::FIELDS[1], &(release_pos << 4 | flags))?;
         if let Some(val) = self.param0 {
             rgb.serialize_field(InstrumentStep::FIELDS[2], &val)?;
         }
@@ -139,9 +183,14 @@ impl<'de> Deserialize<'de> for InstrumentStep {
             {
                 let note: u8 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(0, &self))?;
                 let flags: u8 = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let release_pos = match (note & 0x80 != 0, flags >> 4) {
+                    (false, _) => ReleasePos::NotReleased,
+                    (true, pos) => ReleasePos::try_from(pos + 1)
+                        .map_err(|_| de::Error::invalid_value(de::Unexpected::Unsigned(pos as u64), &self))?,
+                };
                 let mut i = InstrumentStep {
                     note: note & 0x7f,
-                    release: note & 0x80 != 0,
+                    release_pos,
                     param0: None,
                     param1: None,
                 };
@@ -164,16 +213,27 @@ impl<'de> Deserialize<'de> for InstrumentStep {
 
 #[test]
 fn postcard_serialize() -> Result<(), Box<dyn Error>> {
-    let i = InstrumentStep {
-        note: 36,
-        release: true,
-        param0: None,
-        param1: Some(8),
-    };
+    let cases = [
+        Default::default(),
+        InstrumentStep {
+            note: 36,
+            release_pos: ReleasePos::Full,
+            param0: None,
+            param1: Some(8),
+        },
+        InstrumentStep {
+            note: 36,
+            release_pos: ReleasePos::Half,
+            param0: Some(1),
+            param1: Some(-1),
+        },
+    ];
 
-    let ser = postcard::to_allocvec(&i)?;
-    let r: InstrumentStep = postcard::from_bytes(&ser)?;
-    assert!(r == i);
+    for step in &cases {
+        let ser = postcard::to_allocvec(step)?;
+        let r: InstrumentStep = postcard::from_bytes(&ser)?;
+        assert!(r == *step);
+    }
     Ok(())
 }
 
@@ -313,7 +373,7 @@ impl Pattern {
         instrument_id: &str,
         step: usize,
         set_press_note: Option<Option<u8>>,
-        set_release: Option<bool>,
+        set_release_pos: Option<ReleasePos>,
         set_params: Option<(Option<i8>, Option<i8>)>,
     ) -> InstrumentStep {
         let instrument_steps = self.get_steps_mut_or_insert(instrument_id, Some(instrument));
@@ -321,9 +381,9 @@ impl Pattern {
         let previous = *step;
 
         let mut something_added = false;
-        if let Some(release) = set_release {
-            something_added |= release;
-            step.release = release;
+        if let Some(release_pos) = set_release_pos {
+            something_added |= release_pos != ReleasePos::NotReleased;
+            step.release_pos = release_pos;
         }
         if let Some(note) = set_press_note {
             something_added |= note.is_some();
@@ -417,7 +477,7 @@ impl Default for InstrumentParamDef {
 
 struct NoteClipboard {
     note: u8,
-    release: bool,
+    release: ReleasePos,
 }
 
 enum SelectionClipboard {
@@ -489,7 +549,7 @@ impl Sequencer {
             instrument_params: vec![[0; NUM_INSTRUMENT_PARAMS]; NUM_INSTRUMENTS],
             default_note_clipboard: NoteClipboard {
                 note: DEFAULT_NOTE,
-                release: true,
+                release: ReleasePos::Full,
             },
             default_song_pattern_clipboard: 0,
             main_window: main_window.clone(),
@@ -718,7 +778,7 @@ impl Sequencer {
                 for (i, step) in maybe_steps.unwrap_or_default().iter().enumerate() {
                     let mut row_data = model.row_data(i).unwrap();
                     row_data.press = step.press();
-                    row_data.release = step.release;
+                    row_data.release_pos = step.release_pos.to_ui();
                     row_data.note = step.press_note().unwrap_or(0) as i32;
                     match step.param0 {
                         Some(v) => {
@@ -778,7 +838,8 @@ impl Sequencer {
 
     pub fn set_default_step_note(&mut self, step: usize) {
         let maybe_steps = self.song.patterns[self.displayed_pattern_idx()].get_steps(self.displayed_instrument);
-        let pressed_note_and_release = maybe_steps.and_then(|ss| ss[step].press_note().map(|p| (p, ss[step].release)));
+        let pressed_note_and_release =
+            maybe_steps.and_then(|ss| ss[step].press_note().map(|p| (p, ss[step].release_pos)));
         if let Some((note, release)) = pressed_note_and_release {
             self.default_note_clipboard = NoteClipboard { note, release };
         }
@@ -821,7 +882,7 @@ impl Sequencer {
             step,
             self.displayed_song_pattern,
             Some(None),
-            Some(false),
+            Some(ReleasePos::NotReleased),
             Some((None, None)),
         );
 
@@ -852,7 +913,32 @@ impl Sequencer {
 
     pub fn toggle_step_release(&mut self, step: usize) {
         let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.displayed_instrument);
-        let toggled = !maybe_steps.map_or(false, |ss| ss[step].release);
+        let toggled = match maybe_steps.map_or(ReleasePos::NotReleased, |ss| ss[step].release_pos) {
+            ReleasePos::NotReleased => ReleasePos::Full,
+            ReleasePos::Half => ReleasePos::NotReleased,
+            ReleasePos::Full => ReleasePos::NotReleased,
+        };
+        self.set_pattern_step_events(step, self.displayed_song_pattern, None, Some(toggled), None);
+
+        self.set_default_step_note(step);
+    }
+
+    pub fn cycle_step_release(&mut self, step: usize, forward: bool) {
+        let maybe_steps = self.song.patterns[self.active_pattern_idx()].get_steps(self.displayed_instrument);
+        let toggled = if forward {
+            match maybe_steps.map_or(ReleasePos::NotReleased, |ss| ss[step].release_pos) {
+                ReleasePos::NotReleased => ReleasePos::Half,
+                ReleasePos::Half => ReleasePos::Full,
+                ReleasePos::Full => ReleasePos::NotReleased,
+            }
+        } else {
+            match maybe_steps.map_or(ReleasePos::NotReleased, |ss| ss[step].release_pos) {
+                ReleasePos::NotReleased => ReleasePos::Full,
+                ReleasePos::Half => ReleasePos::NotReleased,
+                ReleasePos::Full => ReleasePos::Half,
+            }
+        };
+
         self.set_pattern_step_events(step, self.displayed_song_pattern, None, Some(toggled), None);
 
         self.set_default_step_note(step);
@@ -889,7 +975,7 @@ impl Sequencer {
         step: usize,
         song_pattern: usize,
         set_press_note: Option<Option<u8>>,
-        set_release: Option<bool>,
+        set_release_pos: Option<ReleasePos>,
         set_params: Option<(Option<i8>, Option<i8>)>,
     ) -> InstrumentStep {
         // If editing the stub pattern, commit it to a real pattern now.
@@ -916,7 +1002,7 @@ impl Sequencer {
             instrument_id,
             step,
             set_press_note,
-            set_release,
+            set_release_pos,
             adjusted_set_params,
         );
 
@@ -929,8 +1015,8 @@ impl Sequencer {
                         step_row_data.press = maybe_note.is_some();
                         step_row_data.note = maybe_note.unwrap_or(0) as i32;
                     }
-                    if let Some(release) = set_release {
-                        step_row_data.release = release;
+                    if let Some(release_pos) = set_release_pos {
+                        step_row_data.release_pos = release_pos.to_ui();
                     }
                     if let Some((param0, param1)) = adjusted_set_params {
                         match param0 {
@@ -989,7 +1075,7 @@ impl Sequencer {
             self.active_step,
             self.active_song_pattern,
             Some(None),
-            Some(false),
+            Some(ReleasePos::NotReleased),
             Some((None, None)),
         );
     }
@@ -1051,7 +1137,11 @@ impl Sequencer {
         }
     }
 
-    fn handle_active_step_releases(&mut self, note_events: &mut Vec<(u8, StepEvent)>) {
+    fn handle_active_step_releases(
+        &mut self,
+        executing_release_pos: ReleasePos,
+        note_events: &mut Vec<(u8, StepEvent)>,
+    ) {
         for instrument in &self.song.patterns[self.active_pattern_idx()].instruments {
             let i = match instrument.synth_index {
                 Some(i) => i,
@@ -1067,16 +1157,11 @@ impl Sequencer {
                 // Let the press loop further down reset the flag.
                 continue;
             }
-            if let Some(InstrumentStep {
-                note: _,
-                release,
-                param0: _,
-                param1: _,
-            }) = self.song.patterns[self.active_pattern_idx()]
+            if let Some(step) = self.song.patterns[self.active_pattern_idx()]
                 .get_steps(i)
                 .map(|ss| ss[self.active_step])
             {
-                if release {
+                if step.release_pos == executing_release_pos {
                     log!("➖ REL {}", self.synth_instrument_ids[i as usize]);
                     note_events.push((i, StepEvent::Release));
                 }
@@ -1091,24 +1176,21 @@ impl Sequencer {
             return (None, note_events);
         }
 
-        match self.active_frame {
-            None => {
-                self.active_frame = Some(1);
+        // Trigger events on frame transitions.
+        // So active_frame % frames_per_step going from (frames_per_step - 1) to 0 means transitioning from
+        // the end of the previous step's last frame to the start of the next step's first frame.
+        // The synth state is updated between frames and the PSG generates sound during that frame.
+        let (next_frame, first_step) = match self.active_frame {
+            None => (0, true),
+            Some(last_frame) => (last_frame.wrapping_add(1), false),
+        };
+        self.active_frame = Some(next_frame);
 
-                // The first advance_frame after playing will move from frame 0 to frame 1 and skip presses
-                // of frame 0. Since we don't care about releases of the non-existent previous frame, do the
-                // presses now, right after starting the playback.
-                let mut note_events: Vec<(u8, StepEvent)> = Vec::new();
-                self.handle_active_step_presses_and_params(&mut note_events);
-
-                (Some(self.active_step as u32), note_events)
-            }
-            Some(frame) if frame % self.song.frames_per_step == 0 => {
-                // FIXME: Reset or remove overflow check
-                self.active_frame = Some(frame + 1);
+        if next_frame % self.song.frames_per_step == 0 {
+            if !first_step {
                 // Release are at then end of a step, so start by triggering any release of the
                 // previous frame.
-                self.handle_active_step_releases(&mut note_events);
+                self.handle_active_step_releases(ReleasePos::Full, &mut note_events);
 
                 self.advance_step();
                 if self.erasing {
@@ -1116,18 +1198,21 @@ impl Sequencer {
                         self.active_step,
                         self.active_song_pattern,
                         Some(None),
-                        Some(false),
+                        Some(ReleasePos::NotReleased),
                         Some((None, None)),
                     );
                 }
+            }
 
-                self.handle_active_step_presses_and_params(&mut note_events);
-                (Some(self.active_step as u32), note_events)
-            }
-            Some(frame) => {
-                self.active_frame = Some(frame + 1);
-                (None, note_events)
-            }
+            self.handle_active_step_presses_and_params(&mut note_events);
+            (Some(self.active_step as u32), note_events)
+        } else if next_frame % self.song.frames_per_step == self.song.frames_per_step.div_ceil(2) {
+            // Process half-step releases
+            // Use div_ceil to prefer having the note play half a frame longer instead of shorter.
+            self.handle_active_step_releases(ReleasePos::Half, &mut note_events);
+            (None, note_events)
+        } else {
+            (None, note_events)
         }
     }
 
@@ -1147,7 +1232,11 @@ impl Sequencer {
                     .map_or(false, |ss| ss[self.active_step].press());
                 if !pressed {
                     // If the step isn't already pressed, record it both as pressed and released.
-                    (Some(note), Some(true), (self.active_step, self.active_song_pattern))
+                    (
+                        Some(note),
+                        Some(ReleasePos::Full),
+                        (self.active_step, self.active_song_pattern),
+                    )
                 } else {
                     // Else, only set the note.
                     (Some(note), None, (self.active_step, self.active_song_pattern))
@@ -1188,21 +1277,31 @@ impl Sequencer {
                 fn round(n: u32, to: u32) -> u32 {
                     (n + to / 2) / to * to
                 }
-                let rounded_steps_note_length = round(
-                    self.active_frame_or_zero() - self.last_press_frame.unwrap(),
-                    self.song.frames_per_step,
-                );
-                // We need to place the release in the previous step (its end), so subtract one step.
-                let rounded_end_frame = self.last_press_frame.unwrap() + (rounded_steps_note_length.max(1) - 1);
+                let pressed_frames = self.active_frame_or_zero() - self.last_press_frame.unwrap();
+                let rounded_steps_note_length = round(pressed_frames, self.song.frames_per_step);
+                // Only record half-step releases when the length is less than what seems to be one frame.
+                // It could make sense to snap the release to a length of e.g. 1.5 or 2.5 but given
+                // that the press must be aligned to step transitions would require complex logic
+                // and probably feel unreliable.
+                let release_pos = if pressed_frames < self.song.frames_per_step * 3 / 4 {
+                    ReleasePos::Half
+                } else {
+                    ReleasePos::Full
+                };
 
-                let is_end_in_prev_step = rounded_end_frame / self.song.frames_per_step
-                    < self.active_frame_or_zero() / self.song.frames_per_step;
-                let end_snaps_to_next_step = rounded_end_frame % self.song.frames_per_step < self.snap_at_step_frame();
+                let rounded_end_frame =
+                    self.last_press_frame.unwrap() + rounded_steps_note_length.max(self.song.frames_per_step);
+
+                let is_end_in_prev_or_current_step = rounded_end_frame / self.song.frames_per_step
+                    <= self.active_frame_or_zero() / self.song.frames_per_step;
+                let ends_before_snap_frame = rounded_end_frame % self.song.frames_per_step < self.snap_at_step_frame();
                 (
                     None,
-                    Some(true),
-                    if is_end_in_prev_step && end_snaps_to_next_step {
-                        // It ends before the snap frame of the previous step.
+                    Some(release_pos),
+                    if ends_before_snap_frame && is_end_in_prev_or_current_step {
+                        // It ends before the snap frame of the previous step
+                        // OR it ends in the current step, also before the snap frame
+                        // (since the length is rounded this means that the press is also in the previous step)
                         // Register the release at the end of the previous step.
                         Self::next_step_and_pattern_and_song_pattern(
                             false,
@@ -1210,20 +1309,10 @@ impl Sequencer {
                             self.active_song_pattern,
                             self.num_song_patterns(),
                         )
-                    } else if is_end_in_prev_step || end_snaps_to_next_step {
+                    } else {
                         // It ends between the snap frame of the previous step and the snap frame of the current step
                         // Register the release at the end of the current step.
                         (self.active_step, self.active_song_pattern)
-                    } else {
-                        self.just_recorded_over_next_step = true;
-                        // It ends on or after the snap frame of the current step.
-                        // Register the release at the end of the next step.
-                        Self::next_step_and_pattern_and_song_pattern(
-                            true,
-                            self.active_step,
-                            self.active_song_pattern,
-                            self.num_song_patterns(),
-                        )
                     },
                 )
             }

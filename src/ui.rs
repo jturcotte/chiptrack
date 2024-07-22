@@ -204,6 +204,13 @@ pub fn set_global_engine_handlers<SR: SoundRendererTrait + 'static>(
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
+    global_engine.on_cycle_step_release(move |step, forward| {
+        cloned_sound_renderer
+            .borrow_mut()
+            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().cycle_step_release(step as usize, forward));
+    });
+
+    let cloned_sound_renderer = sound_renderer.clone();
     global_engine.on_toggle_step_release(move |step| {
         cloned_sound_renderer
             .borrow_mut()
@@ -285,13 +292,6 @@ pub fn set_global_engine_handlers<SR: SoundRendererTrait + 'static>(
                 .borrow_mut()
                 .paste_step_range_param(at_step as usize, param_num as u8)
         });
-    });
-
-    let cloned_sound_renderer = sound_renderer.clone();
-    global_engine.on_toggle_step_release(move |step| {
-        cloned_sound_renderer
-            .borrow_mut()
-            .invoke_on_sound_engine(move |se| se.sequencer.borrow_mut().toggle_step_release(step as usize));
     });
 
     let cloned_sound_renderer = sound_renderer.clone();
