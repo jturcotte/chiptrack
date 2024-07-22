@@ -104,8 +104,8 @@ component SequencerStep {
         spacing: 1px;
         StepSelectableText {
             selected: step_selected && root.show_selection && GlobalUI.selected_column == 0 /*param0*/;
-            width: 25%;
-            text: (step.param0_set ? GlobalUtils.to_signed_hex(step.param0_val) : "");
+            width: 20%;
+            text: (step.param0_set ? GlobalUtils.to_hex(step.param0_val) : "");
             text_color: step.press ? black : #a0a0a0;
             horizontal_alignment: right;
         }
@@ -116,8 +116,8 @@ component SequencerStep {
         }
         StepSelectableText {
             selected: step_selected && root.show_selection && GlobalUI.selected_column == 1 /*param1*/;
-            width: 25%;
-            text: (step.param1_set ? GlobalUtils.to_signed_hex(step.param1_val) : "");
+            width: 20%;
+            text: (step.param1_set ? GlobalUtils.to_hex(step.param1_val) : "");
             text_color: step.press ? black : #a0a0a0;
             horizontal_alignment: left;
         }
@@ -295,7 +295,7 @@ export component PatternsPanel inherits HorizontalLayout {
     }
 
     current_pattern := Rectangle { 
-        width: patterns_list.height_of_cell * 6.5;
+        width: patterns_list.height_of_cell * 5.5;
         VerticalLayout {
             spacing: 1px;
             HorizontalLayout {
@@ -303,7 +303,7 @@ export component PatternsPanel inherits HorizontalLayout {
                 spacing: 1px;
                 ScalableText {
                     // Those dimensions should match what is used inside SequencerStep.
-                    width: 25%;
+                    width: 20%;
                     text: (GlobalEngine.instrument_param_0.defined ? GlobalEngine.instrument_param_0.name : "");
                     horizontal_alignment: right;
                 }
@@ -312,7 +312,7 @@ export component PatternsPanel inherits HorizontalLayout {
                     text: "/";
                 }
                 ScalableText {
-                    width: 25%;
+                    width: 20%;
                     text: (GlobalEngine.instrument_param_1.defined ? GlobalEngine.instrument_param_1.name : "");
                     horizontal_alignment: left;
                 }

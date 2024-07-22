@@ -546,14 +546,7 @@ pub fn set_global_utils_handlers(window: &MainWindow) {
 
     global.on_get_midi_note_name(|note| crate::utils::MidiNote(note).name().into());
     global.on_get_midi_note_short_name(|note| crate::utils::MidiNote(note).short_name());
-    global.on_to_signed_hex(|i| {
-        (if i < 0 {
-            format!("-{:02X}", i.abs() as i8)
-        } else {
-            format!("{:02X}", i as i8)
-        })
-        .into()
-    });
+    global.on_to_hex(|i| format!("{:02X}", i as u8).into());
 }
 #[cfg(not(feature = "desktop"))]
 pub fn set_global_utils_handlers(_window: &MainWindow) {}
