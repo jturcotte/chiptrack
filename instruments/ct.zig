@@ -48,6 +48,13 @@ pub const Parameter = struct {
     set_param: ?set_param_fn = null,
 };
 
+pub fn paramLeftChar(p: i8) u4 {
+    return @truncate(@as(u8, @bitCast(p)) >> 4);
+}
+pub fn paramRightChar(p: i8) u4 {
+    return @truncate(@as(u8, @bitCast(p)) & 0xf);
+}
+
 /// Registers an instrument using parameters and function pointers provided through an Instrument struct instance.
 pub fn setInstrument(id: [*:0]const u8, col: u32, instrument: Instrument) void {
     _ = set_instrument_at_column(id, col, instrument.frames_after_release, instrument.press, instrument.release, instrument.frame, instrument.set_param);
@@ -106,6 +113,10 @@ pub const gba = struct {
     pub fn encodeWaveFreq(freq: u32) u11 {
         return @truncate(2048 - ((65536 * 256) / freq));
     }
+    pub const min_square_freq: u32 = 1 * 256;
+    pub const max_square_freq: u32 = 131072 * 256;
+    pub const min_wave_freq: u32 = 1 * 256;
+    pub const max_wave_freq: u32 = 65536 * 256;
 
     pub const Channel = enum {
         square1,
@@ -199,7 +210,7 @@ pub const gba = struct {
         length: u6 = 0,
         ///  6-7   R/W  Wave Pattern Duty                   (0-3)
         duty: u2 = 0,
-        ///  8-10  R/W  Envelope Step-Time; units of n/64s  (1-7, 0=No Envelope)
+        ///  8-10  R/W  Envelope Step-Time; units of 1/64s  (1-7, 0=No Envelope)
         env_interval: u3 = 0,
         ///  11    R/W  Envelope Direction                  (0=Decrease, 1=Increase)
         env_dir: u1 = 0,

@@ -78,27 +78,40 @@ const ADSR = struct {
         decay,
         sustain,
         release,
+        finish,
     };
     level: i8 = 0,
-    state: State = State.attack,
-    attack_step: i8,
-    decay_step: i8,
-    sustain_level: i8,
-    release_step: i8,
+    state: State = State.sustain,
+    attack_step: u4 = 0,
+    decay_step: u4 = 0,
+    sustain_level: u4 = 0,
+    release_step: u4 = 0,
 
     /// Returns a new ADSR in the attack state using the provided envelope parameters:
     /// `attack_step` is the increment per `frame` call from 0 to 15 during the attack state.
     /// `decay_step` is the decrement from 15 to `sustain_level` during the decay state.
     /// `sustain_level` is volume during the sustain state.
     /// `release_step` is the decrement from `sustain_level` to 0 during the release state.
-    pub fn init(attack_step: i8, decay_step: i8, sustain_level: i8, release_step: i8) ADSR {
+    /// Step parameters are infinite if 0 and instant (one frame duration) if 15.
+    /// An infinite `release_step` will keep the sustain level indefinitely.
+    /// An infinite attack or decay make little sense, so if both are 0 the note will
+    /// skip the attack+decay states.
+    pub fn init(attack_step: u4, decay_step: u4, sustain_level: u4, release_step: u4) ADSR {
+        const level_state = if (attack_step != 0 or decay_step != 0) .{ 0, State.attack } else .{ sustain_level, State.sustain };
         return ADSR{
+            .level = level_state[0],
+            .state = level_state[1],
             .attack_step = attack_step,
             .decay_step = decay_step,
             .sustain_level = sustain_level,
             .release_step = release_step,
         };
     }
+
+    pub fn from_params(ad: i8, sr: i8) ADSR {
+        return init(ct.paramLeftChar(ad), ct.paramRightChar(ad), ct.paramLeftChar(sr), ct.paramRightChar(sr));
+    }
+
     /// Call this once per instrument frame
     pub fn frame(self: *ADSR) u4 {
         switch (self.state) {
@@ -120,88 +133,302 @@ const ADSR = struct {
             .release => {
                 self.level -= self.release_step;
                 if (self.level < 0) {
-                    // Re-use the state
-                    self.state = State.sustain;
+                    self.state = State.finish;
                     self.level = 0;
                 }
             },
+            .finish => {},
         }
         return @intCast(self.level);
     }
     /// Call this when the instrument is released
     pub fn release(self: *ADSR) void {
-        self.state = State.release;
-        self.level = self.sustain_level;
+        if (@intFromEnum(self.state) < @intFromEnum(State.release)) {
+            self.state = State.release;
+            self.level = self.sustain_level;
+        }
     }
 
     /// Returns how many frames are needed to finish the release state after `release` is called.
-    pub fn frames_after_release(self: ADSR) u32 {
-        return self.sustain_level / self.release_step + 1;
+    pub fn frames_after_release() u32 {
+        // FIXME: Returning the max here will trigger the frame function multiple time if different
+        //        instruments overlap until channel stealing is implemented...
+        return 0xf;
     }
 };
 
+// Each channel has one ADSR state
+var square1_adsr = ADSR{};
+var square2_adsr = ADSR{};
+var wave_adsr = ADSR{};
+/// Template for non-parametrized ADSR instruments
 const adsr_template = ADSR.init(0x8, 0x5, 0xa, 0x3);
-var square1_adsr = ADSR{
-    .attack_step = 0,
-    .decay_step = 0,
-    .sustain_level = 0,
-    .release_step = 0,
-};
-var square2_adsr = ADSR{
-    .attack_step = 0,
-    .decay_step = 0,
-    .sustain_level = 0,
-    .release_step = 0,
-};
-var wave_adsr = ADSR{
-    .attack_step = 0,
-    .decay_step = 0,
-    .sustain_level = 0,
-    .release_step = 0,
-};
+/// Parameter definitions for instruments with parametrized ADSR
+const adsr_param_0 = ct.Parameter{ .name = "AD", .default = @bitCast(@as(u8, 0x85)) };
+const adsr_param_1 = ct.Parameter{ .name = "SR", .default = @bitCast(@as(u8, 0xa3)) };
 
 //=== The instruments definition starts here ===//
 
-/// This is a very basic instruments that holds the note until it's released.
-const square1_1 = struct {
-    pub const id: [*:0]const u8 = "S1";
+/// Base square1 instrument with configurable Duty and sustain-release.
+const square1_base = struct {
+    pub const id: [*:0]const u8 = "S0";
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = ct.Parameter{ .name = "Duty", .default = 2, .min = 0, .max = 3, .set_param = set_duty };
+    pub const param_1 = adsr_param_1;
 
-    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    var env_duty = gba.EnvDutyLen{ .duty = gba.dut_2_4 };
+    fn set_duty(val: i8) callconv(.C) void {
+        env_duty.duty = @intCast(val);
+    }
+
+    pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        set_duty(p0);
+        square1_adsr = ADSR.from_params(adsr_param_0.default, p1);
+
         // Reset the Sweep here since another instrument might have set it.
         gba.Sweep.init().writeTo(gba.square1);
-        // Set the volume to 0xa out of 0xf (4 bits).
-        gba.EnvDutyLen.init()
-            .withEnvStart(0xa)
-            .withDuty(gba.dut_2_4)
+        // The frame function is also set for frame #0, so no need to trigger
+        // here, we can take the current envelope there and trigger like on
+        // every frame.
+    }
+    pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
+        square1_adsr.release();
+    }
+
+    pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
+        env_duty
+            .withEnvStart(square1_adsr.frame())
             .writeTo(gba.square1);
-        // Set the frequency and trigger the note, this also applies the envelope.
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
             .withTrigger(1)
             .writeTo(gba.square1);
     }
-    pub fn release(freq: u32, _: u8, _: u32) callconv(.C) void {
-        // Set a decreasing envelope from 0xa down to 0x0
-        // with a decrease of 1 per env clock (64Hz).
+};
+
+/// Second voice base square2 instrument with configurable Duty and sustain-release.
+const square2_base = struct {
+    pub const id: [*:0]const u8 = "T0";
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = ct.Parameter{ .name = "Duty", .default = 2, .min = 0, .max = 3, .set_param = set_duty };
+    pub const param_1 = adsr_param_1;
+
+    var env_duty = gba.EnvDutyLen{ .duty = gba.dut_2_4 };
+    fn set_duty(val: i8) callconv(.C) void {
+        env_duty.duty = @intCast(val);
+    }
+
+    pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        set_duty(p0);
+        square2_adsr = ADSR.from_params(adsr_param_0.default, p1);
+
+        // Reset the Sweep here since another instrument might have set it.
+        gba.Sweep.init().writeTo(gba.square2);
+        // The frame function is also set for frame #0, so no need to trigger
+        // here, we can take the current envelope there and trigger like on
+        // every frame.
+    }
+    pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
+        square2_adsr.release();
+    }
+
+    pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
+        env_duty
+            .withEnvStart(square2_adsr.frame())
+            .writeTo(gba.square2);
+        gba.CtrlFreq.init()
+            .withSquareFreq(freq)
+            .withTrigger(1)
+            .writeTo(gba.square2);
+    }
+};
+
+/// ADSR configurable on both parameters, but duty is fixed to 2/4.
+const square1_2_4 = struct {
+    pub const id: [*:0]const u8 = "S2";
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = adsr_param_0;
+    pub const param_1 = adsr_param_1;
+
+    pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        square1_adsr = ADSR.from_params(p0, p1);
+
+        // Reset the Sweep here since another instrument might have set it.
+        gba.Sweep.init().writeTo(gba.square1);
+    }
+    pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
+        square1_adsr.release();
+    }
+
+    pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
         gba.EnvDutyLen.init()
             .withEnvDir(gba.env_dec)
-            .withEnvStart(0xa)
-            .withEnvInterval(1)
+            .withEnvStart(square1_adsr.frame())
             .withDuty(gba.dut_2_4)
             .writeTo(gba.square1);
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
             .withTrigger(1)
             .writeTo(gba.square1);
+    }
+};
+
+/// ADSR configurable on both parameters, but duty is fixed to 1/4.
+const square1_1_4 = struct {
+    pub const id: [*:0]const u8 = "S4";
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = adsr_param_0;
+    pub const param_1 = adsr_param_1;
+
+    pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        square1_adsr = ADSR.from_params(p0, p1);
+
+        // Reset the Sweep here since another instrument might have set it.
+        gba.Sweep.init().writeTo(gba.square1);
+    }
+    pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
+        square1_adsr.release();
+    }
+
+    pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
+        gba.EnvDutyLen.init()
+            .withEnvDir(gba.env_dec)
+            .withEnvStart(square1_adsr.frame())
+            .withDuty(gba.dut_1_4)
+            .writeTo(gba.square1);
+        gba.CtrlFreq.init()
+            .withSquareFreq(freq)
+            .withTrigger(1)
+            .writeTo(gba.square1);
+    }
+};
+
+/// ADSR configurable on both parameters, but duty is fixed to 1/8.
+const square1_1_8 = struct {
+    pub const id: [*:0]const u8 = "S8";
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = adsr_param_0;
+    pub const param_1 = adsr_param_1;
+
+    pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        square1_adsr = ADSR.from_params(p0, p1);
+
+        // Reset the Sweep here since another instrument might have set it.
+        gba.Sweep.init().writeTo(gba.square1);
+    }
+    pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
+        square1_adsr.release();
+    }
+
+    pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
+        gba.EnvDutyLen.init()
+            .withEnvDir(gba.env_dec)
+            .withEnvStart(square1_adsr.frame())
+            .withDuty(gba.dut_1_8)
+            .writeTo(gba.square1);
+        gba.CtrlFreq.init()
+            .withSquareFreq(freq)
+            .withTrigger(1)
+            .writeTo(gba.square1);
+    }
+};
+
+/// Second voice ADSR configurable on both parameters, but duty is fixed to 2/4.
+const square2_2_4 = struct {
+    pub const id: [*:0]const u8 = "T2";
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = adsr_param_0;
+    pub const param_1 = adsr_param_1;
+
+    pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        square2_adsr = ADSR.from_params(p0, p1);
+
+        // Reset the Sweep here since another instrument might have set it.
+        gba.Sweep.init().writeTo(gba.square2);
+    }
+    pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
+        square2_adsr.release();
+    }
+
+    pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
+        gba.EnvDutyLen.init()
+            .withEnvDir(gba.env_dec)
+            .withEnvStart(square2_adsr.frame())
+            .withDuty(gba.dut_2_4)
+            .writeTo(gba.square2);
+        gba.CtrlFreq.init()
+            .withSquareFreq(freq)
+            .withTrigger(1)
+            .writeTo(gba.square2);
+    }
+};
+
+/// ADSR configurable on both parameters, but duty is fixed to 1/4.
+const square2_1_4 = struct {
+    pub const id: [*:0]const u8 = "T4";
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = adsr_param_0;
+    pub const param_1 = adsr_param_1;
+
+    pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        square2_adsr = ADSR.from_params(p0, p1);
+
+        // Reset the Sweep here since another instrument might have set it.
+        gba.Sweep.init().writeTo(gba.square2);
+    }
+    pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
+        square2_adsr.release();
+    }
+
+    pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
+        gba.EnvDutyLen.init()
+            .withEnvDir(gba.env_dec)
+            .withEnvStart(square2_adsr.frame())
+            .withDuty(gba.dut_1_4)
+            .writeTo(gba.square2);
+        gba.CtrlFreq.init()
+            .withSquareFreq(freq)
+            .withTrigger(1)
+            .writeTo(gba.square2);
+    }
+};
+
+/// Second voice ADSR configurable on both parameters, but duty is fixed to 1/8.
+const square2_1_8 = struct {
+    pub const id: [*:0]const u8 = "T8";
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = adsr_param_0;
+    pub const param_1 = adsr_param_1;
+
+    pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        square2_adsr = ADSR.from_params(p0, p1);
+
+        // Reset the Sweep here since another instrument might have set it.
+        gba.Sweep.init().writeTo(gba.square2);
+    }
+    pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
+        square2_adsr.release();
+    }
+
+    pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
+        gba.EnvDutyLen.init()
+            .withEnvDir(gba.env_dec)
+            .withEnvStart(square2_adsr.frame())
+            .withDuty(gba.dut_1_8)
+            .writeTo(gba.square2);
+        gba.CtrlFreq.init()
+            .withSquareFreq(freq)
+            .withTrigger(1)
+            .writeTo(gba.square2);
     }
 };
 
 /// A square instrument with a vibrato effect.
-const square1_2 = struct {
-    pub const id: [*:0]const u8 = "S2";
+const square1_vibrato = struct {
+    pub const id: [*:0]const u8 = "SV";
     pub const param_0 = ct.Parameter{ .name = "Duty", .default = 2, .min = 0, .max = 3, .set_param = set_duty };
     pub const param_1 = ct.Parameter{ .name = "VP Vibrato Period", .default = 12, .min = 2, .set_param = set_p };
-    pub const frames_after_release: u32 = adsr_template.frames_after_release();
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
 
     var env_duty = gba.EnvDutyLen{ .duty = gba.dut_1_4 };
     var p: u16 = 8;
@@ -212,9 +439,9 @@ const square1_2 = struct {
         p = @max(1, @as(u16, @intCast(val)));
     }
 
-    pub fn press(_: u32, _: u8, duty_val: i8, p_val: i8) callconv(.C) void {
-        set_duty(duty_val);
-        set_p(p_val);
+    pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        set_duty(p0);
+        set_p(p1);
         square1_adsr = adsr_template;
 
         gba.Sweep.init().writeTo(gba.square1);
@@ -237,17 +464,15 @@ const square1_2 = struct {
 };
 
 /// Using the length counter for a short bleep.
-const square1_3 = struct {
-    pub const id: [*:0]const u8 = "S3";
+const square1_bleep = struct {
+    pub const id: [*:0]const u8 = "SB";
     pub const param_0 = ct.Parameter{ .name = "Duty", .default = 2, .min = 0, .max = 3 };
 
     pub fn press(freq: u32, _: u8, p0: i8, _: i8) callconv(.C) void {
         gba.Sweep.init().writeTo(gba.square1);
         gba.EnvDutyLen.init()
             .withDuty(@intCast(p0))
-            .withEnvDir(gba.env_dec)
             .withEnvStart(0xa)
-            .withEnvInterval(1)
             .withLength(48)
             .writeTo(gba.square1);
         gba.CtrlFreq.init()
@@ -259,12 +484,14 @@ const square1_3 = struct {
 };
 
 /// An instrument alternating the duty cycle every 2 frames.
-const square1_4 = struct {
-    pub const id: [*:0]const u8 = "S4";
-    pub const frames_after_release: u32 = adsr_template.frames_after_release();
+const square1_duty = struct {
+    pub const id: [*:0]const u8 = "SD";
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = adsr_param_0;
+    pub const param_1 = adsr_param_1;
 
-    pub fn press(_: u32, _: u8, _: i8, _: i8) callconv(.C) void {
-        square1_adsr = adsr_template;
+    pub fn press(_: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        square1_adsr = ADSR.from_params(p0, p1);
         gba.Sweep.init().writeTo(gba.square1);
     }
     pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
@@ -290,17 +517,18 @@ const square1_4 = struct {
 };
 
 /// Sweep the frequency down with an automatic envelope.
-const square1_5 = struct {
-    pub const id: [*:0]const u8 = "S5";
+const square1_sweep = struct {
+    pub const id: [*:0]const u8 = "SW";
+    pub const param_0 = ct.Parameter{ .name = "Duty", .default = 2, .min = 0, .max = 3 };
 
-    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub fn press(freq: u32, _: u8, p0: i8, _: i8) callconv(.C) void {
         gba.Sweep.init()
             .withTime(2)
             .withDir(gba.swe_dec)
             .withShift(2)
             .writeTo(gba.square1);
         gba.EnvDutyLen.init()
-            .withDuty(gba.dut_2_4)
+            .withDuty(@intCast(p0))
             .withEnvStart(0xd)
             .withEnvDir(gba.env_dec)
             .withEnvInterval(2)
@@ -313,8 +541,8 @@ const square1_5 = struct {
 };
 
 /// Example of an instrument that uses both square channels and applies a vibrato effect to both.
-const square2_1 = struct {
-    pub const id: [*:0]const u8 = "T1";
+const square2_dyad = struct {
+    pub const id: [*:0]const u8 = "TD";
     pub const param_0 = ct.Parameter{ .name = "Detune (semitones)", .default = 4 };
     // Keep calling frame until the envelope is finished
     pub const frames_after_release: u32 = 13;
@@ -366,9 +594,28 @@ const square2_1 = struct {
     }
 };
 
+/// Simple square instrument with an EnvDutyLen automatic envelope to trigger a short bleep.
+const square2_bleep = struct {
+    pub const id: [*:0]const u8 = "TB";
+    pub const param_0 = ct.Parameter{ .name = "Duty", .default = 2, .min = 0, .max = 3 };
+
+    pub fn press(freq: u32, _: u8, p0: i8, _: i8) callconv(.C) void {
+        gba.EnvDutyLen.init()
+            .withDuty(@intCast(p0))
+            .withEnvDir(gba.env_dec)
+            .withEnvInterval(1)
+            .withEnvStart(0xa)
+            .writeTo(gba.square2);
+        gba.CtrlFreq.init()
+            .withTrigger(1)
+            .withSquareFreq(freq)
+            .writeTo(gba.square2);
+    }
+};
+
 /// Arpeggio effect alternating between 3 tones based on the sequenced note.
-const square2_2 = struct {
-    pub const id: [*:0]const u8 = "T2";
+const square2_arp = struct {
+    pub const id: [*:0]const u8 = "TA";
     pub const param_0 = ct.Parameter{ .name = "A1 Arp 1. (semitones)", .default = 4 };
     pub const param_1 = ct.Parameter{ .name = "A2 Arp 2. (semitones)", .default = 7 };
     pub const frames_after_release: u32 = 24;
@@ -396,8 +643,8 @@ const square2_2 = struct {
 };
 
 /// Square instrument with a switch effect between the left and right channels.
-const square2_3 = struct {
-    pub const id: [*:0]const u8 = "T3";
+const square2_pan = struct {
+    pub const id: [*:0]const u8 = "TP";
     pub const param_0 = ct.Parameter{ .name = "LP (left pan period)", .default = 4 };
     pub const param_1 = ct.Parameter{ .name = "RP (right pan period)", .default = 5 };
 
@@ -439,37 +686,33 @@ const square2_3 = struct {
     }
 };
 
-/// Basic square instrument with a manual per frame envelope instead of using EnvDutyLen's automatic envelope.
-const square2_4 = struct {
-    pub const id: [*:0]const u8 = "T4";
-    pub const frames_after_release: u32 = adsr_template.frames_after_release();
-
-    pub fn press(_: u32, _: u8, _: i8, _: i8) callconv(.C) void {
-        square2_adsr = adsr_template;
-    }
-    pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
-        square2_adsr.release();
-    }
-    pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
-        gba.EnvDutyLen.init()
-            .withDuty(gba.dut_3_4)
-            .withEnvStart(square2_adsr.frame())
-            .writeTo(gba.square2);
-        gba.CtrlFreq.init()
-            .withTrigger(1)
-            .withSquareFreq(freq)
-            .writeTo(gba.square2);
-    }
+// Converts [0x0..0xf] volume levels to wave fixed levels.
+const wave_vol_table = [_]u3{
+    gba.vol_0,
+    gba.vol_25,
+    gba.vol_25,
+    gba.vol_25,
+    gba.vol_25,
+    gba.vol_25,
+    gba.vol_50,
+    gba.vol_50,
+    gba.vol_50,
+    gba.vol_50,
+    gba.vol_50,
+    gba.vol_75,
+    gba.vol_75,
+    gba.vol_75,
+    gba.vol_75,
+    gba.vol_100,
 };
-
 const wave_env_frames = [_]gba.WaveVolLen{
     .{ .volume = gba.vol_75 },
     .{ .volume = gba.vol_50 },
     .{ .volume = gba.vol_25 },
     .{ .volume = gba.vol_0 },
 };
-var wave_released_at: ?u32 = null;
-fn wave_p(freq: u32, table: *const gba.WavTable) void {
+fn wave_p(freq: u32, p0: i8, p1: i8, table: *const gba.WavTable) void {
+    wave_adsr = ADSR.from_params(p0, p1);
     gba.WaveRam.setTable(table);
     gba.WaveVolLen.init()
         .withVolume(gba.vol_100)
@@ -478,48 +721,51 @@ fn wave_p(freq: u32, table: *const gba.WavTable) void {
         .withWaveFreq(freq)
         .withTrigger(1)
         .writeTo(gba.wave);
-    wave_released_at = null;
 }
-fn wave_env_r(_: u32, _: u8, t: u32) callconv(.C) void {
-    wave_released_at = t;
+fn wave_env_r(_: u32, _: u8, _: u32) callconv(.C) void {
+    wave_adsr.release();
 }
-fn wave_env_f(_: u32, _: u8, t: u32) callconv(.C) void {
-    if (wave_released_at) |r_frame| {
-        if (t - r_frame < wave_env_frames.len)
-            wave_env_frames[t - r_frame].writeTo(gba.wave);
-    }
+fn wave_env_f(_: u32, _: u8, _: u32) callconv(.C) void {
+    gba.WaveVolLen.init()
+        .withVolume(wave_vol_table[wave_adsr.frame()])
+        .writeTo(gba.wave);
 }
 
 /// Triangle wave
-const wave_1 = struct {
-    pub const id: [*:0]const u8 = "W1";
+const wave_triangle = struct {
+    pub const id: [*:0]const u8 = "WT";
 
     const table = gba.wav(0x0123456789abcdeffedcba9876543210);
-    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
-        wave_p(freq, &table);
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = adsr_param_0;
+    pub const param_1 = adsr_param_1;
+
+    pub fn press(freq: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        wave_p(freq, p0, p1, &table);
     }
     pub const release = wave_env_r;
     pub const frame = wave_env_f;
-    pub const frames_after_release: u32 = 4;
 };
 
 /// Bass-like wave sound when played at lower frequencies.
-const wave_2 = struct {
-    pub const id: [*:0]const u8 = "W2";
+const wave_bass = struct {
+    pub const id: [*:0]const u8 = "WB";
 
     const table = gba.wav(0x11235678999876679adffec985421131);
-    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
-        wave_p(freq, &table);
-    }
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = adsr_param_0;
+    pub const param_1 = adsr_param_1;
 
+    pub fn press(freq: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        wave_p(freq, p0, p1, &table);
+    }
     pub const release = wave_env_r;
     pub const frame = wave_env_f;
-    pub const frames_after_release: u32 = 4;
 };
 
 /// Arpeggio effect on a ramp-up wave shape.
-const wave_3 = struct {
-    pub const id: [*:0]const u8 = "W3";
+const wave_arp = struct {
+    pub const id: [*:0]const u8 = "WA";
     pub const param_0 = ct.Parameter{ .name = "A1 Arp 1. (semitones)", .default = 4 };
     pub const param_1 = ct.Parameter{ .name = "A2 Arp 2. (semitones)", .default = 7 };
     pub const frames_after_release: u32 = 4;
@@ -527,7 +773,7 @@ const wave_3 = struct {
 
     const table = gba.wav(0xdedcba98765432100000000011111111);
     pub fn press(freq: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
-        wave_p(freq, &table);
+        wave_p(freq, adsr_param_0.default, adsr_param_1.default, &table);
         semitones[1] = p0;
         semitones[2] = p1;
     }
@@ -535,62 +781,62 @@ const wave_3 = struct {
         gba.CtrlFreq.init()
             .withWaveFreq(arpeggio(freq, t, &semitones))
             .writeTo(gba.wave);
-        if (wave_released_at) |r_frame| {
-            if (t - r_frame < wave_env_frames.len)
-                wave_env_frames[t - r_frame].writeTo(gba.wave);
-        }
+        gba.WaveVolLen.init()
+            .withVolume(wave_vol_table[wave_adsr.frame()])
+            .writeTo(gba.wave);
     }
     pub const release = wave_env_r;
 };
 
-const wave_4 = struct {
-    pub const id: [*:0]const u8 = "W4";
+/// High freq Square wave with alternating duty cycle.
+const wave_duty = struct {
+    pub const id: [*:0]const u8 = "WD";
 
     const table = gba.wav(0xf0f0f0f0f0f0f0f0ff00ff00ff00ff00);
-    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
-        wave_p(freq, &table);
+    pub const frames_after_release: u32 = ADSR.frames_after_release();
+    pub const param_0 = adsr_param_0;
+    pub const param_1 = adsr_param_1;
+
+    pub fn press(freq: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        wave_p(freq, p0, p1, &table);
     }
     pub const release = wave_env_r;
     pub const frame = wave_env_f;
-    pub const frames_after_release: u32 = 4;
 };
 
 /// Sweep up a by number of semitones each frame.
-/// `p0`: number of semitones to sweep up
-const wave_5 = struct {
-    pub const id: [*:0]const u8 = "W5";
+const wave_sweep = struct {
+    pub const id: [*:0]const u8 = "WS";
+    pub const param_0 = ct.Parameter{ .name = "Sweep (semitones)", .default = 4, .min = 0, .max = 12 };
+    pub const param_1 = adsr_param_1;
     pub const frames_after_release: u32 = 16;
 
     const table = gba.wav(0x0234679acdffffeeeeffffdca9764310);
     var steps: u32 = 4;
     var current_step_freq: u32 = 0;
-    pub fn press(freq: u32, _: u8, p0: i8, _: i8) callconv(.C) void {
-        gba.WaveRam.setTable(&table);
-        gba.WaveVolLen.init()
-            .withVolume(gba.vol_100)
-            .writeTo(gba.wave);
-        gba.CtrlFreq.init()
-            .withWaveFreq(freq)
-            .withTrigger(1)
-            .writeTo(gba.wave);
-        wave_released_at = 12;
-        steps = if (p0 == 0) 4 else @as(u32, @intCast(p0)) % 12;
+    pub fn press(freq: u32, _: u8, p0: i8, p1: i8) callconv(.C) void {
+        wave_p(freq, adsr_param_0.default, p1, &table);
+        steps = @intCast(p0);
         current_step_freq = freq;
     }
-    pub fn frame(_: u32, _: u8, t: u32) callconv(.C) void {
-        gba.CtrlFreq.init()
-            .withWaveFreq(semitones_steps(steps, &current_step_freq))
-            .writeTo(gba.wave);
-        if (wave_released_at) |r_frame| {
-            if (t - r_frame < wave_env_frames.len)
-                wave_env_frames[t - r_frame].writeTo(gba.wave);
+    pub fn frame(_: u32, _: u8, _: u32) callconv(.C) void {
+        if (current_step_freq < gba.max_wave_freq) {
+            gba.CtrlFreq.init()
+                .withWaveFreq(semitones_steps(steps, &current_step_freq))
+                .writeTo(gba.wave);
+        } else {
+            wave_adsr.release();
         }
+        gba.WaveVolLen.init()
+            .withVolume(wave_vol_table[wave_adsr.frame()])
+            .writeTo(gba.wave);
     }
+    pub const release = wave_env_r;
 };
 
 /// A noise instrument with different pre-defined sounds per note.
-const noise_1 = struct {
-    pub const id: [*:0]const u8 = "N1";
+const noise_predef = struct {
+    pub const id: [*:0]const u8 = "NP";
     pub const frames_after_release: u32 = 15;
 
     // Different sounds must update the sound chip over multiple frames but the sound is selected
@@ -793,22 +1039,23 @@ const noise_1 = struct {
     }
 };
 
-/// A noise instrument that derives the sound parameters arbitrarily from the frequency.
-const noise_2 = struct {
-    pub const id: [*:0]const u8 = "N2";
+/// A noise instrument feeding from sound parameters and the pressed note.
+const noise_manual = struct {
+    pub const id: [*:0]const u8 = "NM";
+    pub const param_0 = ct.Parameter{ .name = "FD (Freq divider)", .default = 4, .min = 0, .max = 15 };
+    pub const param_1 = ct.Parameter{ .name = "WV (Width / Vol)", .default = 0x0f, .min = 0x00, .max = 0x1f };
 
-    pub fn press(freq: u32, _: u8, _: i8, _: i8) callconv(.C) void {
+    pub fn press(_: u32, note: u8, p0: i8, p1: i8) callconv(.C) void {
         gba.EnvDutyLen.init()
-            .withEnvStart(0xf)
+            .withEnvStart(ct.paramRightChar(p1))
             .withEnvDir(gba.env_dec)
             .withEnvInterval(1)
             .writeTo(gba.noise);
-        // Use the frequency as input just so that different keys produce different sounds.
-        const gb_freq = gba.encodeSquareFreq(freq);
         gba.NoiseCtrlFreq.init()
-            .withFreq(@truncate(gb_freq >> 4))
-            .withCounterWidth(gba.wid_15)
-            .withFreqDiv(@truncate(gb_freq))
+            .withFreq(@intCast(p0))
+            .withCounterWidth(@intCast(ct.paramLeftChar(p1)))
+        // Only 0-7 are valid frequency dividers, so this repeats after G.
+            .withFreqDiv(@intCast(note % 12))
             .withTrigger(1)
             .writeTo(gba.noise);
     }
@@ -819,20 +1066,27 @@ const noise_2 = struct {
 /// be called when needed after this function returns.
 /// Instruments that are not registered are not visible to the application.
 pub fn main() void {
-    ct.registerInstrument(square1_1, 0);
-    ct.registerInstrument(square1_2, 0);
-    ct.registerInstrument(square1_3, 0);
-    ct.registerInstrument(square1_4, 0);
-    ct.registerInstrument(square1_5, 0);
-    ct.registerInstrument(square2_1, 1);
-    ct.registerInstrument(square2_2, 1);
-    ct.registerInstrument(square2_3, 1);
-    ct.registerInstrument(square2_4, 1);
-    ct.registerInstrument(wave_1, 2);
-    ct.registerInstrument(wave_2, 2);
-    ct.registerInstrument(wave_3, 2);
-    ct.registerInstrument(wave_4, 2);
-    ct.registerInstrument(wave_5, 2);
-    ct.registerInstrument(noise_1, 3);
-    ct.registerInstrument(noise_2, 3);
+    ct.registerInstrument(square1_vibrato, 0);
+    ct.registerInstrument(square1_bleep, 0);
+    ct.registerInstrument(square1_duty, 0);
+    ct.registerInstrument(square1_sweep, 0);
+    ct.registerInstrument(square1_base, 0);
+    ct.registerInstrument(square1_2_4, 0);
+    ct.registerInstrument(square1_1_4, 0);
+    ct.registerInstrument(square1_1_8, 0);
+    ct.registerInstrument(square2_dyad, 1);
+    ct.registerInstrument(square2_bleep, 1);
+    ct.registerInstrument(square2_arp, 1);
+    ct.registerInstrument(square2_pan, 1);
+    ct.registerInstrument(square2_base, 1);
+    ct.registerInstrument(square2_2_4, 1);
+    ct.registerInstrument(square2_1_4, 1);
+    ct.registerInstrument(square2_1_8, 1);
+    ct.registerInstrument(wave_triangle, 2);
+    ct.registerInstrument(wave_bass, 2);
+    ct.registerInstrument(wave_arp, 2);
+    ct.registerInstrument(wave_duty, 2);
+    ct.registerInstrument(wave_sweep, 2);
+    ct.registerInstrument(noise_predef, 3);
+    ct.registerInstrument(noise_manual, 3);
 }
