@@ -82,7 +82,7 @@ optional = true
 
 [dependencies.wamr-sys]
 git = "https://github.com/jturcotte/wamr-sys.git"
-rev = "c2ff75098bf51faa077ad2e77f7940c0f85cf4e6"
+rev = "73efa0995874882bef84f132551f8216c826d391"
 default-features = false
 optional = true
 
