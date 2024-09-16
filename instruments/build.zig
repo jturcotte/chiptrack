@@ -8,7 +8,7 @@
 //  - wasm2wat in your PATH, available at https://github.com/WebAssembly/wabt/releases
 //
 // Then to rebuild the instruments .wat file from modified source code:
-//  zig build
+//  zig build --release
 //
 // The compiled instruments.wat file will be in the source folder, beside the zig file.
 // Chiptrack will reload it automatically if the song is currently loaded.
@@ -38,8 +38,9 @@ pub fn build(b: *std.Build) void {
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
         }),
-        .optimize = .ReleaseFast,
+        .optimize = b.standardOptimizeOption(.{ .preferred_optimize_mode = std.builtin.OptimizeMode.ReleaseFast }),
     });
+
     wasm.rdynamic = true;
     wasm.export_table = true;
     wasm.max_memory = 65536;
