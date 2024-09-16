@@ -424,6 +424,7 @@ impl WasmModuleInst {
             } else {
                 // exception is thrown if call fails
                 let cstr = CStr::from_ptr(wasm_runtime_get_exception(wasm_runtime_get_module_inst(exec_env)));
+                wasm_runtime_clear_exception(wasm_runtime_get_module_inst(exec_env));
                 Err(format!("wasm_runtime_call_wasm failed: {:?}", cstr))?
             }
         }
@@ -447,6 +448,13 @@ impl WasmModuleInst {
             } else {
                 // exception is thrown if call fails
                 let cstr = CStr::from_ptr(wasm_runtime_get_exception(wasm_runtime_get_module_inst(exec_env)));
+
+                // Clear the exception to allow calling other functions.
+                // The unwinding was probably not clean and WASM memory likely corrupted,
+                // but instruments should avoid this situation in the first place anyway
+                // as this is essentially a panic.
+                wasm_runtime_clear_exception(wasm_runtime_get_module_inst(exec_env));
+
                 Err(format!(
                     "wasm_runtime_call_indirect of table index {:?} failed: {:?}",
                     function.table_index, cstr
