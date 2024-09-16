@@ -69,11 +69,13 @@ pub fn registerInstrument(comptime instrument: anytype, col: u32) void {
     const frame: ?frame_fn = if (@hasDecl(instrument, "frame")) instrument.frame else null;
     const far: u32 = if (@hasDecl(instrument, "frames_after_release")) instrument.frames_after_release else 0;
     const handle = set_instrument_at_column(instrument.id, col, far, press, release, frame);
-    if (@hasDecl(instrument, "param_0")) {
-        define_param(handle, 0, instrument.param_0.name, instrument.param_0.default, instrument.param_0.min, instrument.param_0.max, instrument.param_0.set_param);
-    }
-    if (@hasDecl(instrument, "param_1")) {
-        define_param(handle, 1, instrument.param_1.name, instrument.param_1.default, instrument.param_1.min, instrument.param_1.max, instrument.param_1.set_param);
+    if (handle != 255) {
+        if (@hasDecl(instrument, "param_0")) {
+            define_param(handle, 0, instrument.param_0.name, instrument.param_0.default, instrument.param_0.min, instrument.param_0.max, instrument.param_0.set_param);
+        }
+        if (@hasDecl(instrument, "param_1")) {
+            define_param(handle, 1, instrument.param_1.name, instrument.param_1.default, instrument.param_1.min, instrument.param_1.max, instrument.param_1.set_param);
+        }
     }
 }
 

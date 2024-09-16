@@ -124,18 +124,18 @@ impl SynthScript {
                     "set_instrument_at_column: id must not be empty, got {:?}. Ignoring instrument.",
                     id
                 );
-                return -1;
+                return 255;
             }
             if sequencer_instrument_def_clone.borrow().ids.is_empty() {
                 elog!("set_instrument_at_column: can only be called during start/main. Ignoring instrument.");
-                return -1;
+                return 255;
             }
             if sequencer_instrument_def_clone.borrow().ids.iter().any(|i| i == id) {
                 elog!(
                     "set_instrument_at_column: id {} must be unique, but was already set. Ignoring instrument.",
                     id
                 );
-                return -1;
+                return 255;
             }
             if !(col >= 0 && col < NUM_INSTRUMENT_COLS as i32) {
                 elog!(
@@ -143,7 +143,7 @@ impl SynthScript {
                     NUM_INSTRUMENT_COLS,
                     col
                 );
-                return -1;
+                return 255;
             }
 
             let mut state_cols = instrument_states_clone.borrow_mut();
@@ -154,7 +154,7 @@ impl SynthScript {
                         "set_instrument_at_column: column {} already contains 16 instruments. Ignoring instrument.",
                         col
                     );
-                    return -1;
+                    return 255;
                 }
                 state_col.push(Default::default());
                 // Column index is in the two lsb
@@ -200,6 +200,14 @@ impl SynthScript {
                 elog!(
                     "define_param: name must not be empty, got {:?}. Ignoring parameter.",
                     name
+                );
+                return;
+            }
+            if instrument < 0 || instrument >= NUM_INSTRUMENTS as i32 {
+                elog!(
+                    "define_param: instrument must be 0 <= instrument < {}, got {}. Ignoring parameter.",
+                    NUM_INSTRUMENTS,
+                    instrument
                 );
                 return;
             }
