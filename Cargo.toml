@@ -102,7 +102,7 @@ pulldown-cmark = { version = "0.9", optional = true }
 regex = { version = "1", optional = true }
 native-dialog = { version = "0.6", optional = true }
 
-gba = { version = "0.11", optional = true }
+gba = { version = "0.12", optional = true }
 voladdress = { version = "1", optional = true }
 libm = { version = "0.2", optional = true }
 critical-section = { version = "1", optional = true }
