@@ -122,6 +122,7 @@ impl SoundEngine {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_ready(&self) -> bool {
         self.sequencer.borrow().received_instruments_ids_after_load
     }

@@ -81,9 +81,11 @@ pub struct SynthScript {
 }
 
 impl SynthScript {
-    #[cfg(not(feature = "gba"))]
+    #[cfg(feature = "desktop")]
     pub const DEFAULT_INSTRUMENTS_TEXT: &'static [u8] = include_bytes!("../instruments/default-instruments.wat");
+    #[cfg(feature = "desktop")]
     pub const DEFAULT_INSTRUMENTS_ZIG: &'static [u8] = include_bytes!("../instruments/default-instruments.zig");
+    #[cfg(feature = "desktop")]
     pub const DEFAULT_INSTRUMENTS_BUILD: &'static [u8] = include_bytes!("../instruments/build.zig");
     // Built by build.rs
     #[cfg(feature = "gba")]

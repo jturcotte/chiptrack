@@ -8,7 +8,6 @@ use crate::ui::MainWindow;
 use alloc::format;
 use alloc::string::String;
 use slint::EventLoopError;
-use slint::SharedString;
 use slint::Weak;
 #[cfg(feature = "desktop")]
 use url::Url;
@@ -88,7 +87,8 @@ impl MidiNote {
         let desc = self.char_desc();
         format!("{}{}{}", desc[0] as char, desc[1] as char, desc[2] as char)
     }
-    pub fn short_name(&self) -> SharedString {
+    #[cfg(not(feature = "gba"))]
+    pub fn short_name(&self) -> slint::SharedString {
         let note_name = self.base_note_name() as char;
         let sharp_char = if self.is_black() { '#' } else { ' ' };
         format!("{}{}", note_name, sharp_char).into()
