@@ -6,7 +6,7 @@ use core::cell::RefCell;
 use crate::sound_renderer::SoundRendererTrait;
 
 use alloc::rc::Rc;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop_native")]
 use native_dialog::FileDialog;
 #[cfg(feature = "desktop")]
 use slint::Model;

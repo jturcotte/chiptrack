@@ -194,7 +194,10 @@ fn parse_command_arguments() -> ParsedCommandArguments {
         let query_string = window.location().search().unwrap();
         let search_params = web_sys::UrlSearchParams::new_with_str(&query_string).unwrap();
 
-        (None::<PathBuf>, search_params.get("gist"))
+        match search_params.get("gist") {
+            Some(gist_url_path) => ParsedCommandArguments::Gist(gist_url_path),
+            None => ParsedCommandArguments::None,
+        }
     }
 }
 
