@@ -251,7 +251,6 @@ impl ScreenController {
 pub struct MenuScreen {
     focused_row_checker: ChangeChecker<i32>,
     frames_per_step_checker: ChangeChecker<i32>,
-    sync_enabled_checker: ChangeChecker<bool>,
 }
 
 impl MenuScreen {
@@ -265,21 +264,15 @@ impl MenuScreen {
         draw_ascii_ref(tsb.get_row(9).unwrap(), 1.., b"Frames per step:", NORMAL_TEXT);
         draw_ascii_ref(tsb.get_row(9).unwrap(), 20.., b"(    BPM)", NORMAL_TEXT);
 
-        draw_ascii_ref(tsb.get_row(12).unwrap(), 1.., b"Settings", NORMAL_TEXT);
-        draw_ascii_ref(tsb.get_row(13).unwrap(), 1.., b"----------------", NORMAL_TEXT);
-        draw_ascii_ref(tsb.get_row(14).unwrap(), 1.., b"Sync Mode:", NORMAL_TEXT);
-
         Self {
             focused_row_checker: ChangeChecker::new(-1),
             frames_per_step_checker: ChangeChecker::new(0),
-            sync_enabled_checker: ChangeChecker::new(true),
         }
     }
 
     pub fn draw(&mut self, window: MainWindow) {
         let focused_row = self.focused_row_checker.check(window.get_focused_menu_row());
         let frames_per_step = self.frames_per_step_checker.check(window.get_frames_per_step());
-        let sync_enabled = self.sync_enabled_checker.check(window.get_sync_enabled());
         let tsb = TEXT_SCREENBLOCKS.get_frame(MENU_SCREENBLOCK as usize).unwrap();
 
         if focused_row.dirty() {
@@ -312,20 +305,6 @@ impl MenuScreen {
             );
             let bpm = 60 /* s */ * 60 /* fps */ / 4 /* steps per beat */ / frames_per_step.current;
             draw_ascii(tsb.get_row(9).unwrap(), 21.., to_dec3(bpm as u16), NORMAL_TEXT);
-        }
-
-        if focused_row.dirty() || sync_enabled.dirty() {
-            let palbank = if focused_row.current != 3 {
-                NORMAL_TEXT
-            } else {
-                SELECTED_TEXT
-            };
-            if sync_enabled.current {
-                draw_ascii_ref(tsb.get_row(14).unwrap(), 11.., b"PO SY1", palbank);
-            } else {
-                draw_ascii_ref(tsb.get_row(14).unwrap(), 11.., b"Off", palbank);
-                draw_ascii_chars(tsb.get_row(14).unwrap(), 14..17, repeat(' '), NORMAL_TEXT);
-            }
         }
     }
 }
