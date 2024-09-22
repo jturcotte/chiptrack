@@ -14,6 +14,26 @@ use slint::Model;
 // By putting this here, every generated Slint type is imported into crate::ui.
 slint::include_modules!();
 
+#[cfg(feature = "desktop_native")]
+pub static LOG_WINDOW: std::sync::Mutex<Option<slint::Weak<LogWindow>>> = std::sync::Mutex::new(None);
+
+#[cfg(feature = "desktop_native")]
+impl LogWindow {
+    pub fn update_log_text(&self, new_text: &str) {
+        let current_text = self.get_log_text();
+        let mut stripped = current_text.as_str();
+        while stripped.len() > 10000 {
+            if let Some(pos) = stripped.find('\n') {
+                stripped = &stripped[pos + 1..];
+            } else {
+                break;
+            }
+        }
+        // This is pretty wasteful, maybe Slint will have some sort of text document interface at some point.
+        self.set_log_text(format!("{}{}\n", stripped, new_text).into());
+    }
+}
+
 pub fn set_window_handlers<SR: SoundRendererTrait + 'static>(window: &MainWindow, _sound_renderer: Rc<RefCell<SR>>) {
     #[cfg(feature = "gba")]
     {
@@ -21,6 +41,7 @@ pub fn set_window_handlers<SR: SoundRendererTrait + 'static>(window: &MainWindow
             crate::gba_platform::renderer::clear_status_text();
         });
     }
+
     let _window_weak = window.as_weak();
     #[cfg(feature = "desktop")]
     window.on_octave_increased(move |octave_delta| {
@@ -38,6 +59,12 @@ pub fn set_window_handlers<SR: SoundRendererTrait + 'static>(window: &MainWindow
             row_data.active = false;
             model.set_row_data(row, row_data);
         }
+    });
+
+    #[cfg(feature = "desktop_native")]
+    window.on_show_log_window(move || {
+        let log_window = LOG_WINDOW.lock().unwrap().as_ref().unwrap().upgrade().unwrap();
+        log_window.show().unwrap();
     });
 }
 

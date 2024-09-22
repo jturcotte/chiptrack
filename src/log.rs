@@ -23,16 +23,24 @@ macro_rules! elog {
 #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
 #[macro_export]
 macro_rules! log {
-    ( $( $t:tt )* ) => {
-        println!( $( $t )* )
-    }
+    ( $( $t:tt )* ) => { {
+        let text = format!( $( $t )* );
+        println!("{}", &text);
+        if let Some(log_window) = crate::ui::LOG_WINDOW.lock().unwrap().as_ref() {
+            log_window.upgrade_in_event_loop(move |h| h.update_log_text(&text)).unwrap();
+        }
+    } }
 }
 #[cfg(all(feature = "std", not(target_arch = "wasm32")))]
 #[macro_export]
 macro_rules! elog {
-    ( $( $t:tt )* ) => {
-        eprintln!( $( $t )* )
-    }
+    ( $( $t:tt )* ) => { {
+        let text = format!( $( $t )* );
+        eprintln!("{}", &text);
+        if let Some(log_window) = crate::ui::LOG_WINDOW.lock().unwrap().as_ref() {
+            log_window.upgrade_in_event_loop(move |h| h.update_log_text(&text)).unwrap();
+        }
+    } }
 }
 
 #[cfg(feature = "gba")]
