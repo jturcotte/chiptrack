@@ -1654,7 +1654,7 @@ impl Sequencer {
 
         // Check if the stub inserted during selection needs to be committed.
         if self.has_stub_pattern {
-            // This is the
+            // Paste the clipboard into the current stub, then commit it.
             self.song.song_patterns[self.displayed_song_pattern] = self.default_song_pattern_clipboard;
             self.commit_stub_song_pattern();
             self.update_steps();
@@ -1682,6 +1682,11 @@ impl Sequencer {
     }
 
     pub fn cycle_song_pattern(&mut self, forward: bool) {
+        // If editing the stub pattern, commit it to a real pattern now.
+        if self.has_stub_pattern {
+            self.commit_stub_song_pattern();
+        }
+
         let mut pattern = self.displayed_pattern_idx();
         if forward && pattern < NUM_PATTERNS - 1 {
             pattern += 1;
