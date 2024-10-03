@@ -856,8 +856,9 @@ impl Sequencer {
 
     pub fn cut_step_range_note(&mut self, step_range_first: usize, step_range_last: usize) {
         let displayed_pattern_idx = self.displayed_pattern_idx();
-        let maybe_steps = self.song.patterns[displayed_pattern_idx].get_steps_mut(self.displayed_instrument);
-        let steps = maybe_steps.map_or_else(
+        let pattern = &mut self.song.patterns[displayed_pattern_idx];
+        let mut maybe_steps = pattern.get_steps_mut(self.displayed_instrument);
+        let steps = maybe_steps.as_mut().map_or_else(
             || vec![InstrumentStep::default(); step_range_last - step_range_first + 1],
             |ss| {
                 let slice = &mut ss[step_range_first..=step_range_last];
@@ -868,6 +869,9 @@ impl Sequencer {
                 r
             },
         );
+        if maybe_steps.map_or(false, |ss| ss.iter().all(|s| s.is_empty())) {
+            pattern.remove_instrument(self.displayed_instrument);
+        }
 
         self.selection_clipboard = SelectionClipboard::WholeSteps(steps);
         self.update_steps();
