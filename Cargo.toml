@@ -62,13 +62,13 @@ gba = [
 ]
 
 [build-dependencies.slint-build]
-version = "1.7.2"
+version = "1.8.0"
 [dependencies.slint]
-version = "1.7.2"
+version = "1.8.0"
 default-features = false
 features = ["compat-1-0"]
 [dependencies.i-slint-core]
-version = "=1.7.2"
+version = "=1.8.0"
 default-features = false
 optional = true
 
