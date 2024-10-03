@@ -515,7 +515,7 @@ pub struct Sequencer {
     synth_instrument_ids: Vec<SharedString>,
     synth_instrument_param_defs: Vec<[Option<InstrumentParamDef>; NUM_INSTRUMENT_PARAMS]>,
     /// Current instrument parameters used for recording.
-    instrument_params: Vec<[i8; NUM_INSTRUMENT_PARAMS]>,
+    instrument_params: Vec<[Option<i8>; NUM_INSTRUMENT_PARAMS]>,
     /// The note that will be used when an empty step is press-toggled.
     default_note_clipboard: NoteClipboard,
     /// The pattern that will be used when a new song pattern slot is added.
@@ -546,7 +546,7 @@ impl Sequencer {
             muted_instruments: BTreeSet::new(),
             synth_instrument_ids: vec![SharedString::new(); NUM_INSTRUMENTS],
             synth_instrument_param_defs: vec![[None, None]; NUM_INSTRUMENTS],
-            instrument_params: vec![[0; NUM_INSTRUMENT_PARAMS]; NUM_INSTRUMENTS],
+            instrument_params: vec![[None; NUM_INSTRUMENT_PARAMS]; NUM_INSTRUMENTS],
             default_note_clipboard: NoteClipboard {
                 note: DEFAULT_NOTE,
                 release: ReleasePos::Full,
@@ -1104,9 +1104,8 @@ impl Sequencer {
                 if let Some(note) = step.press_note() {
                     let param_defs = &self.synth_instrument_param_defs[i as usize];
                     // Use the param's default if the sequencer didn't have any param set for that press
-                    // (which should only happens if the serialized song didn't define them).
-                    // Or pass DEFAULT_PARAM_VAL but in the latter case the instrument will normally
-                    // won't care as it didn't define the parameter.
+                    // or pass DEFAULT_PARAM_VAL but in the latter case the instrument will normally
+                    // not care as it didn't define the parameter.
                     let p0 = step
                         .param0
                         .or(param_defs[0].as_ref().map(|p| p.default))
@@ -1376,7 +1375,7 @@ impl Sequencer {
         let (set_release, set_params) = if maybe_selected_note.is_none() {
             (
                 Some(self.default_note_clipboard.release),
-                Some((Some(instrument_params[0]), Some(instrument_params[1]))),
+                Some((instrument_params[0], instrument_params[1])),
             )
         } else {
             (None, None)
@@ -1389,42 +1388,56 @@ impl Sequencer {
             set_params,
         );
 
+        let param_defs = &self.synth_instrument_param_defs[self.displayed_instrument as usize];
+        // Use the param's default if the sequencer didn't have any param set for that press
+        // or pass DEFAULT_PARAM_VAL but in the latter case the instrument will normally
+        // not care as it didn't define the parameter.
         (
             new_note,
-            p0.unwrap_or(instrument_params[0]),
-            p1.unwrap_or(instrument_params[1]),
+            p0.or(param_defs[0].as_ref().map(|p| p.default))
+                .unwrap_or(DEFAULT_PARAM_VAL),
+            p1.or(param_defs[1].as_ref().map(|p| p.default))
+                .unwrap_or(DEFAULT_PARAM_VAL),
         )
     }
 
     pub fn displayed_instrument_params(&self) -> [i8; NUM_INSTRUMENT_PARAMS] {
         let instrument = self.displayed_instrument as usize;
-        self.instrument_params[instrument]
+        let param_defs = &self.synth_instrument_param_defs[instrument];
+        let mut params = [DEFAULT_PARAM_VAL; NUM_INSTRUMENT_PARAMS];
+        for i in 0..NUM_INSTRUMENT_PARAMS {
+            params[i] = self.instrument_params[instrument][i]
+                .or(param_defs[i].as_ref().map(|p| p.default))
+                .unwrap_or(DEFAULT_PARAM_VAL);
+        }
+        params
     }
 
+    /// Returns the parameters value for playback, falling back to the default.
     pub fn cycle_instrument_param(&mut self, param_num: u8, forward: bool) -> [i8; NUM_INSTRUMENT_PARAMS] {
         let instrument = self.displayed_instrument as usize;
         let instrument_params = &mut self.instrument_params[instrument];
-        let v = &mut instrument_params[param_num as usize];
+        let v: &mut Option<i8> = &mut instrument_params[param_num as usize];
 
         let param_def = self.synth_instrument_param_defs[self.displayed_instrument as usize][param_num as usize]
             .as_ref()
             .expect("Caller attempted to cycle a non-defined parameter");
 
         if forward {
-            if *v < param_def.max - 1 {
-                *v += 1;
-            } else {
-                *v = param_def.max;
+            match v {
+                Some(val) if *val < param_def.max - 1 => *val += 1,
+                None if param_def.default < param_def.max - 1 => *v = Some(param_def.default + 1),
+                _ => (),
             }
         } else {
-            if *v > param_def.min + 1 {
-                *v -= 1;
-            } else {
-                *v = param_def.min;
+            match v {
+                Some(val) if *val > param_def.min + 1 => *val -= 1,
+                None if param_def.default > param_def.min + 1 => *v = Some(param_def.default - 1),
+                _ => (),
             }
         }
 
-        let v_ui = *v as i32;
+        let v_ui = v.unwrap_or(param_def.default) as i32;
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let instruments_model = GlobalEngine::get(&handle).get_instruments();
@@ -1438,7 +1451,15 @@ impl Sequencer {
             })
             .unwrap();
 
-        *instrument_params
+        let param_defs = &self.synth_instrument_param_defs[self.displayed_instrument as usize];
+        [
+            instrument_params[0]
+                .or(param_defs[0].as_ref().map(|p| p.default))
+                .unwrap_or(DEFAULT_PARAM_VAL),
+            instrument_params[1]
+                .or(param_defs[1].as_ref().map(|p| p.default))
+                .unwrap_or(DEFAULT_PARAM_VAL),
+        ]
     }
 
     pub fn cycle_step_param(
@@ -1457,12 +1478,16 @@ impl Sequencer {
             });
 
         let instrument_params = self.instrument_params[self.displayed_instrument as usize];
+        let param_def = self.synth_instrument_param_defs[self.displayed_instrument as usize][param_num as usize]
+            .as_ref()
+            .expect("UI attempted to cycle a non-defined parameter");
+
         let val = if param_num == 0 {
             if step_parameters.0.is_none() {
                 if on_empty == OnEmpty::EmptyOnEmpty {
                     return (0, 0, 0);
                 }
-                step_parameters.0 = Some(instrument_params[0]);
+                step_parameters.0 = Some(instrument_params[0].unwrap_or(param_def.default));
             }
             &mut step_parameters.0
         } else {
@@ -1470,14 +1495,11 @@ impl Sequencer {
                 if on_empty == OnEmpty::EmptyOnEmpty {
                     return (0, 0, 0);
                 }
-                step_parameters.1 = Some(instrument_params[1]);
+                step_parameters.1 = Some(instrument_params[1].unwrap_or(param_def.default));
             }
             &mut step_parameters.1
         };
 
-        let param_def = self.synth_instrument_param_defs[self.displayed_instrument as usize][param_num as usize]
-            .as_ref()
-            .expect("UI attempted to cycle a non-defined parameter");
         let inc = if large_inc { 0x10 } else { 0x01 };
 
         let v = val.as_mut().unwrap();
@@ -1503,10 +1525,18 @@ impl Sequencer {
 
         self.set_pattern_step_events(step, self.displayed_song_pattern, None, None, Some(step_parameters));
 
+        let param_defs = &self.synth_instrument_param_defs[self.displayed_instrument as usize];
+
         (
             maybe_selected_note.unwrap_or(self.default_note_clipboard.note),
-            step_parameters.0.unwrap_or(instrument_params[0]),
-            step_parameters.1.unwrap_or(instrument_params[1]),
+            step_parameters
+                .0
+                .or(param_defs[0].as_ref().map(|p| p.default))
+                .unwrap_or(DEFAULT_PARAM_VAL),
+            step_parameters
+                .1
+                .or(param_defs[1].as_ref().map(|p| p.default))
+                .unwrap_or(DEFAULT_PARAM_VAL),
         )
     }
 
@@ -1522,17 +1552,21 @@ impl Sequencer {
         let instrument = self.displayed_instrument as usize;
         let instrument_params = &mut self.instrument_params[instrument];
         if only_param_num.map_or(true, |p| p == 0) {
-            if let Some(p) = step_parameters.0 {
-                instrument_params[0] = p;
-            }
+            instrument_params[0] = step_parameters.0;
         }
         if only_param_num.map_or(true, |p| p == 1) {
-            if let Some(p) = step_parameters.1 {
-                instrument_params[1] = p;
-            }
+            instrument_params[1] = step_parameters.1;
         }
 
-        let ui_copy = *instrument_params;
+        let param_defs = &self.synth_instrument_param_defs[self.displayed_instrument as usize];
+        let ui_copy = [
+            instrument_params[0]
+                .or(param_defs[0].as_ref().map(|p| p.default))
+                .unwrap_or(DEFAULT_PARAM_VAL),
+            instrument_params[1]
+                .or(param_defs[1].as_ref().map(|p| p.default))
+                .unwrap_or(DEFAULT_PARAM_VAL),
+        ];
         self.main_window
             .upgrade_in_event_loop(move |handle| {
                 let instruments_model = &GlobalEngine::get(&handle).get_instruments();
@@ -1926,8 +1960,8 @@ impl Sequencer {
 
         // When the instrument is updated, overwrite the instrument params with new default values.
         for (i, param_defs) in self.synth_instrument_param_defs.iter().enumerate() {
-            let param0 = param_defs[0].as_ref().map_or(0, |p| p.default);
-            let param1 = param_defs[1].as_ref().map_or(0, |p| p.default);
+            let param0 = param_defs[0].as_ref().map(|p| p.default);
+            let param1 = param_defs[1].as_ref().map(|p| p.default);
             self.instrument_params[i] = [param0, param1];
         }
 

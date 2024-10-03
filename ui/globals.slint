@@ -81,6 +81,7 @@ export global GlobalUI {
     out property<bool> shift_pressed_something: false;
     out property<bool> x_pressed_something: false;
     out property<bool> z_pressed_something: false;
+    out property<bool> cycling: false;
     in-out property<bool> z_press_handled: false;
 
     in-out property<bool> playing: false;
@@ -187,11 +188,13 @@ export global GlobalUI {
     }
 
     public function cycle_step_note_start() {
+        cycling = true;
         if selected_step_range_first == -1 {
             GlobalEngine.cycle_step_note_start(selected_step);
         }
     }
     public function cycle_step_note_end() {
+        cycling = false;
         if selected_step_range_first == -1 {
             GlobalEngine.cycle_step_note_end(selected_step);
         }
@@ -269,11 +272,15 @@ export global GlobalUI {
     }
 
     public function cycle_step_param_start() {
+        // cycle end will put the last value in the clipboard, make sure not to call it
+        // when e.g. z+x have been press for cutting.
+        cycling = true;
         if selected_step_range_first == -1 {
             GlobalEngine.cycle_step_param_start(selected_step, selected_column);
         }
     }
     public function cycle_step_param_end() {
+        cycling = false;
         if selected_step_range_first == -1 {
             GlobalEngine.cycle_step_param_end(selected_step, selected_column);
         }

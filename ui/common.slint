@@ -50,15 +50,15 @@ export component StepsFocusScope inherits FocusScope {
             GlobalUI.cycle_selection_mode();
         } }
         else if GlobalUI.selected_column < 2 /*params*/ && e.text == "x" { if !e.repeat { GlobalUI.cycle_step_param_start(); } }
-        else if GlobalUI.selected_column < 2 /*params*/ && e.text == Key.UpArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_param(true, true); }
-        else if GlobalUI.selected_column < 2 /*params*/ && e.text == Key.DownArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_param(false, true); }
-        else if GlobalUI.selected_column < 2 /*params*/ && e.text == Key.LeftArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_param(false, false); }
-        else if GlobalUI.selected_column < 2 /*params*/ && e.text == Key.RightArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_param(true, false); }
+        else if GlobalUI.selected_column < 2 /*params*/ && e.text == Key.UpArrow && GlobalUI.x_pressed && GlobalUI.cycling { GlobalUI.cycle_step_param(true, true); }
+        else if GlobalUI.selected_column < 2 /*params*/ && e.text == Key.DownArrow && GlobalUI.x_pressed && GlobalUI.cycling { GlobalUI.cycle_step_param(false, true); }
+        else if GlobalUI.selected_column < 2 /*params*/ && e.text == Key.LeftArrow && GlobalUI.x_pressed && GlobalUI.cycling { GlobalUI.cycle_step_param(false, false); }
+        else if GlobalUI.selected_column < 2 /*params*/ && e.text == Key.RightArrow && GlobalUI.x_pressed && GlobalUI.cycling { GlobalUI.cycle_step_param(true, false); }
         else if GlobalUI.selected_column == 2 /*press*/ && e.text == "x" { if !e.repeat { GlobalUI.cycle_step_note_start(); } }
-        else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.UpArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(true, true); }
-        else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.DownArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(false, true); }
-        else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.LeftArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(false, false); }
-        else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.RightArrow && GlobalUI.x_pressed { GlobalUI.cycle_step_note(true, false); }
+        else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.UpArrow && GlobalUI.x_pressed && GlobalUI.cycling { GlobalUI.cycle_step_note(true, true); }
+        else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.DownArrow && GlobalUI.x_pressed && GlobalUI.cycling { GlobalUI.cycle_step_note(false, true); }
+        else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.LeftArrow && GlobalUI.x_pressed && GlobalUI.cycling { GlobalUI.cycle_step_note(false, false); }
+        else if GlobalUI.selected_column == 2 /*press*/ && e.text == Key.RightArrow && GlobalUI.x_pressed && GlobalUI.cycling { GlobalUI.cycle_step_note(true, false); }
         else if GlobalUI.selected_column == 3 /*release*/ && e.text == Key.UpArrow && GlobalUI.x_pressed { GlobalEngine.cycle_step_release(GlobalUI.selected_step, true); }
         else if GlobalUI.selected_column == 3 /*release*/ && e.text == Key.DownArrow && GlobalUI.x_pressed { GlobalEngine.cycle_step_release(GlobalUI.selected_step, false); }
         else if GlobalUI.selected_column == 3 /*release*/ && e.text == Key.LeftArrow && GlobalUI.x_pressed { GlobalEngine.cycle_step_release(GlobalUI.selected_step, false); }
@@ -83,10 +83,10 @@ export component StepsFocusScope inherits FocusScope {
     key_released(e) => { 
         GlobalUI.update_release_states(e);
 
-        if GlobalUI.selected_column < 2 /*params*/ && e.text == "x" { GlobalUI.cycle_step_param_end(); }
-        else if GlobalUI.selected_column == 2 /*press*/ && e.text == "x" { GlobalUI.cycle_step_note_end(); }
+        if GlobalUI.selected_column < 2 /*params*/ && GlobalUI.cycling && e.text == "x" { GlobalUI.cycle_step_param_end(); }
+        else if GlobalUI.selected_column == 2 /*press*/ && GlobalUI.cycling && e.text == "x" { GlobalUI.cycle_step_note_end(); }
         else if !GlobalUI.z_press_handled && !GlobalUI.z_pressed_something && e.text == "z" { GlobalUI.copy_step_selection(); }
-        else if !GlobalUI.x_pressed_something && e.text == "x" { GlobalEngine.toggle_step_release(GlobalUI.selected_step); }
+        else if GlobalUI.selected_column == 3 /*release*/ && !GlobalUI.x_pressed_something && e.text == "x" { GlobalEngine.toggle_step_release(GlobalUI.selected_step); }
         else if !GlobalUI.shift_pressed_something && e.text == Key.Shift { GlobalUI.cancel_selection_mode(); }
         else {
             return root_key_released(e);
