@@ -141,6 +141,9 @@ export global GlobalUI {
     }
 
     public function cycle_selection_mode() {
+        if playing {
+            pin_selection_to_active = false;
+        }
         if selected_step_range_first == -1 {
             // Start selection mode
             selected_step_range_first = selected_step;
@@ -170,8 +173,8 @@ export global GlobalUI {
     public function toggle_play(song_mode: bool) {
         if ! /*currently*/ playing {
             // In song mode pin the selection to the active pattern/step
-            // so that the playback position is kept visible.
-            pin_selection_to_active = song_mode;
+            // so that the playback position is kept visible, but only if not in selection mode.
+            pin_selection_to_active = song_mode && !in_selection_mode();
 
             // Reset the playback step position to the beginning of the pattern.
             GlobalEngine.activate_step(0);
