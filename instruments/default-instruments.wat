@@ -3004,78 +3004,17 @@
       (local.get 3)
       (i32.const 8475)))
   (func $default-instruments.wave_arp.press (type 4) (param i32 i32 i32 i32)
-    (local i32)
-    (global.set $__stack_pointer
-      (local.tee 4
-        (i32.sub
-          (global.get $__stack_pointer)
-          (i32.const 16))))
-    (i32.store8 offset=15
-      (local.get 4)
-      (i32.const 0))
-    (i32.store8 offset=14
-      (local.get 4)
-      (i32.const 8))
-    (i32.store8 offset=13
-      (local.get 4)
-      (i32.const 5))
-    (i32.store8 offset=12
-      (local.get 4)
-      (i32.const 10))
-    (i32.store8 offset=11
-      (local.get 4)
-      (i32.const 3))
-    (i32.store8 offset=9147
-      (i32.const 0)
-      (i32.const 3))
-    (i32.store8 offset=9146
-      (i32.const 0)
-      (i32.const 10))
-    (i32.store8 offset=9145
-      (i32.const 0)
-      (i32.const 5))
-    (i32.store8 offset=9144
-      (i32.const 0)
-      (i32.const 8))
-    (i32.store8 offset=9143
-      (i32.const 0)
-      (i32.const 0))
-    (i32.store8 offset=9142
-      (i32.const 0)
-      (i32.const 0))
-    (call $gba_set_sound_reg
-      (i32.const 67108976)
-      (i32.const 0))
-    (call $gba_set_wave_table
-      (i32.const 8491)
-      (i32.const 16))
-    (call $gba_set_sound_reg
-      (i32.const 67108976)
-      (i32.const 192))
-    (call $gba_set_sound_reg
-      (i32.const 67108978)
-      (i32.const 8192))
-    (call $gba_set_sound_reg
-      (i32.const 67108980)
-      (i32.or
-        (i32.and
-          (i32.sub
-            (i32.const 0)
-            (i32.div_u
-              (i32.const 16777216)
-              (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768)))
+    (call $default-instruments.wave_p
+      (local.get 0)
+      (i32.const 133)
+      (i32.const 163)
+      (i32.const 8491))
     (i32.store8 offset=9150
       (i32.const 0)
       (local.get 3))
     (i32.store8 offset=9149
       (i32.const 0)
-      (local.get 2))
-    (global.set $__stack_pointer
-      (i32.add
-        (local.get 4)
-        (i32.const 16))))
+      (local.get 2)))
   (func $default-instruments.wave_arp.frame (type 5) (param i32 i32 i32)
     (local i32 i32 i32 i32 i32)
     (local.set 3
@@ -3239,86 +3178,17 @@
       (local.get 3)
       (i32.const 8507)))
   (func $default-instruments.wave_sweep.press (type 4) (param i32 i32 i32 i32)
-    (local i32 i32)
-    (global.set $__stack_pointer
-      (local.tee 4
-        (i32.sub
-          (global.get $__stack_pointer)
-          (i32.const 16))))
-    (i32.store8 offset=15
-      (local.get 4)
-      (i32.const 0))
-    (i32.store8 offset=14
-      (local.get 4)
-      (i32.const 8))
-    (i32.store8 offset=13
-      (local.get 4)
-      (i32.const 5))
-    (i32.store8 offset=12
-      (local.get 4)
-      (local.tee 5
-        (i32.and
-          (i32.shr_u
-            (local.get 3)
-            (i32.const 4))
-          (i32.const 15))))
-    (i32.store8 offset=11
-      (local.get 4)
-      (local.tee 3
-        (i32.and
-          (local.get 3)
-          (i32.const 15))))
-    (i32.store8 offset=9147
-      (i32.const 0)
-      (local.get 3))
-    (i32.store8 offset=9146
-      (i32.const 0)
-      (local.get 5))
-    (i32.store8 offset=9145
-      (i32.const 0)
-      (i32.const 5))
-    (i32.store8 offset=9144
-      (i32.const 0)
-      (i32.const 8))
-    (i32.store8 offset=9143
-      (i32.const 0)
-      (i32.const 0))
-    (i32.store8 offset=9142
-      (i32.const 0)
-      (i32.const 0))
-    (call $gba_set_sound_reg
-      (i32.const 67108976)
-      (i32.const 0))
-    (call $gba_set_wave_table
-      (i32.const 8523)
-      (i32.const 16))
-    (call $gba_set_sound_reg
-      (i32.const 67108976)
-      (i32.const 192))
-    (call $gba_set_sound_reg
-      (i32.const 67108978)
-      (i32.const 8192))
-    (call $gba_set_sound_reg
-      (i32.const 67108980)
-      (i32.or
-        (i32.and
-          (i32.sub
-            (i32.const 0)
-            (i32.div_u
-              (i32.const 16777216)
-              (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768)))
+    (call $default-instruments.wave_p
+      (local.get 0)
+      (i32.const 133)
+      (local.get 3)
+      (i32.const 8523))
     (i32.store offset=9168
       (i32.const 0)
       (local.get 0))
     (i32.store offset=9152
       (i32.const 0)
-      (local.get 2))
-    (global.set $__stack_pointer
-      (i32.add
-        (local.get 4)
-        (i32.const 16))))
+      (local.get 2)))
   (func $default-instruments.wave_sweep.frame (type 5) (param i32 i32 i32)
     (local i32 i32 i32)
     (block  ;; label = @1
@@ -3677,15 +3547,24 @@
       (i32.and
         (local.get 6)
         (i32.const 15)))
-    (call $gba_set_sound_reg
-      (i32.const 67108976)
-      (i32.const 0))
-    (call $gba_set_wave_table
-      (local.get 3)
-      (i32.const 16))
-    (call $gba_set_sound_reg
-      (i32.const 67108976)
-      (i32.const 192))
+    (block  ;; label = @1
+      (br_if 0 (;@1;)
+        (i32.eq
+          (i32.load offset=9180
+            (i32.const 0))
+          (local.get 3)))
+      (i32.store offset=9180
+        (i32.const 0)
+        (local.get 3))
+      (call $gba_set_sound_reg
+        (i32.const 67108976)
+        (i32.const 0))
+      (call $gba_set_wave_table
+        (local.get 3)
+        (i32.const 16))
+      (call $gba_set_sound_reg
+        (i32.const 67108976)
+        (i32.const 192)))
     (call $gba_set_sound_reg
       (i32.const 67108978)
       (i32.const 8192))

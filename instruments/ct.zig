@@ -350,7 +350,12 @@ pub const gba = struct {
         pub fn writeTo(self: WaveRam, channel: Channel) void {
             gba_set_sound_reg(address(channel), @as(u16, @bitCast(self)));
         }
+
+        var cur_table: ?*const WavTable = null;
         pub fn setTable(table: *const WavTable) void {
+            if (cur_table == table)
+                return;
+            cur_table = table;
             (WaveRam{ .playing = 0, .bank = 0 }).writeTo(wave);
             gba_set_wave_table(&table.v, table.v.len);
             (WaveRam{ .playing = 1, .bank = 1 }).writeTo(wave);
