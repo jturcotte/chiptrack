@@ -6,72 +6,24 @@ A programmable cross-platform sequencer for the Game Boy Advance sound chip.
 
 [Try the Web Player](https://jturcotte.github.io/chiptrack)
 
-## Install using Cargo
+### Install
 
-```bash
-# On Linux you might need WAMR and CPAL local dependencies, for example on Ubuntu:
-# sudo apt install build-essential cmake pkg-config libasound2-dev libxft-dev
-
-cargo install --git https://github.com/jturcotte/chiptrack
-```
+[See the Releases page](https://github.com/jturcotte/chiptrack/releases)
 
 ## Features
-- [Runs natively on the Game Boy Advance](#runs-natively-on-the-game-boy-advance)
-- [Instruments are programmable](#instruments-are-programmable)
-- [Songs can be distributed and played from GitHub gists](#songs-can-be-distributed-and-played-from-github-gists)
-- [Basic MIDI support in the desktop version](#basic-midi-support-in-the-desktop-version)
 
-### Runs natively on the Game Boy Advance
+- [Instruments are programmable](instruments/default-instruments.zig)
 
-![image](https://github.com/jturcotte/chiptrack/assets/839935/e358fc48-d26b-46e2-9d37-58d40fa94877)
+  Each song carries a little WebAssembly program that converts sequenced notes to Game Boy Advance sound
+commands.</br>**This gives almost complete control over the sound chip to each song.**
 
-The built-in sound chip is used for sound production in this case.
-The desktop and Web versions will produce the sound in software by emulating sound register commands.
+- [Songs can be distributed and played from GitHub gists](https://gist.github.com/search?l=WebAssembly&q=%23chiptrack)
+- Basic MIDI support in the desktop version
+- Runs natively on the Game Boy Advance
 
-Slint models are used as cross-platform abstraction, read from a [custom renderer](src/gba_platform/renderer.rs)
-to take advantage of the GBA's hardware acceleration.
+  ![image](https://github.com/jturcotte/chiptrack/assets/839935/e358fc48-d26b-46e2-9d37-58d40fa94877)
 
-### Instruments are programmable
-
-```zig
-pub fn press(freq: u32, note: u8, param0: i8, param1: i8) callconv(.C) void {
-    _ = note; _ = param0; _ = param1;
-    gba.EnvDutyLen
-        .withDuty(gba.dut_1_8)
-        .withEnvStart(10)
-        .writeTo(gba.square1);
-    gba.CtrlFreq.init()
-        .withTrigger(1)
-        .withSquareFreq(freq)
-        .writeTo(gba.square1);
-}
-```
-
-Each song carries a little WebAssembly program that converts sequenced notes to Game Boy Advance sound
-commands. **This gives almost complete control over the sound chip to each song.**
-
-[Default instruments are provided for empty projects](instruments/default-instruments.zig) and can be customized.
-
-### Songs can be distributed and played from GitHub gists
-
-```md
-## Pattern 16
-
-| S1 | T2 | W2 | N1 | N2 | N3 |
-|----|----|----|----|----|----|
-|A-4 |A-2 |B-3 | -  |C-2.| -  |
-| -  | -  | -  | -  | -  | -  |
-|A-4 | -  |C#4 |C-2.| -  | -  |
-| -  | -  | -  | -  | -  | -  |
-|A-4 |A-2 |E-4 |C-2.| -  | -  |
-...
-```
-
-Songs are saved as Markdown and are human-readable and can be discovered by searching by using GitHub's search: https://gist.github.com/search?l=WebAssembly&q=%23chiptrack
-
-### Basic MIDI support in the desktop version
-
-An external MIDI keyboard can be used to play or record notes.
+  It can also be run on the 3DS through [open_agb_firm](https://github.com/profi200/open_agb_firm)
 
 ## Key / Button Mapping
 
@@ -140,5 +92,3 @@ The source code is available under the terms of the MIT license
 
 However, because of the use of GPL dependencies, Chiptrack compiled binaries
 are licensed under the terms of the GPLv3 (See [LICENSE-GPL](LICENSE-GPL)).
-
-*"Game Boy Advance" is registered trademark of Nintendo*
