@@ -901,18 +901,27 @@ impl Sequencer {
             self.commit_stub_song_pattern();
         }
 
-        let instrument_id = &self.synth_instrument_ids[self.displayed_instrument as usize];
-        let displayed_pattern_idx = self.displayed_pattern_idx();
-        let steps = self.song.patterns[displayed_pattern_idx]
-            .get_steps_mut_or_insert(instrument_id, Some(self.displayed_instrument));
-
         if let SelectionClipboard::WholeSteps(clip_steps) = &self.selection_clipboard {
-            for (i, step) in clip_steps.iter().enumerate() {
-                steps[(at_step + i) % NUM_STEPS] = *step;
-            }
-        }
+            let instrument_id = &self.synth_instrument_ids[self.displayed_instrument as usize];
+            let displayed_pattern_idx = self.displayed_pattern_idx();
+            let steps = self.song.patterns[displayed_pattern_idx]
+                .get_steps_mut_or_insert(instrument_id, Some(self.displayed_instrument));
+            let param_defs = &self.synth_instrument_param_defs[self.displayed_instrument as usize];
 
-        self.update_steps();
+            for (i, step) in clip_steps.iter().enumerate() {
+                let mut copy = *step;
+                // Clamp the parameters to the destination parameter definition min and max.
+                copy.param0 = param_defs[0]
+                    .as_ref()
+                    .and_then(|def| copy.param0.map(|v| v.clamp(def.min, def.max)));
+                copy.param1 = param_defs[1]
+                    .as_ref()
+                    .and_then(|def| copy.param1.map(|v| v.clamp(def.min, def.max)));
+                steps[(at_step + i) % NUM_STEPS] = copy;
+            }
+
+            self.update_steps();
+        }
     }
 
     pub fn toggle_step_release(&mut self, step: usize) {
@@ -1646,19 +1655,23 @@ impl Sequencer {
         let steps = self.song.patterns[displayed_pattern_idx]
             .get_steps_mut_or_insert(instrument_id, Some(self.displayed_instrument));
 
-        let set_param = if param_num == 0 {
-            |s: &mut InstrumentStep, v: Option<i8>| s.param0 = v
-        } else {
-            |s: &mut InstrumentStep, v: Option<i8>| s.param1 = v
-        };
+        let param_defs = &self.synth_instrument_param_defs[self.displayed_instrument as usize];
+        // Skip pasting if the parameter isn't defined anyway.
+        if let Some((min, max)) = param_defs[param_num as usize].as_ref().map(|p| (p.min, p.max)) {
+            let set_param = if param_num == 0 {
+                |s: &mut InstrumentStep, v: Option<i8>| s.param0 = v
+            } else {
+                |s: &mut InstrumentStep, v: Option<i8>| s.param1 = v
+            };
 
-        if let SelectionClipboard::InstrumentParams(clip_params) = &self.selection_clipboard {
-            for (i, param) in clip_params.iter().enumerate() {
-                set_param(&mut steps[(at_step + i) % NUM_STEPS], *param);
+            if let SelectionClipboard::InstrumentParams(clip_params) = &self.selection_clipboard {
+                for (i, param) in clip_params.iter().enumerate() {
+                    set_param(&mut steps[(at_step + i) % NUM_STEPS], param.map(|v| v.clamp(min, max)));
+                }
             }
-        }
 
-        self.update_steps();
+            self.update_steps();
+        }
     }
 
     /// Return the number of the first pattern that is not referenced by the song and that is still empty,
