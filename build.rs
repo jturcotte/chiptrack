@@ -1,5 +1,11 @@
 #[cfg(not(feature = "gba"))]
 fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
+        let mut res = winresource::WindowsResource::new();
+        res.set_icon("pkg/chiptrack.ico");
+        res.compile().unwrap();
+    }
+
     let config = slint_build::CompilerConfiguration::new().with_style("fluent-light".to_owned());
     slint_build::compile_with_config("ui/main.slint", config).unwrap();
 }

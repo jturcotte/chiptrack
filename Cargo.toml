@@ -61,6 +61,8 @@ gba = [
     "critical-section/restore-state-bool",
 ]
 
+[build-dependencies]
+winresource = "0.1"
 [build-dependencies.slint-build]
 version = "1.8.0"
 [dependencies.slint]
@@ -112,6 +114,8 @@ embedded-alloc = { version = "0.5", optional = true }
 [package.metadata.bundle]
 name = "Chiptrack"
 icon = ["pkg/128x128.png", "pkg/256x256.png"]
+[package.metadata.winresource]
+ProductName = "Chiptrack"
 
 # [profile.release]
 # debug = true
