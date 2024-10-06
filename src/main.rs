@@ -4,6 +4,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "gba", no_main)]
 #![cfg_attr(feature = "gba", feature(alloc_error_handler))]
+#![windows_subsystem = "windows"]
 
 extern crate alloc;
 
