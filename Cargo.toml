@@ -108,5 +108,10 @@ libm = { version = "0.2", optional = true }
 critical-section = { version = "1", optional = true }
 embedded-alloc = { version = "0.5", optional = true }
 
+# Build for macOS using: cargo bundle --release
+[package.metadata.bundle]
+name = "Chiptrack"
+icon = ["pkg/128x128.png", "pkg/256x256.png"]
+
 # [profile.release]
 # debug = true
