@@ -1388,17 +1388,17 @@ impl Sequencer {
         let (set_release, set_params) = if maybe_selected_note.is_none() {
             (
                 Some(self.default_note_clipboard.release),
-                Some((instrument_params[0], instrument_params[1])),
+                (p0.or(instrument_params[0]), p1.or(instrument_params[1])),
             )
         } else {
-            (None, None)
+            (None, (p0, p1))
         };
         self.set_pattern_step_events(
             step,
             self.displayed_song_pattern,
             Some(Some(new_note)),
             set_release,
-            set_params,
+            Some(set_params),
         );
 
         let param_defs = &self.synth_instrument_param_defs[self.displayed_instrument as usize];
@@ -1407,9 +1407,13 @@ impl Sequencer {
         // not care as it didn't define the parameter.
         (
             new_note,
-            p0.or(param_defs[0].as_ref().map(|p| p.default))
+            set_params
+                .0
+                .or(param_defs[0].as_ref().map(|p| p.default))
                 .unwrap_or(DEFAULT_PARAM_VAL),
-            p1.or(param_defs[1].as_ref().map(|p| p.default))
+            set_params
+                .1
+                .or(param_defs[1].as_ref().map(|p| p.default))
                 .unwrap_or(DEFAULT_PARAM_VAL),
         )
     }
