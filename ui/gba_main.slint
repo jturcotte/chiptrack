@@ -29,6 +29,7 @@ export component MainWindow inherits Window {
 
     // Menu UI values
     out property<int> frames_per_step: 7;
+    out property<bool> sync_enabled: false;
 
     callback clear_status_text();
 
@@ -90,7 +91,7 @@ export component MainWindow inherits Window {
 
     function cycle_focus_menu_row(down: bool) {
         if down {
-            if focused_menu_row < 2 {
+            if focused_menu_row < 3 {
                 focused_menu_row += 1;
             }
         } else {
@@ -114,6 +115,13 @@ export component MainWindow inherits Window {
         GlobalSettings.song_settings_changed(GlobalSettings.song_settings);
     }
 
+    function toggle_sync() {
+        sync_enabled = !sync_enabled;
+        // FIXME: Implement or remove
+        GlobalSettings.settings.sync_enabled = sync_enabled;
+        GlobalSettings.settings_changed(GlobalSettings.settings);
+    }
+
     forward_focus: steps_key_handler;
     menu_key_handler := FocusScope {
         key_pressed(e) => {
@@ -121,6 +129,8 @@ export component MainWindow inherits Window {
             else if e.text == Key.DownArrow && !e.modifiers.shift { cycle_focus_menu_row(true); }
             else if focused_menu_row == 2 && e.text == Key.LeftArrow && GlobalUI.x_pressed { cycle_frames_per_step(false); }
             else if focused_menu_row == 2 && e.text == Key.RightArrow && GlobalUI.x_pressed { cycle_frames_per_step(true); }
+            else if focused_menu_row == 3 && e.text == Key.LeftArrow && GlobalUI.x_pressed { toggle_sync(); }
+            else if focused_menu_row == 3 && e.text == Key.RightArrow && GlobalUI.x_pressed { toggle_sync(); }
             else if e.text == "x" {
                 if focused_menu_row == 0 {
                     GlobalEngine.save_project();
