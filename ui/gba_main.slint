@@ -28,8 +28,8 @@ export component MainWindow inherits Window {
     out property<int> focused_menu_row: 0;
 
     // Menu UI values
-    out property<int> frames_per_step: 7;
-    out property<bool> sync_enabled: false;
+    out property<int> frames_per_step: GlobalSettings.song_settings.frames_per_step;
+    out property<bool> sync_enabled: GlobalSettings.settings.sync_enabled;
 
     callback clear_status_text();
 
