@@ -100,6 +100,12 @@ export global GlobalUI {
         }
     }
 
+    public function disable_pin_selection_to_active_if_playing() {
+        if playing {
+            pin_selection_to_active = false;
+        }
+    }
+
     public function select_column(column: int) {
         user_selected_column = column;
         selected_column = column;

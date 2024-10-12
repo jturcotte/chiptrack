@@ -721,7 +721,15 @@ impl Sequencer {
         let col = (self.displayed_instrument as i32 + 4 + col_delta) % 4;
         // Don't wrap
         let row = (self.displayed_instrument as i32 / 4 + row_delta).max(0).min(15);
-        self.user_display_instrument((col + row * 4) as u8)
+        self.user_display_instrument((col + row * 4) as u8);
+
+        // When cycling from the instrument screen, also unpin to avoid going to the nearest instrument
+        // on the next pattern change.
+        self.main_window
+            .upgrade_in_event_loop(move |handle| {
+                GlobalUI::get(&handle).invoke_disable_pin_selection_to_active_if_playing();
+            })
+            .unwrap();
     }
 
     pub fn cycle_pattern_instrument(&mut self, forward: bool) {
