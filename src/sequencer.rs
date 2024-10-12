@@ -576,7 +576,7 @@ impl Sequencer {
         self.pattern_idx(self.displayed_song_pattern)
     }
 
-    pub fn activate_song_pattern(&mut self, song_pattern: usize) {
+    pub fn activate_song_pattern(&mut self, song_pattern: usize, with_nearest_instrument: bool) {
         self.active_song_pattern = song_pattern;
 
         #[cfg(not(feature = "gba"))]
@@ -587,7 +587,7 @@ impl Sequencer {
 
                 engine.set_sequencer_song_pattern_active(song_pattern as i32);
                 if ui.get_playing() && ui.get_pin_selection_to_active() {
-                    if ui.get_recording() {
+                    if ui.get_recording() || !with_nearest_instrument {
                         // When recording, keep displaying the current instrument to allow recording
                         // an instrument over patterns that don't have notes for it yet.
                         engine.invoke_display_song_pattern(song_pattern as i32);
@@ -610,8 +610,14 @@ impl Sequencer {
                 ui.get_playing() && ui.get_pin_selection_to_active()
             });
             if should_display {
-                // TODO: No recording yet happen on the GBA, always use the nearest instrument here instead of tweaking self.recording.
-                self.display_song_pattern_with_nearest_instrument(song_pattern);
+                // TODO: No recording yet happen on the GBA, always use the nearest instrument when requested instead of tweaking self.recording.
+                if !with_nearest_instrument {
+                    // When recording, keep displaying the current instrument to allow recording
+                    // an instrument over patterns that don't have notes for it yet.
+                    self.display_song_pattern(song_pattern);
+                } else {
+                    self.display_song_pattern_with_nearest_instrument(song_pattern);
+                }
             }
         }
     }
@@ -975,13 +981,13 @@ impl Sequencer {
             );
 
             if next_song_pattern != self.active_song_pattern {
-                self.activate_song_pattern(next_song_pattern);
+                self.activate_song_pattern(next_song_pattern, true);
             }
             next_step
         } else {
             // In pattern playback, continue playing from the displayed pattern if it changed.
             if self.active_step == NUM_STEPS - 1 && self.displayed_song_pattern != self.active_song_pattern {
-                self.activate_song_pattern(self.displayed_song_pattern);
+                self.activate_song_pattern(self.displayed_song_pattern, true);
                 0
             } else {
                 (self.active_step + 1) % NUM_STEPS
@@ -1784,7 +1790,7 @@ impl Sequencer {
         // back into the previous song pattern, which could replay some notes and sound buggy, but still better
         // than cutting up the beginning of the song if we'd move the playback halfway through the first song pattern.
         if self.active_song_pattern == self.displayed_song_pattern {
-            self.activate_song_pattern(self.song.song_patterns.len() - 1);
+            self.activate_song_pattern(self.song.song_patterns.len() - 1, false);
         }
     }
 
@@ -1847,7 +1853,7 @@ impl Sequencer {
                 0
             };
             if self.active_song_pattern == self.displayed_song_pattern {
-                self.activate_song_pattern(next_selection);
+                self.activate_song_pattern(next_selection, false);
             }
             self.display_song_pattern(next_selection);
         }
@@ -1898,7 +1904,7 @@ impl Sequencer {
             })
             .unwrap();
 
-        self.activate_song_pattern(0);
+        self.activate_song_pattern(0, true);
         self.display_song_pattern(0);
         self.user_display_instrument(self.displayed_instrument);
     }

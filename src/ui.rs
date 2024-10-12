@@ -376,7 +376,7 @@ pub fn set_global_engine_handlers<SR: SoundRendererTrait + 'static>(
         cloned_sound_renderer.borrow_mut().invoke_on_sound_engine(move |se| {
             se.sequencer
                 .borrow_mut()
-                .activate_song_pattern(song_pattern_idx as usize)
+                .activate_song_pattern(song_pattern_idx as usize, false)
         });
     });
 

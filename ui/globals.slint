@@ -185,7 +185,7 @@ export global GlobalUI {
             // Reset the playback step position to the beginning of the pattern.
             GlobalEngine.activate_step(0);
         } else {
-            // When not playing, keep the active step pinned to the selection so that
+            // When setting to not playing, keep the active step pinned to the selection so that
             // notes can be recorded on the selected step.
             // Also reset the playback step position to the selected song pattern and step.
             pin_selection_to_active = true;
@@ -193,6 +193,7 @@ export global GlobalUI {
             GlobalEngine.activate_step(selected_step);
         }
 
+        // Only set playing after setting the step to make sure that it restarts from the first step.
         GlobalEngine.set_playing(!playing, song_mode);
     }
 
