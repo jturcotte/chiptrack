@@ -218,8 +218,8 @@ fn load_song_from_command_arguments<LazyF: FnOnce() -> sound_renderer::Context>(
         ParsedCommandArguments::Gist(gist_path) => {
             let cloned_sound_send = sound_renderer.sender();
             let handler = move |decode_result: Result<serde_json::Value, String>| match decode_result {
-                Ok(_) => cloned_sound_send
-                    .send(Box::new(move |se| se.clear_song_and_load_default_instruments()))
+                Ok(decoded) => cloned_sound_send
+                    .send(Box::new(move |se| se.load_gist(decoded)))
                     .unwrap(),
                 Err(err) => {
                     elog!("{}. Exiting.", err);
