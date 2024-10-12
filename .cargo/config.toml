@@ -5,4 +5,10 @@ rustflags = [
     # TODO: For some arcane reason this works around an issue preventing startup (see update_synth_index).
     # Check if still needed in later nightlies.
     "--emit=mir",
-    ]
+]
+
+[target.wasm32-unknown-unknown]
+rustflags = [
+    # Enables copy-paste in Slint
+    "--cfg=web_sys_unstable_apis",
+]

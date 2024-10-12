@@ -307,7 +307,7 @@ async fn run_async(wasm_buffer: Vec<u8>, imports: Object) -> Result<(), JsValue>
     CURRENT_INSTANCE.with(|current_instance| {
         // FIXME: It would be cleaner to only set the thread_local instance when entering a call through WasmModuleInst
         //        so that this supports multiple module instances. But I don't need this now and it's simpler that way.
-        assert!(current_instance.replace(Some(instance)).is_none());
+        current_instance.replace(Some(instance));
     });
 
     // Call _start, which will call main and trigger the instrument setup
