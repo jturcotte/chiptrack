@@ -2,7 +2,7 @@
 
 A programmable cross-platform sequencer for the Game Boy Advance sound chip.
 
-[![image](https://github.com/jturcotte/chiptrack/assets/839935/187a2ce6-072f-43d6-9937-2c7579562908)](https://jturcotte.github.io/chiptrack)
+[![image](https://github.com/user-attachments/assets/8e013648-85b0-49f7-ac09-5da0bf96855f)](https://jturcotte.github.io/chiptrack)
 
 [Try the Web Player](https://jturcotte.github.io/chiptrack)
 
