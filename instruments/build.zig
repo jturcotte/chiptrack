@@ -4,7 +4,7 @@
 // After modifying the instruments Zig source code, you must re-compile the WebAssembly file that can be executed by Chiptrack.
 // This file instructs the Zig compiler how to compile it and for this you need
 //  - The Zig 0.13 compiler, available at https://ziglang.org/download/
-//  - ct.zig, the Chiptrack instruments support module, available at https://raw.githubusercontent.com/jturcotte/chiptrack/v0.3/instruments/ct.zig
+//  - ct.zig, the Chiptrack instruments support module, available at https://raw.githubusercontent.com/jturcotte/chiptrack/v0.4/instruments/ct.zig
 //  - wasm2wat in your PATH, available at https://github.com/WebAssembly/wabt/releases
 //
 // Then to rebuild the instruments .wat file from modified source code:
@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) void {
         b.option(bool, "wat", "Compile the instruments to WAT (Web Assembly Text Format) instead of binary WASM. Chiptrack can load either format but this is better for GitHub gist uploads and requires wasm2wat in PATH (default: true).") orelse true;
 
     if (std.fs.cwd().access(ct_zig_path, .{}) == std.fs.Dir.AccessError.FileNotFound)
-        @panic("ct.zig was not found but is necessary to build. You can download it from https://raw.githubusercontent.com/jturcotte/chiptrack/v0.3/instruments/ct.zig .");
+        @panic("ct.zig was not found but is necessary to build. You can download it from https://raw.githubusercontent.com/jturcotte/chiptrack/v0.4/instruments/ct.zig .");
 
     // Listing the module here also allows editors like VSCode with Zig language support to discover it and provide code completion.
     const ct_module = b.addModule("ct", .{ .root_source_file = .{ .cwd_relative = ct_zig_path } });

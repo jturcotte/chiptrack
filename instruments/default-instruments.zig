@@ -1,5 +1,15 @@
 // Copyright © 2024 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: CC0-1.0
+//
+// This is the source file used to compile default-instruments.wat, which is loaded by new songs in Chiptrack.
+//
+// This file and the corresponding WAT file is then copied with a new song the first time it is saved.
+// To change the instruments used by a song, you must edit its instruments.zig file and recompile it to its .wat form.
+// See build.zig on instruction on how to make any modifications you make to that file available to The
+// synthesizer module.
+//
+// The main() function at the end is responsible for registering instruments available in this file.
+// See registerInstrument() in ct.zig for information on what can be added to an instrument struct.
 
 const std = @import("std");
 const math = std.math;
