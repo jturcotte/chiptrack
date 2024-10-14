@@ -8,7 +8,7 @@ A programmable cross-platform sequencer for the Game Boy Advance sound chip.
 
 ### Install
 
-[See the Releases page](https://github.com/jturcotte/chiptrack/releases)
+[See the latest release page](https://github.com/jturcotte/chiptrack/releases/latest)
 
 ## Features
 
