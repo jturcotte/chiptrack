@@ -1456,14 +1456,14 @@ impl Sequencer {
 
         if forward {
             match v {
-                Some(val) if *val < param_def.max - 1 => *val += 1,
-                None if param_def.default < param_def.max - 1 => *v = Some(param_def.default + 1),
+                Some(val) if *val < param_def.max => *val += 1,
+                None if param_def.default < param_def.max => *v = Some(param_def.default + 1),
                 _ => (),
             }
         } else {
             match v {
-                Some(val) if *val > param_def.min + 1 => *val -= 1,
-                None if param_def.default > param_def.min + 1 => *v = Some(param_def.default - 1),
+                Some(val) if *val > param_def.min => *val -= 1,
+                None if param_def.default > param_def.min => *v = Some(param_def.default - 1),
                 _ => (),
             }
         }
