@@ -410,9 +410,9 @@ dependencies = [
 
 [[package]]
 name = "bracer"
-version = "0.1.2"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6559b8c3065745016f5cc2d1095273fe8a175e953c976426947ad828d6ba6fda"
+checksum = "00248d542917c4ef013367c0907300e9befbbc1f99b12938c9e5a356ab50582d"
 
 [[package]]
 name = "bumpalo"
@@ -1499,12 +1499,13 @@ checksum = "3dcaa9ae7725d12cdb85b3ad99a434db70b468c09ded17e012d86b5c1010f7a7"
 
 [[package]]
 name = "gba"
-version = "0.12.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "454def5baf9afaf434b8b5fa75a96095bac4529a26ac1a37d1a438dd893af81a"
+checksum = "a9924be92f04084fdef8e901dab4c2d06b2112114d875c19075eeaf9a6929eee"
 dependencies = [
  "bitfrob",
  "bracer",
+ "bytemuck",
  "voladdress",
 ]
 

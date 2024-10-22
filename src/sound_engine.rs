@@ -664,14 +664,14 @@ impl SoundEngine {
         unsafe {
             let mut buf = [0u8; 4];
             let sram = 0x0E00_0000 as *mut u8;
-            gba::mem_fns::__aeabi_memcpy1(buf.as_mut_ptr(), sram, 4);
+            gba::mem::copy_u8_unchecked(buf.as_mut_ptr(), sram, 4);
             let mut instruments_len = u32::from_le_bytes(buf) as usize;
             if instruments_len == 0xffffffff || self.project_source == ProjectSource::New {
                 // SRAM is empty, copy the default instruments from ROM.
                 instruments_len = SynthScript::DEFAULT_INSTRUMENTS.len();
                 buf = (instruments_len as u32).to_le_bytes();
-                gba::mem_fns::__aeabi_memcpy1(sram, buf.as_ptr(), 4);
-                gba::mem_fns::__aeabi_memcpy1(
+                gba::mem::copy_u8_unchecked(sram, buf.as_ptr(), 4);
+                gba::mem::copy_u8_unchecked(
                     sram.offset(8),
                     SynthScript::DEFAULT_INSTRUMENTS.as_ptr(),
                     instruments_len,
@@ -680,8 +680,8 @@ impl SoundEngine {
             match self.sequencer.borrow().serialize_to_postcard() {
                 Ok(song_bytes) => {
                     buf = (song_bytes.len() as u32).to_le_bytes();
-                    gba::mem_fns::__aeabi_memcpy1(sram.offset(4), buf.as_ptr(), 4);
-                    gba::mem_fns::__aeabi_memcpy1(
+                    gba::mem::copy_u8_unchecked(sram.offset(4), buf.as_ptr(), 4);
+                    gba::mem::copy_u8_unchecked(
                         sram.offset(8 + instruments_len as isize),
                         song_bytes.as_ptr(),
                         song_bytes.len(),
@@ -704,13 +704,13 @@ impl SoundEngine {
             // song_len bytes: song
             let mut buf = [0u8; 4];
             let sram = 0x0E00_0000 as *mut u8;
-            gba::mem_fns::__aeabi_memcpy1(buf.as_mut_ptr(), sram, 4);
+            gba::mem::copy_u8_unchecked(buf.as_mut_ptr(), sram, 4);
             let instruments_len = u32::from_le_bytes(buf) as usize;
             if instruments_len == 0xffffffff {
                 // SRAM is empty
                 return None;
             }
-            gba::mem_fns::__aeabi_memcpy1(buf.as_mut_ptr(), sram.offset(4), 4);
+            gba::mem::copy_u8_unchecked(buf.as_mut_ptr(), sram.offset(4), 4);
             let song_len = u32::from_le_bytes(buf) as usize;
             log!(
                 "Loading song ({} bytes) and instruments ({} bytes) from SRAM.",
@@ -720,7 +720,7 @@ impl SoundEngine {
 
             {
                 let mut song_bytes = Vec::<u8>::with_capacity(song_len);
-                gba::mem_fns::__aeabi_memcpy1(
+                gba::mem::copy_u8_unchecked(
                     song_bytes.as_mut_ptr(),
                     sram.offset(8 + instruments_len as isize),
                     song_len,
@@ -730,7 +730,7 @@ impl SoundEngine {
             }
 
             let mut instrument_bytes = Vec::<u8>::with_capacity(instruments_len);
-            gba::mem_fns::__aeabi_memcpy1(instrument_bytes.as_mut_ptr(), sram.offset(8), instruments_len);
+            gba::mem::copy_u8_unchecked(instrument_bytes.as_mut_ptr(), sram.offset(8), instruments_len);
             instrument_bytes.set_len(instruments_len);
             if let Err(e) = self.script.load_bytes(instrument_bytes) {
                 elog!("load error: {}", e);
