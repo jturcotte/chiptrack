@@ -12,6 +12,19 @@ SECTIONS {
   .text : {
     /* be sure that the ROM header is the very first */
     *(.text.gba_rom_header);
+
+    /* Hardcode the string SRAM_Vnnn right after gba_rom_header for faster save game type detection. */
+    /* https://rust-console.github.io/gbatek-gbaonly/#--gba-cart-backup-ids */
+    BYTE(0x53); /* 'S' */
+    BYTE(0x52); /* 'R' */
+    BYTE(0x41); /* 'A' */
+    BYTE(0x4D); /* 'M' */
+    BYTE(0x5F); /* '_' */
+    BYTE(0x56); /* 'V' */
+    BYTE(0x6E); /* 'n' */
+    BYTE(0x6E); /* 'n' */
+    BYTE(0x6E); /* 'n' */
+
     *(.text .text.*);
     . = ALIGN(4);
   } >rom = 0x00
