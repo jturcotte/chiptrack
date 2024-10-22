@@ -107,7 +107,8 @@ const ADSR = struct {
     /// An infinite attack or decay make little sense, so if both are 0 the note will
     /// skip the attack+decay states.
     pub fn init(attack_step: u4, decay_step: u4, sustain_level: u4, release_step: u4) ADSR {
-        const level_state = if (attack_step != 0 or decay_step != 0) .{ 0, State.attack } else .{ sustain_level, State.sustain };
+        // Start in decay so that changed = 1 on the first frame.
+        const level_state = if (attack_step != 0 or decay_step != 0) .{ 0, State.attack } else .{ sustain_level, State.decay };
         return ADSR{
             .level = level_state[0],
             .state = level_state[1],
@@ -122,8 +123,13 @@ const ADSR = struct {
         return init(ct.paramLeftChar(ad), ct.paramRightChar(ad), ct.paramLeftChar(sr), ct.paramRightChar(sr));
     }
 
+    const FrameEnvelope = struct {
+        val: u4,
+        changed: u1,
+    };
+
     /// Call this once per instrument frame
-    pub fn frame(self: *ADSR) u4 {
+    pub fn frame(self: *ADSR) FrameEnvelope {
         switch (self.state) {
             .attack => {
                 self.level += self.attack_step;
@@ -131,6 +137,7 @@ const ADSR = struct {
                     self.state = State.decay;
                     self.level = 15;
                 }
+                return .{ .val = @intCast(self.level), .changed = 1 };
             },
             .decay => {
                 self.level -= self.decay_step;
@@ -138,18 +145,23 @@ const ADSR = struct {
                     self.state = State.sustain;
                     self.level = self.sustain_level;
                 }
+                return .{ .val = @intCast(self.level), .changed = 1 };
             },
-            .sustain => {},
+            .sustain => {
+                return .{ .val = @intCast(self.level), .changed = 0 };
+            },
             .release => {
                 self.level -= self.release_step;
                 if (self.level < 0) {
                     self.state = State.finish;
                     self.level = 0;
                 }
+                return .{ .val = @intCast(self.level), .changed = 1 };
             },
-            .finish => {},
+            .finish => {
+                return .{ .val = @intCast(self.level), .changed = 0 };
+            },
         }
-        return @intCast(self.level);
     }
     /// Call this when the instrument is released
     pub fn release(self: *ADSR) void {
@@ -206,12 +218,13 @@ const square1_base = struct {
     }
 
     pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
+        const env = square1_adsr.frame();
         env_duty
-            .withEnvStart(square1_adsr.frame())
+            .withEnvStart(env.val)
             .writeTo(gba.square1);
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
-            .withTrigger(1)
+            .withTrigger(env.changed)
             .writeTo(gba.square1);
     }
 };
@@ -243,12 +256,13 @@ const square2_base = struct {
     }
 
     pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
+        const env = square2_adsr.frame();
         env_duty
-            .withEnvStart(square2_adsr.frame())
+            .withEnvStart(env.val)
             .writeTo(gba.square2);
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
-            .withTrigger(1)
+            .withTrigger(env.changed)
             .writeTo(gba.square2);
     }
 };
@@ -271,15 +285,18 @@ const square1_2_4 = struct {
     }
 
     pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
-        gba.EnvDutyLen.init()
-            .withEnvDir(gba.env_dec)
-            .withEnvStart(square1_adsr.frame())
-            .withDuty(gba.dut_2_4)
-            .writeTo(gba.square1);
-        gba.CtrlFreq.init()
-            .withSquareFreq(freq)
-            .withTrigger(1)
-            .writeTo(gba.square1);
+        const env = square1_adsr.frame();
+        if (env.changed == 1) {
+            gba.EnvDutyLen.init()
+                .withEnvDir(gba.env_dec)
+                .withEnvStart(env.val)
+                .withDuty(gba.dut_2_4)
+                .writeTo(gba.square1);
+            gba.CtrlFreq.init()
+                .withSquareFreq(freq)
+                .withTrigger(1)
+                .writeTo(gba.square1);
+        }
     }
 };
 
@@ -301,15 +318,18 @@ const square1_1_4 = struct {
     }
 
     pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
-        gba.EnvDutyLen.init()
-            .withEnvDir(gba.env_dec)
-            .withEnvStart(square1_adsr.frame())
-            .withDuty(gba.dut_1_4)
-            .writeTo(gba.square1);
-        gba.CtrlFreq.init()
-            .withSquareFreq(freq)
-            .withTrigger(1)
-            .writeTo(gba.square1);
+        const env = square1_adsr.frame();
+        if (env.changed == 1) {
+            gba.EnvDutyLen.init()
+                .withEnvDir(gba.env_dec)
+                .withEnvStart(env.val)
+                .withDuty(gba.dut_1_4)
+                .writeTo(gba.square1);
+            gba.CtrlFreq.init()
+                .withSquareFreq(freq)
+                .withTrigger(1)
+                .writeTo(gba.square1);
+        }
     }
 };
 
@@ -331,15 +351,18 @@ const square1_1_8 = struct {
     }
 
     pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
-        gba.EnvDutyLen.init()
-            .withEnvDir(gba.env_dec)
-            .withEnvStart(square1_adsr.frame())
-            .withDuty(gba.dut_1_8)
-            .writeTo(gba.square1);
-        gba.CtrlFreq.init()
-            .withSquareFreq(freq)
-            .withTrigger(1)
-            .writeTo(gba.square1);
+        const env = square1_adsr.frame();
+        if (env.changed == 1) {
+            gba.EnvDutyLen.init()
+                .withEnvDir(gba.env_dec)
+                .withEnvStart(env.val)
+                .withDuty(gba.dut_1_8)
+                .writeTo(gba.square1);
+            gba.CtrlFreq.init()
+                .withSquareFreq(freq)
+                .withTrigger(1)
+                .writeTo(gba.square1);
+        }
     }
 };
 
@@ -361,15 +384,18 @@ const square2_2_4 = struct {
     }
 
     pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
-        gba.EnvDutyLen.init()
-            .withEnvDir(gba.env_dec)
-            .withEnvStart(square2_adsr.frame())
-            .withDuty(gba.dut_2_4)
-            .writeTo(gba.square2);
-        gba.CtrlFreq.init()
-            .withSquareFreq(freq)
-            .withTrigger(1)
-            .writeTo(gba.square2);
+        const env = square2_adsr.frame();
+        if (env.changed == 1) {
+            gba.EnvDutyLen.init()
+                .withEnvDir(gba.env_dec)
+                .withEnvStart(env.val)
+                .withDuty(gba.dut_2_4)
+                .writeTo(gba.square2);
+            gba.CtrlFreq.init()
+                .withSquareFreq(freq)
+                .withTrigger(1)
+                .writeTo(gba.square2);
+        }
     }
 };
 
@@ -391,15 +417,18 @@ const square2_1_4 = struct {
     }
 
     pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
-        gba.EnvDutyLen.init()
-            .withEnvDir(gba.env_dec)
-            .withEnvStart(square2_adsr.frame())
-            .withDuty(gba.dut_1_4)
-            .writeTo(gba.square2);
-        gba.CtrlFreq.init()
-            .withSquareFreq(freq)
-            .withTrigger(1)
-            .writeTo(gba.square2);
+        const env = square2_adsr.frame();
+        if (env.changed == 1) {
+            gba.EnvDutyLen.init()
+                .withEnvDir(gba.env_dec)
+                .withEnvStart(env.val)
+                .withDuty(gba.dut_1_4)
+                .writeTo(gba.square2);
+            gba.CtrlFreq.init()
+                .withSquareFreq(freq)
+                .withTrigger(1)
+                .writeTo(gba.square2);
+        }
     }
 };
 
@@ -421,15 +450,18 @@ const square2_1_8 = struct {
     }
 
     pub fn frame(freq: u32, _: u8, _: u32) callconv(.C) void {
-        gba.EnvDutyLen.init()
-            .withEnvDir(gba.env_dec)
-            .withEnvStart(square2_adsr.frame())
-            .withDuty(gba.dut_1_8)
-            .writeTo(gba.square2);
-        gba.CtrlFreq.init()
-            .withSquareFreq(freq)
-            .withTrigger(1)
-            .writeTo(gba.square2);
+        const env = square2_adsr.frame();
+        if (env.changed == 1) {
+            gba.EnvDutyLen.init()
+                .withEnvDir(gba.env_dec)
+                .withEnvStart(env.val)
+                .withDuty(gba.dut_1_8)
+                .writeTo(gba.square2);
+            gba.CtrlFreq.init()
+                .withSquareFreq(freq)
+                .withTrigger(1)
+                .writeTo(gba.square2);
+        }
     }
 };
 
@@ -462,13 +494,14 @@ const square1_vibrato = struct {
 
     pub fn frame(freq: u32, _: u8, t: u32) callconv(.C) void {
         const delay = 21;
+        const env = square1_adsr.frame();
         env_duty
-            .withEnvStart(square1_adsr.frame())
+            .withEnvStart(env.val)
             .writeTo(gba.square1);
 
         gba.CtrlFreq.init()
             .withSquareFreq(if (t > delay) vibrato(delay, p, freq, t) else freq)
-            .withTrigger(1)
+            .withTrigger(env.changed)
             .writeTo(gba.square1);
     }
 };
@@ -515,13 +548,14 @@ const square1_duty = struct {
             gba.dut_2_4,
         };
 
+        const env = square1_adsr.frame();
         gba.EnvDutyLen.init()
             .withDuty(duties[(t / 2) % duties.len])
-            .withEnvStart(square1_adsr.frame())
+            .withEnvStart(env.val)
             .writeTo(gba.square1);
         gba.CtrlFreq.init()
             .withSquareFreq(freq)
-            .withTrigger(1)
+            .withTrigger(env.changed)
             .writeTo(gba.square1);
     }
 };
@@ -638,13 +672,14 @@ const square2_arp = struct {
         semitones[2] = p1;
     }
     pub fn frame(freq: u32, _: u8, t: u32) callconv(.C) void {
+        const env = square2_adsr.frame();
         gba.EnvDutyLen.init()
             .withDuty(gba.dut_2_4)
-            .withEnvStart(square2_adsr.frame())
+            .withEnvStart(env.val)
             .writeTo(gba.square2);
         gba.CtrlFreq.init()
             .withSquareFreq(arpeggio(freq, t, &semitones))
-            .withTrigger(1)
+            .withTrigger(env.changed)
             .writeTo(gba.square2);
     }
     pub fn release(_: u32, _: u8, _: u32) callconv(.C) void {
@@ -737,7 +772,7 @@ fn wave_env_r(_: u32, _: u8, _: u32) callconv(.C) void {
 }
 fn wave_env_f(_: u32, _: u8, _: u32) callconv(.C) void {
     gba.WaveVolLen.init()
-        .withVolume(wave_vol_table[wave_adsr.frame()])
+        .withVolume(wave_vol_table[wave_adsr.frame().val])
         .writeTo(gba.wave);
 }
 
@@ -792,7 +827,7 @@ const wave_arp = struct {
             .withWaveFreq(arpeggio(freq, t, &semitones))
             .writeTo(gba.wave);
         gba.WaveVolLen.init()
-            .withVolume(wave_vol_table[wave_adsr.frame()])
+            .withVolume(wave_vol_table[wave_adsr.frame().val])
             .writeTo(gba.wave);
     }
     pub const release = wave_env_r;
@@ -838,7 +873,7 @@ const wave_sweep = struct {
             wave_adsr.release();
         }
         gba.WaveVolLen.init()
-            .withVolume(wave_vol_table[wave_adsr.frame()])
+            .withVolume(wave_vol_table[wave_adsr.frame().val])
             .writeTo(gba.wave);
     }
     pub const release = wave_env_r;

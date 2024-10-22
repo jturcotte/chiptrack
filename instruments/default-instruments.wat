@@ -733,99 +733,132 @@
             (i32.const 0))
           (i32.const 15)))))
   (func $default-instruments.square1_vibrato.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32 i32)
-    (local.set 3
-      (i32.const 0))
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
     (local.set 4
-      (i32.load16_u offset=9122
+      (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9116
         (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9117
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9116
-              (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9116
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9119
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 5
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9120
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9117
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9116
             (i32.const 0)
             (local.tee 5
-              (i32.sub
-                (i32.load8_u offset=9116
-                  (i32.const 0))
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9121
+                  (i32.load8_u offset=9118
                     (i32.const 0))
-                  (i32.const 15)))))
+                  (i32.const 15))
+                (local.get 5))))
+          (local.set 4
+            (i32.const 1))
           (br_if 2 (;@1;)
-            (i32.ge_s
+            (i32.lt_s
               (i32.extend8_s
                 (local.get 5))
-              (i32.const 0)))
+              (i32.const 15)))
+          (i32.store8 offset=9116
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9117
+            (i32.const 0)
+            (i32.const 1))
           (local.set 5
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9116
           (i32.const 0)
           (local.tee 6
-            (i32.add
+            (i32.sub
+              (local.get 5)
               (i32.and
-                (i32.load8_u offset=9118
+                (i32.load8_u offset=9119
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9116
-                (i32.const 0)))))
-        (local.set 5
+                (i32.const 15)))))
+        (local.set 4
           (i32.const 1))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 6))
-            (i32.const 14))))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9120
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9116
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9117
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
       (i32.store8 offset=9116
         (i32.const 0)
-        (local.get 3))
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9121
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
       (i32.store8 offset=9117
         (i32.const 0)
-        (local.get 5)))
+        (i32.const 4))
+      (i32.store8 offset=9116
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (local.set 4
+      (i32.load16_u offset=9122
+        (i32.const 0)))
+    (i32.store8 offset=15
+      (local.get 3)
+      (local.tee 5
+        (i32.and
+          (local.get 5)
+          (i32.const 15))))
     (call $gba_set_sound_reg
       (i32.const 67108962)
-      (i32.and
-        (i32.or
+      (i32.or
+        (i32.and
           (i32.shl
-            (i32.load8_u offset=9116
-              (i32.const 0))
+            (local.get 5)
             (i32.const 12))
-          (i32.and
-            (local.get 4)
-            (i32.const 4095)))
-        (i32.const 65535)))
+          (i32.const 61440))
+        (i32.and
+          (local.get 4)
+          (i32.const 4095))))
     (block  ;; label = @1
       (br_if 0 (;@1;)
         (i32.le_u
@@ -843,70 +876,79 @@
             (i32.mul
               (i32.sub
                 (i32.xor
-                  (local.tee 2
+                  (local.tee 0
                     (i32.add
                       (i32.sub
-                        (local.tee 3
+                        (local.tee 2
                           (i32.rem_s
-                            (local.tee 2
+                            (local.tee 0
                               (i32.add
                                 (i32.add
-                                  (local.tee 3
+                                  (local.tee 2
                                     (i32.rem_s
-                                      (local.tee 2
+                                      (local.tee 0
                                         (i32.add
                                           (i32.sub
                                             (local.get 2)
                                             (i32.shr_u
-                                              (local.tee 0
+                                              (local.tee 5
                                                 (i32.load16_u offset=9124
                                                   (i32.const 0)))
                                               (i32.const 2)))
                                           (i32.const -21)))
-                                      (local.get 0)))
-                                  (local.get 0))
+                                      (local.get 5)))
+                                  (local.get 5))
                                 (select
                                   (i32.and
                                     (i32.shr_s
-                                      (local.get 2)
+                                      (local.get 0)
                                       (i32.const 31))
-                                    (local.get 0))
+                                    (local.get 5))
                                   (i32.const 0)
-                                  (local.get 3))))
-                            (local.get 0)))
+                                  (local.get 2))))
+                            (local.get 5)))
                         (i32.shr_u
-                          (local.get 0)
+                          (local.get 5)
                           (i32.const 1)))
                       (select
                         (i32.and
                           (i32.shr_s
-                            (local.get 2)
+                            (local.get 0)
                             (i32.const 31))
-                          (local.get 0))
+                          (local.get 5))
                         (i32.const 0)
-                        (local.get 3))))
-                  (local.tee 2
+                        (local.get 2))))
+                  (local.tee 0
                     (i32.shr_s
-                      (local.get 2)
+                      (local.get 0)
                       (i32.const 31))))
-                (local.get 2))
+                (local.get 0))
               (i32.div_u
                 (i32.shl
                   (local.get 4)
                   (i32.const 2))
-                (local.get 0))))
+                (local.get 5))))
           (i32.const 1))))
     (call $gba_set_sound_reg
       (i32.const 67108964)
       (i32.or
+        (i32.and
+          (i32.shl
+            (i32.load8_u offset=14
+              (local.get 3))
+            (i32.const 15))
+          (i32.const 32768))
         (i32.and
           (i32.sub
             (i32.const 0)
             (i32.div_u
               (i32.const 33554432)
               (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768))))
+          (i32.const 2047))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.square1_vibrato.set_duty (type 6) (param i32)
     (i32.store16 offset=9122
       (i32.const 0)
@@ -986,7 +1028,7 @@
           (i32.const 15)))
       (i32.store8 offset=10
         (local.get 4)
-        (i32.const 2))
+        (i32.const 1))
       (i32.store8 offset=9
         (local.get 4)
         (local.get 5))
@@ -1053,118 +1095,156 @@
         (local.get 4)
         (i32.const 16))))
   (func $default-instruments.square1_duty.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32)
-    (local.set 3
-      (i32.const 0))
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
     (local.set 4
-      (i32.const 1))
-    (local.set 2
-      (i32.load8_u
-        (i32.add
-          (i32.and
-            (i32.shr_u
-              (local.get 2)
-              (i32.const 1))
-            (i32.const 3))
-          (i32.const 8449))))
+      (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9116
+        (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9117
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9116
-              (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9116
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9119
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 4
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9120
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9117
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9116
             (i32.const 0)
-            (local.tee 4
-              (i32.sub
-                (i32.load8_u offset=9116
-                  (i32.const 0))
+            (local.tee 5
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9121
+                  (i32.load8_u offset=9118
                     (i32.const 0))
-                  (i32.const 15)))))
-          (br_if 2 (;@1;)
-            (i32.ge_s
-              (i32.extend8_s
-                (local.get 4))
-              (i32.const 0)))
+                  (i32.const 15))
+                (local.get 5))))
           (local.set 4
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
+            (i32.const 1))
+          (br_if 2 (;@1;)
+            (i32.lt_s
+              (i32.extend8_s
+                (local.get 5))
+              (i32.const 15)))
+          (i32.store8 offset=9116
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9117
+            (i32.const 0)
+            (i32.const 1))
+          (local.set 5
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9116
           (i32.const 0)
-          (local.tee 5
-            (i32.add
+          (local.tee 6
+            (i32.sub
+              (local.get 5)
               (i32.and
-                (i32.load8_u offset=9118
+                (i32.load8_u offset=9119
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9116
-                (i32.const 0)))))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 5))
-            (i32.const 14))))
+                (i32.const 15)))))
+        (local.set 4
+          (i32.const 1))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9120
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9116
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9117
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
       (i32.store8 offset=9116
         (i32.const 0)
-        (local.get 3))
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9121
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
       (i32.store8 offset=9117
         (i32.const 0)
-        (local.get 4)))
+        (i32.const 4))
+      (i32.store8 offset=9116
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (i32.store8 offset=15
+      (local.get 3)
+      (local.tee 5
+        (i32.and
+          (local.get 5)
+          (i32.const 15))))
     (call $gba_set_sound_reg
       (i32.const 67108962)
       (i32.or
         (i32.shl
-          (i32.and
-            (i32.load8_u offset=9116
-              (i32.const 0))
-            (i32.const 15))
+          (local.get 5)
           (i32.const 12))
         (i32.and
           (i32.shl
-            (local.get 2)
+            (i32.load8_u
+              (i32.add
+                (i32.and
+                  (i32.shr_u
+                    (local.get 2)
+                    (i32.const 1))
+                  (i32.const 3))
+                (i32.const 8449)))
             (i32.const 6))
           (i32.const 192))))
     (call $gba_set_sound_reg
       (i32.const 67108964)
       (i32.or
         (i32.and
+          (i32.shl
+            (i32.load8_u offset=14
+              (local.get 3))
+            (i32.const 15))
+          (i32.const 32768))
+        (i32.and
           (i32.sub
             (i32.const 0)
             (i32.div_u
               (i32.const 33554432)
               (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768))))
+          (i32.const 2047))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.square1_sweep.press (type 4) (param i32 i32 i32 i32)
     (call $gba_set_sound_reg
       (i32.const 67108960)
@@ -1257,110 +1337,152 @@
         (local.get 4)
         (i32.const 16))))
   (func $default-instruments.square1_base.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32 i32)
-    (local.set 3
-      (i32.const 0))
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
     (local.set 4
-      (i32.load16_u offset=9126
+      (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9116
         (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9117
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9116
-              (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9116
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9119
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 5
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9120
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9117
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9116
             (i32.const 0)
             (local.tee 5
-              (i32.sub
-                (i32.load8_u offset=9116
-                  (i32.const 0))
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9121
+                  (i32.load8_u offset=9118
                     (i32.const 0))
-                  (i32.const 15)))))
+                  (i32.const 15))
+                (local.get 5))))
+          (local.set 4
+            (i32.const 1))
           (br_if 2 (;@1;)
-            (i32.ge_s
+            (i32.lt_s
               (i32.extend8_s
                 (local.get 5))
-              (i32.const 0)))
+              (i32.const 15)))
+          (i32.store8 offset=9116
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9117
+            (i32.const 0)
+            (i32.const 1))
           (local.set 5
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9116
           (i32.const 0)
           (local.tee 6
-            (i32.add
+            (i32.sub
+              (local.get 5)
               (i32.and
-                (i32.load8_u offset=9118
+                (i32.load8_u offset=9119
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9116
-                (i32.const 0)))))
-        (local.set 5
+                (i32.const 15)))))
+        (local.set 4
           (i32.const 1))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 6))
-            (i32.const 14))))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9120
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9116
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9117
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
       (i32.store8 offset=9116
         (i32.const 0)
-        (local.get 3))
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9121
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
       (i32.store8 offset=9117
         (i32.const 0)
-        (local.get 5)))
+        (i32.const 4))
+      (i32.store8 offset=9116
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (local.set 4
+      (i32.load16_u offset=9126
+        (i32.const 0)))
+    (i32.store8 offset=15
+      (local.get 3)
+      (local.tee 5
+        (i32.and
+          (local.get 5)
+          (i32.const 15))))
     (call $gba_set_sound_reg
       (i32.const 67108962)
-      (i32.and
-        (i32.or
+      (i32.or
+        (i32.and
           (i32.shl
-            (i32.load8_u offset=9116
-              (i32.const 0))
+            (local.get 5)
             (i32.const 12))
-          (i32.and
-            (local.get 4)
-            (i32.const 4095)))
-        (i32.const 65535)))
+          (i32.const 61440))
+        (i32.and
+          (local.get 4)
+          (i32.const 4095))))
     (call $gba_set_sound_reg
       (i32.const 67108964)
       (i32.or
+        (i32.and
+          (i32.shl
+            (i32.load8_u offset=14
+              (local.get 3))
+            (i32.const 15))
+          (i32.const 32768))
         (i32.and
           (i32.sub
             (i32.const 0)
             (i32.div_u
               (i32.const 33554432)
               (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768))))
+          (i32.const 2047))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.square1_base.set_duty (type 6) (param i32)
     (i32.store16 offset=9126
       (i32.const 0)
@@ -1375,303 +1497,426 @@
             (i32.const 6))
           (i32.const 192)))))
   (func $default-instruments.square1_2_4.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32)
-    (local.set 3
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
+    (local.set 4
       (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9116
+        (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9117
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9116
-              (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9116
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9119
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 4
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9120
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9117
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9116
             (i32.const 0)
-            (local.tee 4
-              (i32.sub
-                (i32.load8_u offset=9116
-                  (i32.const 0))
+            (local.tee 5
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9121
+                  (i32.load8_u offset=9118
                     (i32.const 0))
-                  (i32.const 15)))))
-          (br_if 2 (;@1;)
-            (i32.ge_s
-              (i32.extend8_s
-                (local.get 4))
-              (i32.const 0)))
+                  (i32.const 15))
+                (local.get 5))))
           (local.set 4
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
+            (i32.const 1))
+          (br_if 2 (;@1;)
+            (i32.lt_s
+              (i32.extend8_s
+                (local.get 5))
+              (i32.const 15)))
+          (i32.store8 offset=9116
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9117
+            (i32.const 0)
+            (i32.const 1))
+          (local.set 5
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9116
           (i32.const 0)
-          (local.tee 5
-            (i32.add
+          (local.tee 6
+            (i32.sub
+              (local.get 5)
               (i32.and
-                (i32.load8_u offset=9118
+                (i32.load8_u offset=9119
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9116
-                (i32.const 0)))))
+                (i32.const 15)))))
         (local.set 4
           (i32.const 1))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 5))
-            (i32.const 14))))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9120
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9116
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9117
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
       (i32.store8 offset=9116
         (i32.const 0)
-        (local.get 3))
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9121
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
       (i32.store8 offset=9117
         (i32.const 0)
-        (local.get 4)))
-    (call $gba_set_sound_reg
-      (i32.const 67108962)
-      (i32.or
-        (i32.shl
+        (i32.const 4))
+      (i32.store8 offset=9116
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (i32.store8 offset=15
+      (local.get 3)
+      (i32.and
+        (local.get 5)
+        (i32.const 15)))
+    (block  ;; label = @1
+      (br_if 0 (;@1;)
+        (i32.eqz
+          (local.get 4)))
+      (call $gba_set_sound_reg
+        (i32.const 67108962)
+        (i32.or
+          (i32.shl
+            (i32.and
+              (i32.load8_u offset=15
+                (local.get 3))
+              (i32.const 15))
+            (i32.const 12))
+          (i32.const 128)))
+      (call $gba_set_sound_reg
+        (i32.const 67108964)
+        (i32.or
           (i32.and
-            (i32.load8_u offset=9116
-              (i32.const 0))
-            (i32.const 15))
-          (i32.const 12))
-        (i32.const 128)))
-    (call $gba_set_sound_reg
-      (i32.const 67108964)
-      (i32.or
-        (i32.and
-          (i32.sub
-            (i32.const 0)
-            (i32.div_u
-              (i32.const 33554432)
-              (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768))))
+            (i32.sub
+              (i32.const 0)
+              (i32.div_u
+                (i32.const 33554432)
+                (local.get 0)))
+            (i32.const 2047))
+          (i32.const 32768))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.square1_1_4.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32)
-    (local.set 3
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
+    (local.set 4
       (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9116
+        (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9117
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9116
-              (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9116
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9119
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 4
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9120
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9117
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9116
             (i32.const 0)
-            (local.tee 4
-              (i32.sub
-                (i32.load8_u offset=9116
-                  (i32.const 0))
+            (local.tee 5
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9121
+                  (i32.load8_u offset=9118
                     (i32.const 0))
-                  (i32.const 15)))))
-          (br_if 2 (;@1;)
-            (i32.ge_s
-              (i32.extend8_s
-                (local.get 4))
-              (i32.const 0)))
+                  (i32.const 15))
+                (local.get 5))))
           (local.set 4
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
+            (i32.const 1))
+          (br_if 2 (;@1;)
+            (i32.lt_s
+              (i32.extend8_s
+                (local.get 5))
+              (i32.const 15)))
+          (i32.store8 offset=9116
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9117
+            (i32.const 0)
+            (i32.const 1))
+          (local.set 5
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9116
           (i32.const 0)
-          (local.tee 5
-            (i32.add
+          (local.tee 6
+            (i32.sub
+              (local.get 5)
               (i32.and
-                (i32.load8_u offset=9118
+                (i32.load8_u offset=9119
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9116
-                (i32.const 0)))))
+                (i32.const 15)))))
         (local.set 4
           (i32.const 1))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 5))
-            (i32.const 14))))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9120
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9116
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9117
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
       (i32.store8 offset=9116
         (i32.const 0)
-        (local.get 3))
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9121
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
       (i32.store8 offset=9117
         (i32.const 0)
-        (local.get 4)))
-    (call $gba_set_sound_reg
-      (i32.const 67108962)
-      (i32.or
+        (i32.const 4))
+      (i32.store8 offset=9116
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (i32.store8 offset=15
+      (local.get 3)
+      (i32.and
+        (local.get 5)
+        (i32.const 15)))
+    (block  ;; label = @1
+      (br_if 0 (;@1;)
+        (i32.eqz
+          (local.get 4)))
+      (call $gba_set_sound_reg
+        (i32.const 67108962)
+        (i32.or
+          (i32.shl
+            (i32.and
+              (i32.load8_u offset=15
+                (local.get 3))
+              (i32.const 15))
+            (i32.const 12))
+          (i32.const 64)))
+      (call $gba_set_sound_reg
+        (i32.const 67108964)
+        (i32.or
+          (i32.and
+            (i32.sub
+              (i32.const 0)
+              (i32.div_u
+                (i32.const 33554432)
+                (local.get 0)))
+            (i32.const 2047))
+          (i32.const 32768))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
+  (func $default-instruments.square1_1_8.frame (type 5) (param i32 i32 i32)
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
+    (local.set 4
+      (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9116
+        (i32.const 0)))
+    (block  ;; label = @1
+      (block  ;; label = @2
+        (block  ;; label = @3
+          (block  ;; label = @4
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9117
+                  (i32.const 0))
+                (i32.const 7))))
+          (i32.store8 offset=9116
+            (i32.const 0)
+            (local.tee 5
+              (i32.add
+                (i32.and
+                  (i32.load8_u offset=9118
+                    (i32.const 0))
+                  (i32.const 15))
+                (local.get 5))))
+          (local.set 4
+            (i32.const 1))
+          (br_if 2 (;@1;)
+            (i32.lt_s
+              (i32.extend8_s
+                (local.get 5))
+              (i32.const 15)))
+          (i32.store8 offset=9116
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9117
+            (i32.const 0)
+            (i32.const 1))
+          (local.set 5
+            (i32.const 15))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9116
+          (i32.const 0)
+          (local.tee 6
+            (i32.sub
+              (local.get 5)
+              (i32.and
+                (i32.load8_u offset=9119
+                  (i32.const 0))
+                (i32.const 15)))))
+        (local.set 4
+          (i32.const 1))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9120
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9116
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9117
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
+      (i32.store8 offset=9116
+        (i32.const 0)
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9121
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
+      (i32.store8 offset=9117
+        (i32.const 0)
+        (i32.const 4))
+      (i32.store8 offset=9116
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (i32.store8 offset=15
+      (local.get 3)
+      (i32.and
+        (local.get 5)
+        (i32.const 15)))
+    (block  ;; label = @1
+      (br_if 0 (;@1;)
+        (i32.eqz
+          (local.get 4)))
+      (call $gba_set_sound_reg
+        (i32.const 67108962)
         (i32.shl
           (i32.and
-            (i32.load8_u offset=9116
-              (i32.const 0))
+            (i32.load8_u offset=15
+              (local.get 3))
             (i32.const 15))
-          (i32.const 12))
-        (i32.const 64)))
-    (call $gba_set_sound_reg
-      (i32.const 67108964)
-      (i32.or
-        (i32.and
-          (i32.sub
-            (i32.const 0)
-            (i32.div_u
-              (i32.const 33554432)
-              (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768))))
-  (func $default-instruments.square1_1_8.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32)
-    (local.set 3
-      (i32.const 0))
-    (block  ;; label = @1
-      (block  ;; label = @2
-        (block  ;; label = @3
-          (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9117
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9116
+          (i32.const 12)))
+      (call $gba_set_sound_reg
+        (i32.const 67108964)
+        (i32.or
+          (i32.and
+            (i32.sub
               (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9116
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9119
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 4
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9120
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
-          (i32.store8 offset=9116
-            (i32.const 0)
-            (local.tee 4
-              (i32.sub
-                (i32.load8_u offset=9116
-                  (i32.const 0))
-                (i32.and
-                  (i32.load8_u offset=9121
-                    (i32.const 0))
-                  (i32.const 15)))))
-          (br_if 2 (;@1;)
-            (i32.ge_s
-              (i32.extend8_s
-                (local.get 4))
-              (i32.const 0)))
-          (local.set 4
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
-        (i32.store8 offset=9116
-          (i32.const 0)
-          (local.tee 5
-            (i32.add
-              (i32.and
-                (i32.load8_u offset=9118
-                  (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9116
-                (i32.const 0)))))
-        (local.set 4
-          (i32.const 1))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 5))
-            (i32.const 14))))
-      (i32.store8 offset=9116
-        (i32.const 0)
-        (local.get 3))
-      (i32.store8 offset=9117
-        (i32.const 0)
-        (local.get 4)))
-    (call $gba_set_sound_reg
-      (i32.const 67108962)
-      (i32.shl
-        (i32.and
-          (i32.load8_u offset=9116
-            (i32.const 0))
-          (i32.const 15))
-        (i32.const 12)))
-    (call $gba_set_sound_reg
-      (i32.const 67108964)
-      (i32.or
-        (i32.and
-          (i32.sub
-            (i32.const 0)
-            (i32.div_u
-              (i32.const 33554432)
-              (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768))))
+              (i32.div_u
+                (i32.const 33554432)
+                (local.get 0)))
+            (i32.const 2047))
+          (i32.const 32768))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.square2_dyad.press (type 4) (param i32 i32 i32 i32)
     (local i32 i32 i32)
     (i32.store8 offset=9164
@@ -2058,97 +2303,134 @@
             (i32.const 0))
           (i32.const 15)))))
   (func $default-instruments.square2_arp.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32)
-    (local.set 3
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
+    (local.set 4
       (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9128
+        (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9129
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9128
-              (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9128
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9131
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 4
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9132
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9129
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9128
             (i32.const 0)
-            (local.tee 4
-              (i32.sub
-                (i32.load8_u offset=9128
-                  (i32.const 0))
+            (local.tee 5
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9133
+                  (i32.load8_u offset=9130
                     (i32.const 0))
-                  (i32.const 15)))))
-          (br_if 2 (;@1;)
-            (i32.ge_s
-              (i32.extend8_s
-                (local.get 4))
-              (i32.const 0)))
+                  (i32.const 15))
+                (local.get 5))))
           (local.set 4
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
+            (i32.const 1))
+          (br_if 2 (;@1;)
+            (i32.lt_s
+              (i32.extend8_s
+                (local.get 5))
+              (i32.const 15)))
+          (i32.store8 offset=9128
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9129
+            (i32.const 0)
+            (i32.const 1))
+          (local.set 5
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9128
           (i32.const 0)
-          (local.tee 5
-            (i32.add
+          (local.tee 6
+            (i32.sub
+              (local.get 5)
               (i32.and
-                (i32.load8_u offset=9130
+                (i32.load8_u offset=9131
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9128
-                (i32.const 0)))))
+                (i32.const 15)))))
         (local.set 4
           (i32.const 1))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 5))
-            (i32.const 14))))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9132
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9128
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9129
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
       (i32.store8 offset=9128
         (i32.const 0)
-        (local.get 3))
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9133
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
       (i32.store8 offset=9129
         (i32.const 0)
-        (local.get 4)))
+        (i32.const 4))
+      (i32.store8 offset=9128
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (i32.store8 offset=15
+      (local.get 3)
+      (local.tee 5
+        (i32.and
+          (local.get 5)
+          (i32.const 15))))
     (call $gba_set_sound_reg
       (i32.const 67108968)
       (i32.or
         (i32.shl
-          (i32.and
-            (i32.load8_u offset=9128
-              (i32.const 0))
-            (i32.const 15))
+          (local.get 5)
           (i32.const 12))
         (i32.const 128)))
     (call $gba_set_sound_reg
       (i32.const 67108972)
       (i32.or
+        (i32.and
+          (i32.shl
+            (i32.load8_u offset=14
+              (local.get 3))
+            (i32.const 15))
+          (i32.const 32768))
         (i32.and
           (i32.sub
             (i32.const 0)
@@ -2158,35 +2440,35 @@
                 (i32.mul
                   (i32.and
                     (select
-                      (local.tee 5
+                      (local.tee 6
                         (i32.shr_u
-                          (local.tee 4
+                          (local.tee 2
                             (i32.load align=2
                               (i32.add
                                 (i32.shl
                                   (i32.and
                                     (i32.sub
-                                      (local.tee 3
+                                      (local.tee 4
                                         (i32.sub
                                           (i32.xor
-                                            (local.tee 2
+                                            (local.tee 5
                                               (i32.load8_s
                                                 (i32.add
                                                   (i32.and
                                                     (local.get 2)
                                                     (i32.const 3))
                                                   (i32.const 9134))))
-                                            (local.tee 3
+                                            (local.tee 4
                                               (i32.shr_s
                                                 (i32.extend8_s
-                                                  (local.get 2))
+                                                  (local.get 5))
                                                 (i32.const 7))))
-                                          (local.get 3)))
+                                          (local.get 4)))
                                       (i32.mul
-                                        (local.tee 3
+                                        (local.tee 4
                                           (i32.div_u
                                             (i32.and
-                                              (local.get 3)
+                                              (local.get 4)
                                               (i32.const 255))
                                             (i32.const 12)))
                                         (i32.const 12)))
@@ -2194,24 +2476,27 @@
                                   (i32.const 2))
                                 (i32.const 8932))))
                           (i32.const 16)))
-                      (local.tee 3
+                      (local.tee 4
                         (i32.shl
-                          (local.get 4)
-                          (local.get 3)))
-                      (local.tee 2
-                        (i32.lt_s
                           (local.get 2)
+                          (local.get 4)))
+                      (local.tee 5
+                        (i32.lt_s
+                          (local.get 5)
                           (i32.const 0))))
                     (i32.const 65535))
                   (local.get 0))
                 (i32.and
                   (select
-                    (local.get 3)
-                    (local.get 5)
-                    (local.get 2))
+                    (local.get 4)
+                    (local.get 6)
+                    (local.get 5))
                   (i32.const 65535)))))
-          (i32.const 2047))
-        (i32.const 32768))))
+          (i32.const 2047))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.square2_pan.press (type 4) (param i32 i32 i32 i32)
     (i32.store8 offset=9166
       (i32.const 0)
@@ -2371,110 +2656,152 @@
         (local.get 4)
         (i32.const 16))))
   (func $default-instruments.square2_base.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32 i32)
-    (local.set 3
-      (i32.const 0))
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
     (local.set 4
-      (i32.load16_u offset=9140
+      (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9128
         (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9129
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9128
-              (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9128
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9131
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 5
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9132
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9129
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9128
             (i32.const 0)
             (local.tee 5
-              (i32.sub
-                (i32.load8_u offset=9128
-                  (i32.const 0))
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9133
+                  (i32.load8_u offset=9130
                     (i32.const 0))
-                  (i32.const 15)))))
+                  (i32.const 15))
+                (local.get 5))))
+          (local.set 4
+            (i32.const 1))
           (br_if 2 (;@1;)
-            (i32.ge_s
+            (i32.lt_s
               (i32.extend8_s
                 (local.get 5))
-              (i32.const 0)))
+              (i32.const 15)))
+          (i32.store8 offset=9128
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9129
+            (i32.const 0)
+            (i32.const 1))
           (local.set 5
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9128
           (i32.const 0)
           (local.tee 6
-            (i32.add
+            (i32.sub
+              (local.get 5)
               (i32.and
-                (i32.load8_u offset=9130
+                (i32.load8_u offset=9131
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9128
-                (i32.const 0)))))
-        (local.set 5
+                (i32.const 15)))))
+        (local.set 4
           (i32.const 1))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 6))
-            (i32.const 14))))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9132
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9128
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9129
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
       (i32.store8 offset=9128
         (i32.const 0)
-        (local.get 3))
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9133
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
       (i32.store8 offset=9129
         (i32.const 0)
-        (local.get 5)))
+        (i32.const 4))
+      (i32.store8 offset=9128
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (local.set 4
+      (i32.load16_u offset=9140
+        (i32.const 0)))
+    (i32.store8 offset=15
+      (local.get 3)
+      (local.tee 5
+        (i32.and
+          (local.get 5)
+          (i32.const 15))))
     (call $gba_set_sound_reg
       (i32.const 67108968)
-      (i32.and
-        (i32.or
+      (i32.or
+        (i32.and
           (i32.shl
-            (i32.load8_u offset=9128
-              (i32.const 0))
+            (local.get 5)
             (i32.const 12))
-          (i32.and
-            (local.get 4)
-            (i32.const 4095)))
-        (i32.const 65535)))
+          (i32.const 61440))
+        (i32.and
+          (local.get 4)
+          (i32.const 4095))))
     (call $gba_set_sound_reg
       (i32.const 67108972)
       (i32.or
+        (i32.and
+          (i32.shl
+            (i32.load8_u offset=14
+              (local.get 3))
+            (i32.const 15))
+          (i32.const 32768))
         (i32.and
           (i32.sub
             (i32.const 0)
             (i32.div_u
               (i32.const 33554432)
               (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768))))
+          (i32.const 2047))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.square2_base.set_duty (type 6) (param i32)
     (i32.store16 offset=9140
       (i32.const 0)
@@ -2517,7 +2844,7 @@
           (i32.const 15)))
       (i32.store8 offset=10
         (local.get 4)
-        (i32.const 2))
+        (i32.const 1))
       (i32.store8 offset=9
         (local.get 4)
         (local.get 5))
@@ -2584,303 +2911,426 @@
         (local.get 4)
         (i32.const 16))))
   (func $default-instruments.square2_2_4.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32)
-    (local.set 3
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
+    (local.set 4
       (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9128
+        (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9129
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9128
-              (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9128
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9131
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 4
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9132
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9129
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9128
             (i32.const 0)
-            (local.tee 4
-              (i32.sub
-                (i32.load8_u offset=9128
-                  (i32.const 0))
+            (local.tee 5
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9133
+                  (i32.load8_u offset=9130
                     (i32.const 0))
-                  (i32.const 15)))))
-          (br_if 2 (;@1;)
-            (i32.ge_s
-              (i32.extend8_s
-                (local.get 4))
-              (i32.const 0)))
+                  (i32.const 15))
+                (local.get 5))))
           (local.set 4
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
+            (i32.const 1))
+          (br_if 2 (;@1;)
+            (i32.lt_s
+              (i32.extend8_s
+                (local.get 5))
+              (i32.const 15)))
+          (i32.store8 offset=9128
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9129
+            (i32.const 0)
+            (i32.const 1))
+          (local.set 5
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9128
           (i32.const 0)
-          (local.tee 5
-            (i32.add
+          (local.tee 6
+            (i32.sub
+              (local.get 5)
               (i32.and
-                (i32.load8_u offset=9130
+                (i32.load8_u offset=9131
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9128
-                (i32.const 0)))))
+                (i32.const 15)))))
         (local.set 4
           (i32.const 1))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 5))
-            (i32.const 14))))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9132
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9128
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9129
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
       (i32.store8 offset=9128
         (i32.const 0)
-        (local.get 3))
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9133
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
       (i32.store8 offset=9129
         (i32.const 0)
-        (local.get 4)))
-    (call $gba_set_sound_reg
-      (i32.const 67108968)
-      (i32.or
-        (i32.shl
+        (i32.const 4))
+      (i32.store8 offset=9128
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (i32.store8 offset=15
+      (local.get 3)
+      (i32.and
+        (local.get 5)
+        (i32.const 15)))
+    (block  ;; label = @1
+      (br_if 0 (;@1;)
+        (i32.eqz
+          (local.get 4)))
+      (call $gba_set_sound_reg
+        (i32.const 67108968)
+        (i32.or
+          (i32.shl
+            (i32.and
+              (i32.load8_u offset=15
+                (local.get 3))
+              (i32.const 15))
+            (i32.const 12))
+          (i32.const 128)))
+      (call $gba_set_sound_reg
+        (i32.const 67108972)
+        (i32.or
           (i32.and
-            (i32.load8_u offset=9128
-              (i32.const 0))
-            (i32.const 15))
-          (i32.const 12))
-        (i32.const 128)))
-    (call $gba_set_sound_reg
-      (i32.const 67108972)
-      (i32.or
-        (i32.and
-          (i32.sub
-            (i32.const 0)
-            (i32.div_u
-              (i32.const 33554432)
-              (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768))))
+            (i32.sub
+              (i32.const 0)
+              (i32.div_u
+                (i32.const 33554432)
+                (local.get 0)))
+            (i32.const 2047))
+          (i32.const 32768))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.square2_1_4.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32)
-    (local.set 3
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
+    (local.set 4
       (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9128
+        (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9129
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9128
-              (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9128
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9131
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 4
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9132
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9129
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9128
             (i32.const 0)
-            (local.tee 4
-              (i32.sub
-                (i32.load8_u offset=9128
-                  (i32.const 0))
+            (local.tee 5
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9133
+                  (i32.load8_u offset=9130
                     (i32.const 0))
-                  (i32.const 15)))))
-          (br_if 2 (;@1;)
-            (i32.ge_s
-              (i32.extend8_s
-                (local.get 4))
-              (i32.const 0)))
+                  (i32.const 15))
+                (local.get 5))))
           (local.set 4
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
+            (i32.const 1))
+          (br_if 2 (;@1;)
+            (i32.lt_s
+              (i32.extend8_s
+                (local.get 5))
+              (i32.const 15)))
+          (i32.store8 offset=9128
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9129
+            (i32.const 0)
+            (i32.const 1))
+          (local.set 5
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9128
           (i32.const 0)
-          (local.tee 5
-            (i32.add
+          (local.tee 6
+            (i32.sub
+              (local.get 5)
               (i32.and
-                (i32.load8_u offset=9130
+                (i32.load8_u offset=9131
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9128
-                (i32.const 0)))))
+                (i32.const 15)))))
         (local.set 4
           (i32.const 1))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 5))
-            (i32.const 14))))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9132
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9128
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9129
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
       (i32.store8 offset=9128
         (i32.const 0)
-        (local.get 3))
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9133
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
       (i32.store8 offset=9129
         (i32.const 0)
-        (local.get 4)))
-    (call $gba_set_sound_reg
-      (i32.const 67108968)
-      (i32.or
+        (i32.const 4))
+      (i32.store8 offset=9128
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (i32.store8 offset=15
+      (local.get 3)
+      (i32.and
+        (local.get 5)
+        (i32.const 15)))
+    (block  ;; label = @1
+      (br_if 0 (;@1;)
+        (i32.eqz
+          (local.get 4)))
+      (call $gba_set_sound_reg
+        (i32.const 67108968)
+        (i32.or
+          (i32.shl
+            (i32.and
+              (i32.load8_u offset=15
+                (local.get 3))
+              (i32.const 15))
+            (i32.const 12))
+          (i32.const 64)))
+      (call $gba_set_sound_reg
+        (i32.const 67108972)
+        (i32.or
+          (i32.and
+            (i32.sub
+              (i32.const 0)
+              (i32.div_u
+                (i32.const 33554432)
+                (local.get 0)))
+            (i32.const 2047))
+          (i32.const 32768))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
+  (func $default-instruments.square2_1_8.frame (type 5) (param i32 i32 i32)
+    (local i32 i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
+    (local.set 4
+      (i32.const 0))
+    (local.set 5
+      (i32.load8_u offset=9128
+        (i32.const 0)))
+    (block  ;; label = @1
+      (block  ;; label = @2
+        (block  ;; label = @3
+          (block  ;; label = @4
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9129
+                  (i32.const 0))
+                (i32.const 7))))
+          (i32.store8 offset=9128
+            (i32.const 0)
+            (local.tee 5
+              (i32.add
+                (i32.and
+                  (i32.load8_u offset=9130
+                    (i32.const 0))
+                  (i32.const 15))
+                (local.get 5))))
+          (local.set 4
+            (i32.const 1))
+          (br_if 2 (;@1;)
+            (i32.lt_s
+              (i32.extend8_s
+                (local.get 5))
+              (i32.const 15)))
+          (i32.store8 offset=9128
+            (i32.const 0)
+            (i32.const 15))
+          (local.set 4
+            (i32.const 1))
+          (i32.store8 offset=9129
+            (i32.const 0)
+            (i32.const 1))
+          (local.set 5
+            (i32.const 15))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9128
+          (i32.const 0)
+          (local.tee 6
+            (i32.sub
+              (local.get 5)
+              (i32.and
+                (i32.load8_u offset=9131
+                  (i32.const 0))
+                (i32.const 15)))))
+        (local.set 4
+          (i32.const 1))
+        (block  ;; label = @3
+          (br_if 0 (;@3;)
+            (i32.le_s
+              (i32.extend8_s
+                (local.get 6))
+              (local.tee 7
+                (i32.and
+                  (local.tee 5
+                    (i32.load8_u offset=9132
+                      (i32.const 0)))
+                  (i32.const 15)))))
+          (local.set 5
+            (local.get 6))
+          (br 2 (;@1;)))
+        (i32.store8 offset=9128
+          (i32.const 0)
+          (local.get 7))
+        (i32.store8 offset=9129
+          (i32.const 0)
+          (i32.const 2))
+        (br 1 (;@1;)))
+      (i32.store8 offset=9128
+        (i32.const 0)
+        (local.tee 5
+          (i32.sub
+            (local.get 5)
+            (i32.and
+              (i32.load8_u offset=9133
+                (i32.const 0))
+              (i32.const 15)))))
+      (local.set 4
+        (i32.const 1))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 5))
+          (i32.const -1)))
+      (i32.store8 offset=9129
+        (i32.const 0)
+        (i32.const 4))
+      (i32.store8 offset=9128
+        (i32.const 0)
+        (i32.const 0))
+      (local.set 5
+        (i32.const 0)))
+    (i32.store8 offset=14
+      (local.get 3)
+      (local.get 4))
+    (i32.store8 offset=15
+      (local.get 3)
+      (i32.and
+        (local.get 5)
+        (i32.const 15)))
+    (block  ;; label = @1
+      (br_if 0 (;@1;)
+        (i32.eqz
+          (local.get 4)))
+      (call $gba_set_sound_reg
+        (i32.const 67108968)
         (i32.shl
           (i32.and
-            (i32.load8_u offset=9128
-              (i32.const 0))
+            (i32.load8_u offset=15
+              (local.get 3))
             (i32.const 15))
-          (i32.const 12))
-        (i32.const 64)))
-    (call $gba_set_sound_reg
-      (i32.const 67108972)
-      (i32.or
-        (i32.and
-          (i32.sub
-            (i32.const 0)
-            (i32.div_u
-              (i32.const 33554432)
-              (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768))))
-  (func $default-instruments.square2_1_8.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32)
-    (local.set 3
-      (i32.const 0))
-    (block  ;; label = @1
-      (block  ;; label = @2
-        (block  ;; label = @3
-          (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9129
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9128
+          (i32.const 12)))
+      (call $gba_set_sound_reg
+        (i32.const 67108972)
+        (i32.or
+          (i32.and
+            (i32.sub
               (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9128
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9131
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 4
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9132
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
-          (i32.store8 offset=9128
-            (i32.const 0)
-            (local.tee 4
-              (i32.sub
-                (i32.load8_u offset=9128
-                  (i32.const 0))
-                (i32.and
-                  (i32.load8_u offset=9133
-                    (i32.const 0))
-                  (i32.const 15)))))
-          (br_if 2 (;@1;)
-            (i32.ge_s
-              (i32.extend8_s
-                (local.get 4))
-              (i32.const 0)))
-          (local.set 4
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
-        (i32.store8 offset=9128
-          (i32.const 0)
-          (local.tee 5
-            (i32.add
-              (i32.and
-                (i32.load8_u offset=9130
-                  (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9128
-                (i32.const 0)))))
-        (local.set 4
-          (i32.const 1))
-        (br_if 1 (;@1;)
-          (i32.le_s
-            (i32.extend8_s
-              (local.get 5))
-            (i32.const 14))))
-      (i32.store8 offset=9128
-        (i32.const 0)
-        (local.get 3))
-      (i32.store8 offset=9129
-        (i32.const 0)
-        (local.get 4)))
-    (call $gba_set_sound_reg
-      (i32.const 67108968)
-      (i32.shl
-        (i32.and
-          (i32.load8_u offset=9128
-            (i32.const 0))
-          (i32.const 15))
-        (i32.const 12)))
-    (call $gba_set_sound_reg
-      (i32.const 67108972)
-      (i32.or
-        (i32.and
-          (i32.sub
-            (i32.const 0)
-            (i32.div_u
-              (i32.const 33554432)
-              (local.get 0)))
-          (i32.const 2047))
-        (i32.const 32768))))
+              (i32.div_u
+                (i32.const 33554432)
+                (local.get 0)))
+            (i32.const 2047))
+          (i32.const 32768))))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.wave_triangle.press (type 4) (param i32 i32 i32 i32)
     (call $default-instruments.wave_p
       (local.get 0)
@@ -2906,97 +3356,117 @@
             (i32.const 0))
           (i32.const 15)))))
   (func $default-instruments.wave_env_f (type 5) (param i32 i32 i32)
-    (local i32 i32 i32)
-    (local.set 3
-      (i32.const 0))
+    (local i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
+    (local.set 4
+      (i32.load8_u offset=9142
+        (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9143
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9142
-              (i32.const 0)
-              (local.tee 3
-                (i32.sub
-                  (i32.load8_u offset=9142
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9145
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (local.set 4
-              (i32.const 2))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 3))
-                (local.tee 3
-                  (i32.and
-                    (i32.load8_u offset=9146
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9143
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9142
             (i32.const 0)
             (local.tee 4
-              (i32.sub
-                (i32.load8_u offset=9142
-                  (i32.const 0))
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9147
+                  (i32.load8_u offset=9144
                     (i32.const 0))
-                  (i32.const 15)))))
+                  (i32.const 15))
+                (local.get 4))))
           (br_if 2 (;@1;)
-            (i32.ge_s
+            (i32.lt_s
               (i32.extend8_s
                 (local.get 4))
-              (i32.const 0)))
+              (i32.const 15)))
+          (i32.store8 offset=9142
+            (i32.const 0)
+            (i32.const 15))
+          (i32.store8 offset=9143
+            (i32.const 0)
+            (i32.const 1))
           (local.set 4
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 3
-          (i32.const 15))
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9142
           (i32.const 0)
-          (local.tee 5
-            (i32.add
+          (local.tee 4
+            (i32.sub
+              (local.get 4)
               (i32.and
-                (i32.load8_u offset=9144
+                (i32.load8_u offset=9145
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9142
-                (i32.const 0)))))
-        (local.set 4
-          (i32.const 1))
+                (i32.const 15)))))
         (br_if 1 (;@1;)
-          (i32.le_s
+          (i32.gt_s
             (i32.extend8_s
-              (local.get 5))
-            (i32.const 14))))
+              (local.get 4))
+            (local.tee 6
+              (i32.and
+                (local.tee 5
+                  (i32.load8_u offset=9146
+                    (i32.const 0)))
+                (i32.const 15)))))
+        (i32.store8 offset=9142
+          (i32.const 0)
+          (local.get 6))
+        (i32.store8 offset=9143
+          (i32.const 0)
+          (i32.const 2))
+        (local.set 4
+          (local.get 5))
+        (br 1 (;@1;)))
       (i32.store8 offset=9142
         (i32.const 0)
-        (local.get 3))
+        (local.tee 4
+          (i32.sub
+            (local.get 4)
+            (i32.and
+              (i32.load8_u offset=9147
+                (i32.const 0))
+              (i32.const 15)))))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 4))
+          (i32.const -1)))
+      (local.set 4
+        (i32.const 0))
       (i32.store8 offset=9143
         (i32.const 0)
-        (local.get 4)))
+        (i32.const 4))
+      (i32.store8 offset=9142
+        (i32.const 0)
+        (i32.const 0)))
+    (i32.store8 offset=15
+      (local.get 3)
+      (local.tee 4
+        (i32.and
+          (local.get 4)
+          (i32.const 15))))
     (call $gba_set_sound_reg
       (i32.const 67108978)
       (i32.shl
         (i32.and
           (i32.load8_u
             (i32.add
-              (i32.and
-                (i32.load8_u offset=9142
-                  (i32.const 0))
-                (i32.const 15))
+              (local.get 4)
               (i32.const 8539)))
           (i32.const 7))
-        (i32.const 13))))
+        (i32.const 13)))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.wave_bass.press (type 4) (param i32 i32 i32 i32)
     (call $default-instruments.wave_p
       (local.get 0)
@@ -3016,11 +3486,12 @@
       (i32.const 0)
       (local.get 2)))
   (func $default-instruments.wave_arp.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32 i32 i32)
-    (local.set 3
-      (i32.const 2))
-    (local.set 4
-      (i32.const 0))
+    (local i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
     (call $gba_set_sound_reg
       (i32.const 67108980)
       (i32.and
@@ -3032,15 +3503,15 @@
               (i32.mul
                 (i32.and
                   (select
-                    (local.tee 7
+                    (local.tee 6
                       (i32.shr_u
-                        (local.tee 6
+                        (local.tee 5
                           (i32.load align=2
                             (i32.add
                               (i32.shl
                                 (i32.and
                                   (i32.sub
-                                    (local.tee 5
+                                    (local.tee 4
                                       (i32.sub
                                         (i32.xor
                                           (local.tee 2
@@ -3050,17 +3521,17 @@
                                                   (local.get 2)
                                                   (i32.const 3))
                                                 (i32.const 9148))))
-                                          (local.tee 5
+                                          (local.tee 4
                                             (i32.shr_s
                                               (i32.extend8_s
                                                 (local.get 2))
                                               (i32.const 7))))
-                                        (local.get 5)))
+                                        (local.get 4)))
                                     (i32.mul
-                                      (local.tee 5
+                                      (local.tee 4
                                         (i32.div_u
                                           (i32.and
-                                            (local.get 5)
+                                            (local.get 4)
                                             (i32.const 255))
                                           (i32.const 12)))
                                       (i32.const 12)))
@@ -3068,10 +3539,10 @@
                                 (i32.const 2))
                               (i32.const 8932))))
                         (i32.const 16)))
-                    (local.tee 5
+                    (local.tee 4
                       (i32.shl
-                        (local.get 6)
-                        (local.get 5)))
+                        (local.get 5)
+                        (local.get 4)))
                     (local.tee 2
                       (i32.lt_s
                         (local.get 2)
@@ -3080,97 +3551,116 @@
                 (local.get 0))
               (i32.and
                 (select
-                  (local.get 5)
-                  (local.get 7)
+                  (local.get 4)
+                  (local.get 6)
                   (local.get 2))
                 (i32.const 65535)))))
         (i32.const 2047)))
+    (local.set 2
+      (i32.load8_u offset=9142
+        (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 2 (;@3;) 0 (;@5;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 2 (;@3;)
-                (i32.and
-                  (i32.load8_u offset=9143
-                    (i32.const 0))
-                  (i32.const 7))))
-            (i32.store8 offset=9142
-              (i32.const 0)
-              (local.tee 2
-                (i32.sub
-                  (i32.load8_u offset=9142
-                    (i32.const 0))
-                  (i32.and
-                    (i32.load8_u offset=9145
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br_if 3 (;@1;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 2))
-                (local.tee 4
-                  (i32.and
-                    (i32.load8_u offset=9146
-                      (i32.const 0))
-                    (i32.const 15)))))
-            (br 2 (;@2;)))
+            (br_table 0 (;@4;) 1 (;@3;) 3 (;@1;) 2 (;@2;) 3 (;@1;) 0 (;@4;)
+              (i32.and
+                (i32.load8_u offset=9143
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9142
             (i32.const 0)
             (local.tee 2
-              (i32.sub
-                (i32.load8_u offset=9142
-                  (i32.const 0))
+              (i32.add
                 (i32.and
-                  (i32.load8_u offset=9147
+                  (i32.load8_u offset=9144
                     (i32.const 0))
-                  (i32.const 15)))))
+                  (i32.const 15))
+                (local.get 2))))
           (br_if 2 (;@1;)
-            (i32.ge_s
+            (i32.lt_s
               (i32.extend8_s
                 (local.get 2))
-              (i32.const 0)))
-          (local.set 3
-            (i32.const 4))
-          (br 1 (;@2;)))
-        (local.set 4
-          (i32.const 15))
+              (i32.const 15)))
+          (i32.store8 offset=9142
+            (i32.const 0)
+            (i32.const 15))
+          (i32.store8 offset=9143
+            (i32.const 0)
+            (i32.const 1))
+          (local.set 2
+            (i32.const 15))
+          (br 2 (;@1;)))
         (i32.store8 offset=9142
           (i32.const 0)
           (local.tee 2
-            (i32.add
+            (i32.sub
+              (local.get 2)
               (i32.and
-                (i32.load8_u offset=9144
+                (i32.load8_u offset=9145
                   (i32.const 0))
-                (i32.const 15))
-              (i32.load8_u offset=9142
-                (i32.const 0)))))
-        (local.set 3
-          (i32.const 1))
+                (i32.const 15)))))
         (br_if 1 (;@1;)
-          (i32.le_s
+          (i32.gt_s
             (i32.extend8_s
               (local.get 2))
-            (i32.const 14))))
+            (local.tee 4
+              (i32.and
+                (local.tee 0
+                  (i32.load8_u offset=9146
+                    (i32.const 0)))
+                (i32.const 15)))))
+        (i32.store8 offset=9142
+          (i32.const 0)
+          (local.get 4))
+        (i32.store8 offset=9143
+          (i32.const 0)
+          (i32.const 2))
+        (local.set 2
+          (local.get 0))
+        (br 1 (;@1;)))
       (i32.store8 offset=9142
         (i32.const 0)
-        (local.get 4))
+        (local.tee 2
+          (i32.sub
+            (local.get 2)
+            (i32.and
+              (i32.load8_u offset=9147
+                (i32.const 0))
+              (i32.const 15)))))
+      (br_if 0 (;@1;)
+        (i32.gt_s
+          (i32.extend8_s
+            (local.get 2))
+          (i32.const -1)))
+      (local.set 2
+        (i32.const 0))
       (i32.store8 offset=9143
         (i32.const 0)
-        (local.get 3)))
+        (i32.const 4))
+      (i32.store8 offset=9142
+        (i32.const 0)
+        (i32.const 0)))
+    (i32.store8 offset=15
+      (local.get 3)
+      (local.tee 2
+        (i32.and
+          (local.get 2)
+          (i32.const 15))))
     (call $gba_set_sound_reg
       (i32.const 67108978)
       (i32.shl
         (i32.and
           (i32.load8_u
             (i32.add
-              (i32.and
-                (i32.load8_u offset=9142
-                  (i32.const 0))
-                (i32.const 15))
+              (local.get 2)
               (i32.const 8539)))
           (i32.const 7))
-        (i32.const 13))))
+        (i32.const 13)))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.wave_duty.press (type 4) (param i32 i32 i32 i32)
     (call $default-instruments.wave_p
       (local.get 0)
@@ -3190,12 +3680,17 @@
       (i32.const 0)
       (local.get 2)))
   (func $default-instruments.wave_sweep.frame (type 5) (param i32 i32 i32)
-    (local i32 i32 i32)
+    (local i32 i32 i32 i32)
+    (global.set $__stack_pointer
+      (local.tee 3
+        (i32.sub
+          (global.get $__stack_pointer)
+          (i32.const 16))))
     (block  ;; label = @1
       (block  ;; label = @2
         (br_if 0 (;@2;)
           (i32.ge_u
-            (local.tee 3
+            (local.tee 4
               (i32.load offset=9168
                 (i32.const 0)))
             (i32.const 16777216)))
@@ -3203,10 +3698,10 @@
           (i32.const 0)
           (i32.div_u
             (i32.mul
-              (local.get 3)
+              (local.get 4)
               (i32.load16_u
                 (i32.add
-                  (local.tee 4
+                  (local.tee 5
                     (i32.shl
                       (i32.load offset=9152
                         (i32.const 0))
@@ -3214,7 +3709,7 @@
                   (i32.const 8932))))
             (i32.load16_u
               (i32.add
-                (local.get 4)
+                (local.get 5)
                 (i32.const 8934)))))
         (call $gba_set_sound_reg
           (i32.const 67108980)
@@ -3223,7 +3718,7 @@
               (i32.const 0)
               (i32.div_u
                 (i32.const 16777216)
-                (local.get 3)))
+                (local.get 4)))
             (i32.const 2047)))
         (br 1 (;@1;)))
       (br_if 0 (;@1;)
@@ -3242,96 +3737,111 @@
           (i32.load8_u offset=9146
             (i32.const 0))
           (i32.const 15))))
-    (local.set 3
-      (i32.const 0))
+    (local.set 4
+      (i32.load8_u offset=9142
+        (i32.const 0)))
     (block  ;; label = @1
       (block  ;; label = @2
         (block  ;; label = @3
           (block  ;; label = @4
-            (block  ;; label = @5
-              (br_table 0 (;@5;) 2 (;@3;) 4 (;@1;) 1 (;@4;) 4 (;@1;) 0 (;@5;)
-                (i32.and
-                  (i32.load8_u offset=9143
-                    (i32.const 0))
-                  (i32.const 7))))
-            (local.set 3
-              (i32.const 15))
-            (i32.store8 offset=9142
-              (i32.const 0)
-              (local.tee 5
-                (i32.add
-                  (i32.and
-                    (i32.load8_u offset=9144
-                      (i32.const 0))
-                    (i32.const 15))
-                  (i32.load8_u offset=9142
-                    (i32.const 0)))))
-            (local.set 4
-              (i32.const 1))
-            (br_if 2 (;@2;)
-              (i32.gt_s
-                (i32.extend8_s
-                  (local.get 5))
-                (i32.const 14)))
-            (br 3 (;@1;)))
+            (br_table 2 (;@2;) 1 (;@3;) 3 (;@1;) 0 (;@4;) 3 (;@1;) 2 (;@2;)
+              (i32.and
+                (i32.load8_u offset=9143
+                  (i32.const 0))
+                (i32.const 7))))
           (i32.store8 offset=9142
             (i32.const 0)
             (local.tee 4
               (i32.sub
-                (i32.load8_u offset=9142
-                  (i32.const 0))
+                (local.get 4)
                 (i32.and
                   (i32.load8_u offset=9147
                     (i32.const 0))
                   (i32.const 15)))))
           (br_if 2 (;@1;)
-            (i32.ge_s
+            (i32.gt_s
               (i32.extend8_s
                 (local.get 4))
-              (i32.const 0)))
+              (i32.const -1)))
           (local.set 4
+            (i32.const 0))
+          (i32.store8 offset=9143
+            (i32.const 0)
             (i32.const 4))
-          (br 1 (;@2;)))
+          (i32.store8 offset=9142
+            (i32.const 0)
+            (i32.const 0))
+          (br 2 (;@1;)))
         (i32.store8 offset=9142
           (i32.const 0)
-          (local.tee 3
+          (local.tee 4
             (i32.sub
-              (i32.load8_u offset=9142
-                (i32.const 0))
+              (local.get 4)
               (i32.and
                 (i32.load8_u offset=9145
                   (i32.const 0))
                 (i32.const 15)))))
-        (local.set 4
-          (i32.const 2))
         (br_if 1 (;@1;)
           (i32.gt_s
             (i32.extend8_s
-              (local.get 3))
-            (local.tee 3
+              (local.get 4))
+            (local.tee 6
               (i32.and
-                (i32.load8_u offset=9146
-                  (i32.const 0))
-                (i32.const 15))))))
+                (local.tee 5
+                  (i32.load8_u offset=9146
+                    (i32.const 0)))
+                (i32.const 15)))))
+        (i32.store8 offset=9142
+          (i32.const 0)
+          (local.get 6))
+        (i32.store8 offset=9143
+          (i32.const 0)
+          (i32.const 2))
+        (local.set 4
+          (local.get 5))
+        (br 1 (;@1;)))
       (i32.store8 offset=9142
         (i32.const 0)
-        (local.get 3))
+        (local.tee 4
+          (i32.add
+            (i32.and
+              (i32.load8_u offset=9144
+                (i32.const 0))
+              (i32.const 15))
+            (local.get 4))))
+      (br_if 0 (;@1;)
+        (i32.lt_s
+          (i32.extend8_s
+            (local.get 4))
+          (i32.const 15)))
+      (i32.store8 offset=9142
+        (i32.const 0)
+        (i32.const 15))
       (i32.store8 offset=9143
         (i32.const 0)
-        (local.get 4)))
+        (i32.const 1))
+      (local.set 4
+        (i32.const 15)))
+    (i32.store8 offset=15
+      (local.get 3)
+      (local.tee 4
+        (i32.and
+          (local.get 4)
+          (i32.const 15))))
     (call $gba_set_sound_reg
       (i32.const 67108978)
       (i32.shl
         (i32.and
           (i32.load8_u
             (i32.add
-              (i32.and
-                (i32.load8_u offset=9142
-                  (i32.const 0))
-                (i32.const 15))
+              (local.get 4)
               (i32.const 8539)))
           (i32.const 7))
-        (i32.const 13))))
+        (i32.const 13)))
+    (global.set $__stack_pointer
+      (i32.add
+        (local.get 3)
+        (i32.const 16))))
   (func $default-instruments.noise_predef.press (type 4) (param i32 i32 i32 i32)
     (local i32 i32 i32 i32)
     (local.set 4
@@ -3488,7 +3998,7 @@
           (i32.const 15)))
       (i32.store8 offset=10
         (local.get 4)
-        (i32.const 2))
+        (i32.const 1))
       (i32.store8 offset=9
         (local.get 4)
         (local.get 5))
