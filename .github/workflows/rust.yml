@@ -11,14 +11,43 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Install deps
-      run: sudo apt-get install -y libasound2-dev     
+      run: sudo apt-get install -y libasound2-dev
     - name: Build
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+  build_gba:
+    runs-on: ubuntu-latest
+    # For more information, see:
+    # https://docs.rs/gba/latest/gba/#how-to-make-your-own-gba-project-using-this-crate
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # The CMake/C++ GBA toolchain is needed to build wamr-sys for thumbv4t-none-eabi
+    - name: Checkout the GBA toolchain
+      uses: actions/checkout@v4
+      with:
+        repository: felixjones/gba-toolchain
+        path: gba-toolchain
+
+    - name: Install Rust Nightly
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+          components: rust-src
+
+    - run: sudo apt-get install -y gcc-arm-none-eabi wabt
+    - run: cargo install gbafix
+    - run: CMAKE_TOOLCHAIN_FILE=$PWD/gba-toolchain/cmake/gba.toolchain.cmake cargo +nightly build --no-default-features --features=gba --target=thumbv4t-none-eabi -Z build-std=core,alloc --release
+    - run: arm-none-eabi-objcopy -v -O binary target/thumbv4t-none-eabi/release/chiptrack chiptrack-dev.gba && gbafix chiptrack-dev.gba
+
+    - name: Make the output GBA ROM available as an action artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: chiptrack-dev.gba
+        path: chiptrack-dev.gba
