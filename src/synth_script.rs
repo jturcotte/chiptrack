@@ -319,7 +319,6 @@ impl SynthScript {
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     pub fn save_default_instruments_as(
-        &mut self,
         instruments_dir: &std::path::Path,
     ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
         let instruments_path = instruments_dir.join("instruments.wat");

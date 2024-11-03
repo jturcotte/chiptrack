@@ -25,7 +25,6 @@ use serde::ser::{SerializeStruct, Serializer};
 
 #[cfg(feature = "desktop")]
 use markdown::{parse_markdown_song, save_markdown_song};
-#[cfg(feature = "gba")]
 use postcard::from_bytes;
 use postcard::to_allocvec;
 use serde::Deserialize;
@@ -1957,7 +1956,6 @@ impl Sequencer {
         to_allocvec(&self.song)
     }
 
-    #[cfg(feature = "gba")]
     pub fn load_postcard_bytes(&mut self, bytes: &[u8]) -> Result<(), String> {
         let song: SequencerSong = from_bytes(bytes).unwrap();
 

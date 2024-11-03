@@ -46,11 +46,14 @@ enum NoteSource {
 enum ProjectSource {
     New,
     #[cfg(feature = "desktop_native")]
+    /// Like New, but will extract instruments instead of using defaults on save
+    GbaSavImportFile(PathBuf),
+    #[cfg(feature = "desktop_native")]
     /// Contains the path to the song file and the instruments file
-    File((PathBuf, PathBuf)),
+    MarkdownFile((PathBuf, PathBuf)),
     #[cfg(feature = "desktop")]
     /// Contains a copy of the WASM/WAT instrument bytes for exporting
-    Gist(Vec<u8>),
+    MarkdownGist(Vec<u8>),
     #[cfg(feature = "gba")]
     SRAM,
 }
@@ -496,10 +499,28 @@ impl SoundEngine {
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
     pub fn load_file(&mut self, song_path: &Path) {
-        match self.load_file_internal(song_path) {
-            Ok(instruments_path) => self.project_source = ProjectSource::File((song_path.to_owned(), instruments_path)),
-            Err(err) => {
-                elog!("Error extracting project from file [{:?}]: {}", song_path, err);
+        match song_path.extension().and_then(|ext| ext.to_str()) {
+            Some("sav") | Some("srm") => {
+                self.import_project_from_gba_sav(song_path);
+            }
+            Some("md")
+                if song_path
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .map_or(false, |s| s.ends_with(".ct.md")) =>
+            {
+                match self.load_md_file_internal(song_path) {
+                    Ok(instruments_path) => {
+                        self.project_source = ProjectSource::MarkdownFile((song_path.to_owned(), instruments_path))
+                    }
+                    Err(err) => {
+                        elog!("Error extracting project from file [{:?}]: {}", song_path, err);
+                        self.clear_song_and_load_default_instruments();
+                    }
+                }
+            }
+            _ => {
+                elog!("Unsupported file extension for file {:?}", song_path);
                 self.clear_song_and_load_default_instruments();
             }
         }
@@ -507,8 +528,8 @@ impl SoundEngine {
 
     #[cfg(feature = "desktop")]
     pub fn load_gist(&mut self, json: serde_json::Value) {
-        match self.load_gist_internal(json) {
-            Ok(instruments) => self.project_source = ProjectSource::Gist(instruments),
+        match self.load_md_gist_internal(json) {
+            Ok(instruments) => self.project_source = ProjectSource::MarkdownGist(instruments),
             Err(err) => {
                 elog!("Error extracting project from gist: {}", err);
                 self.clear_song_and_load_default_instruments();
@@ -517,7 +538,7 @@ impl SoundEngine {
     }
 
     #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
-    fn load_file_internal(&mut self, song_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
+    fn load_md_file_internal(&mut self, song_path: &Path) -> Result<PathBuf, Box<dyn Error>> {
         log!("Loading the project song from file {:?}", song_path);
         let instruments_file = self.sequencer.borrow_mut().load_file(song_path)?;
         let instruments_path = song_path.with_file_name(instruments_file);
@@ -528,7 +549,7 @@ impl SoundEngine {
     }
 
     #[cfg(feature = "desktop")]
-    fn load_gist_internal(&mut self, json: serde_json::Value) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn load_md_gist_internal(&mut self, json: serde_json::Value) -> Result<Vec<u8>, Box<dyn Error>> {
         let files = json
             .get("files")
             .ok_or("JSON should have a files property")?
@@ -563,7 +584,10 @@ impl SoundEngine {
     }
 
     #[cfg(feature = "desktop_native")]
-    pub fn save_project_as(&mut self) {
+    pub fn save_project_as_impl<F>(&mut self, save_instruments: F)
+    where
+        F: FnOnce(&Path) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> + Send + 'static,
+    {
         // On some platforms the native dialog needs to be invoked from the
         // main thread, but the state needed to decide whether or not we need
         // to show the dialog (e.g. save for new file) is on the sound engine thread.
@@ -580,7 +604,8 @@ impl SoundEngine {
             if let Some(mut song_path) = maybe_song_path {
                 if song_path
                     .file_name()
-                    .map_or(false, |f| f.to_str().map_or(false, |s| !s.ends_with(".ct.md")))
+                    .and_then(|f| f.to_str())
+                    .map_or(false, |s| !s.ends_with(".ct.md"))
                 {
                     song_path.set_extension("ct.md");
                 }
@@ -590,12 +615,12 @@ impl SoundEngine {
                     move || -> Result<(), Box<dyn Error>> {
                         // Songs shouldn't rely on the default instruments that will vary between versions,
                         // so save a copy of the instruments and make the saved song point to that file.
-                        let instruments_path = engine.script.save_default_instruments_as(song_dir.as_path())?;
+                        let instruments_path = save_instruments(song_dir.as_path())?;
                         engine
                             .sequencer
                             .borrow_mut()
                             .save_as(song_path.as_path(), instruments_path.as_path())?;
-                        engine.project_source = ProjectSource::File((song_path, instruments_path));
+                        engine.project_source = ProjectSource::MarkdownFile((song_path, instruments_path));
                         Ok(())
                     }()
                     .unwrap_or_else(|e| elog!("Error saving the project: {}", e))
@@ -613,14 +638,42 @@ impl SoundEngine {
 
         #[cfg(feature = "desktop")]
         match &self.project_source {
-            ProjectSource::New => self.save_project_as(),
             #[cfg(feature = "desktop_native")]
-            ProjectSource::File((song_path, _)) => self
+            ProjectSource::MarkdownFile((song_path, _)) => self
                 .sequencer
                 .borrow()
                 .save(song_path.as_path())
                 .unwrap_or_else(|e| elog!("Error saving the project: {}", e)),
-            ProjectSource::Gist(_) => elog!("Can't save a project loaded from a gist URL."),
+            // Everything else is always a save as
+            _ => self.save_project_as(),
+        }
+    }
+
+    #[cfg(feature = "desktop_native")]
+    pub fn save_project_as(&mut self) {
+        #[cfg(feature = "gba")]
+        self.save_song_to_gba_sram();
+
+        #[cfg(feature = "desktop")]
+        match &self.project_source {
+            ProjectSource::New => {
+                self.save_project_as_impl(|song_dir| SynthScript::save_default_instruments_as(song_dir))
+            }
+            ProjectSource::GbaSavImportFile(sav_path) => {
+                let copy = sav_path.clone();
+                self.save_project_as_impl(move |song_dir| {
+                    Self::save_instruments_bytes_from_gba_sav_file(&copy, song_dir)
+                })
+            }
+
+            #[cfg(feature = "desktop_native")]
+            ProjectSource::MarkdownFile((_, instruments_path)) => {
+                let instruments_path_copy = instruments_path.to_owned();
+                self.save_project_as_impl(move |song_dir| Self::copy_instruments_file(&instruments_path_copy, song_dir))
+            }
+            ProjectSource::MarkdownGist(_) => {
+                elog!("Can't save a project loaded from a gist URL, please download it first.")
+            }
         }
     }
 
@@ -657,6 +710,136 @@ impl SoundEngine {
             Ok(())
         }()
         .unwrap_or_else(|e| elog!("Error exporting the project: {}", e))
+    }
+
+    fn read_u32_from_sram(sram: &mut [u8]) -> u32 {
+        #[cfg(feature = "gba")]
+        unsafe {
+            let mut buf = [0u8; 4];
+            // The GBA can only read one byte at a time from that memory type.
+            gba::mem::copy_u8_unchecked(buf.as_mut_ptr(), sram.as_mut_ptr(), 4);
+            u32::from_le_bytes(buf)
+        }
+        #[cfg(not(feature = "gba"))]
+        u32::from_le_bytes(sram[0..4].try_into().unwrap())
+    }
+    fn copy_vec_from_sram(sram: &mut [u8], len: usize) -> Vec<u8> {
+        #[cfg(feature = "gba")]
+        unsafe {
+            let mut buf = Vec::<u8>::with_capacity(len);
+            gba::mem::copy_u8_unchecked(buf.as_mut_ptr(), sram.as_mut_ptr(), len);
+            buf.set_len(len);
+            buf
+        }
+        #[cfg(not(feature = "gba"))]
+        sram[..len].to_vec()
+    }
+    pub fn load_gba_sav_from_buffer(&mut self, sram: &mut [u8]) -> Option<()> {
+        // 4 bytes: instruments_len
+        // 4 bytes: song_len
+        // instruments_len bytes: instruments
+        // song_len bytes: song
+        // let mut buf = [0u8; 4];
+        // let sram = 0x0E00_0000 as *mut u8;
+        let instruments_len = Self::read_u32_from_sram(sram) as usize;
+        if instruments_len == 0xffffffff {
+            // SRAM is empty
+            return None;
+        }
+        let song_len = Self::read_u32_from_sram(&mut sram[4..]) as usize;
+        log!(
+            "Loading song ({} bytes) and instruments ({} bytes) from SRAM.",
+            song_len,
+            instruments_len
+        );
+
+        {
+            let song_bytes = Self::copy_vec_from_sram(&mut sram[8 + instruments_len..], song_len);
+            self.sequencer.borrow_mut().load_postcard_bytes(&song_bytes).unwrap();
+        }
+
+        // let mut instrument_bytes = Vec::<u8>::with_capacity(instruments_len);
+        // gba::mem::copy_u8_unchecked(instrument_bytes.as_mut_ptr(), sram.offset(8), instruments_len);
+        // instrument_bytes.set_len(instruments_len);
+        let instrument_bytes = Self::copy_vec_from_sram(&mut sram[8..], instruments_len);
+        if let Err(e) = self.script.load_bytes(instrument_bytes) {
+            elog!("load error: {}", e);
+        }
+
+        Some(())
+    }
+
+    #[cfg(feature = "desktop_native")]
+    pub fn instruments_bytes_from_gba_sav_file(song_path: &Path) -> Vec<u8> {
+        let mut sram = match std::fs::read(song_path) {
+            Ok(buf) => buf,
+            Err(e) => {
+                elog!("Error reading file {:?}: {}", song_path, e);
+                return Vec::new();
+            }
+        };
+        let instruments_len = Self::read_u32_from_sram(&mut sram) as usize;
+        assert!(instruments_len < sram.len());
+
+        sram[8..][..instruments_len].into()
+    }
+
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
+    pub fn copy_instruments_file(
+        source_instruments_path: &Path,
+        target_instruments_dir: &std::path::Path,
+    ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+        let target_path = target_instruments_dir.join(source_instruments_path.file_name().unwrap());
+        if target_path.exists() {
+            elog!("File already exists: {:?}, not overwriting. If those are not the same instruments the IDs in the song might not match.", source_instruments_path);
+            return Ok(target_path.to_path_buf());
+        }
+
+        std::fs::copy(&source_instruments_path, &target_path)?;
+
+        Ok(target_path)
+    }
+
+    #[cfg(all(feature = "desktop", not(target_arch = "wasm32")))]
+    pub fn save_instruments_bytes_from_gba_sav_file(
+        sav_path: &Path,
+        instruments_dir: &std::path::Path,
+    ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+        use std::io::Write;
+
+        let instruments_path = instruments_dir.join("imported-instruments.wasm");
+        let content = Self::instruments_bytes_from_gba_sav_file(sav_path);
+        let f = std::fs::File::options()
+            .write(true)
+            .create_new(true)
+            .open(&instruments_path);
+        match f {
+            Ok(mut file) => {
+                file.write_all(&content)?;
+                file.flush()?;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                elog!("File already exists: {:?}, not overwriting. If those are not the same instruments the IDs in the song might not match.", instruments_path);
+            }
+            Err(e) => return Err(e.into()),
+        }
+
+        Ok(instruments_path)
+    }
+
+    #[cfg(feature = "desktop_native")]
+    pub fn import_project_from_gba_sav(&mut self, song_path: &Path) {
+        let mut buf = match std::fs::read(song_path) {
+            Ok(buf) => buf,
+            Err(e) => {
+                elog!("Error reading file {:?}: {}", song_path, e);
+                return;
+            }
+        };
+        self.load_gba_sav_from_buffer(&mut buf);
+
+        // This uses the load file code path and menu but is more like an import.
+        self.project_source = ProjectSource::GbaSavImportFile(song_path.to_owned());
     }
 
     #[cfg(feature = "gba")]
@@ -698,53 +881,20 @@ impl SoundEngine {
     #[cfg(feature = "gba")]
     pub fn load_gba_sram(&mut self) -> Option<()> {
         unsafe {
-            // 4 bytes: instruments_len
-            // 4 bytes: song_len
-            // instruments_len bytes: instruments
-            // song_len bytes: song
-            let mut buf = [0u8; 4];
             let sram = 0x0E00_0000 as *mut u8;
-            gba::mem::copy_u8_unchecked(buf.as_mut_ptr(), sram, 4);
-            let instruments_len = u32::from_le_bytes(buf) as usize;
-            if instruments_len == 0xffffffff {
-                // SRAM is empty
-                return None;
-            }
-            gba::mem::copy_u8_unchecked(buf.as_mut_ptr(), sram.offset(4), 4);
-            let song_len = u32::from_le_bytes(buf) as usize;
-            log!(
-                "Loading song ({} bytes) and instruments ({} bytes) from SRAM.",
-                song_len,
-                instruments_len
-            );
+            let r = self.load_gba_sav_from_buffer(core::slice::from_raw_parts_mut(sram, 32 * 1024));
 
-            {
-                let mut song_bytes = Vec::<u8>::with_capacity(song_len);
-                gba::mem::copy_u8_unchecked(
-                    song_bytes.as_mut_ptr(),
-                    sram.offset(8 + instruments_len as isize),
-                    song_len,
-                );
-                song_bytes.set_len(song_len);
-                self.sequencer.borrow_mut().load_postcard_bytes(&song_bytes).unwrap();
+            if r.is_some() {
+                self.project_source = ProjectSource::SRAM;
             }
-
-            let mut instrument_bytes = Vec::<u8>::with_capacity(instruments_len);
-            gba::mem::copy_u8_unchecked(instrument_bytes.as_mut_ptr(), sram.offset(8), instruments_len);
-            instrument_bytes.set_len(instruments_len);
-            if let Err(e) = self.script.load_bytes(instrument_bytes) {
-                elog!("load error: {}", e);
-            }
-
-            self.project_source = ProjectSource::SRAM;
-            Some(())
+            r
         }
     }
 
     #[cfg(feature = "desktop_native")]
     pub fn instruments_path(&self) -> Option<&Path> {
         match &self.project_source {
-            ProjectSource::File((_, instruments_path)) => Some(instruments_path.as_path()),
+            ProjectSource::MarkdownFile((_, instruments_path)) => Some(instruments_path.as_path()),
             _ => None,
         }
     }
@@ -753,16 +903,17 @@ impl SoundEngine {
     fn instruments_bytes(&self) -> Vec<u8> {
         match &self.project_source {
             ProjectSource::New => SynthScript::DEFAULT_INSTRUMENTS_TEXT.to_vec(),
-            ProjectSource::File((_, instruments_path)) => {
+            ProjectSource::GbaSavImportFile(sav_path) => Self::instruments_bytes_from_gba_sav_file(sav_path),
+            ProjectSource::MarkdownFile((_, instruments_path)) => {
                 std::fs::read(instruments_path).expect("Error reading instruments file")
             }
-            ProjectSource::Gist(instruments) => instruments.clone(),
+            ProjectSource::MarkdownGist(instruments) => instruments.clone(),
         }
     }
 
     #[cfg(feature = "desktop_native")]
     pub fn reload_instruments_from_file(&mut self) {
-        if let ProjectSource::File((_, path)) = &self.project_source {
+        if let ProjectSource::MarkdownFile((_, path)) = &self.project_source {
             if let Err(e) = self.script.load_file(path.as_path()) {
                 elog!("Couldn't reload instruments from file {:?}.\n\tError: {:?}", path, e);
             }
