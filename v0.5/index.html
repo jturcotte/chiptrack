@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Chiptrack (Web Assembly version)</title>
+  <style>
+    body {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      -o-user-select: none;
+      user-select: none;
+    }
+
+    canvas {
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+      width: 100vw !important;
+      height: 100vh !important;
+    }
+
+    canvas:focus {
+      outline: none;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+    }
+
+    @supports (-webkit-touch-callout: none) {
+      canvas {
+        /* Mobile Safari doesn't seem to allow pushing the toolbar up by scrolling with 100vh. */
+        height: 101vh !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas" unselectable="on"></canvas>
+  <script type="module">
+    import init from './chiptrack.js';
+    init();
+  </script>
+</body>
+
+</html>
