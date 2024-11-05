@@ -68,6 +68,7 @@ export component MenuDialog inherits OverlayDialog {
                             root.closed();
                         }
                     }
+                    if !desktop_web:
                     Button {
                         text: "Open File";
                         clicked => {
@@ -88,6 +89,7 @@ export component MenuDialog inherits OverlayDialog {
                             }
                         }
                     }
+                    if !desktop_web:
                     Button {
                         text: "Save";
                         clicked => {
@@ -95,6 +97,7 @@ export component MenuDialog inherits OverlayDialog {
                             root.closed();
                         }
                     }
+                    if !desktop_web:
                     Button {
                         text: "Save as";
                         clicked => {
@@ -102,6 +105,7 @@ export component MenuDialog inherits OverlayDialog {
                             root.closed();
                         }
                     }
+                    if !desktop_web:
                     Button {
                         text: "Export as GBA .sav";
                         clicked => {
