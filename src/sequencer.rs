@@ -1873,6 +1873,7 @@ impl Sequencer {
         self.set_recording(false);
         self.set_playing(false, false);
 
+        self.has_stub_pattern = false;
         self.song = song;
 
         let song_patterns = self.song.song_patterns.clone();
