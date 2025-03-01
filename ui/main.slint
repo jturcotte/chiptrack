@@ -228,7 +228,7 @@ export component MainWindow inherits Window {
 }
 
 export component LogWindow inherits Window {
-    in property log_text <=> t.text;
+    in-out property log_text <=> t.text;
     default_font_family: "BigBlue TerminalPlus";
     ScrollView {
         viewport-width: t.preferred-width;
