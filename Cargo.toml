@@ -64,13 +64,13 @@ gba = [
 [build-dependencies]
 winresource = "0.1"
 [build-dependencies.slint-build]
-version = "1.10.0"
+version = "1.11.0"
 [dependencies.slint]
-version = "1.10.0"
+version = "1.11.0"
 default-features = false
 features = ["compat-1-0"]
 [dependencies.i-slint-core]
-version = "=1.10.0"
+version = "=1.11.0"
 default-features = false
 optional = true
 
