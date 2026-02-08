@@ -1,7 +1,6 @@
 // Copyright © 2021 Jocelyn Turcotte <turcotte.j@gmail.com>
 // SPDX-License-Identifier: MIT
 
-use crate::log;
 use crate::sequencer::InstrumentParamDef;
 use crate::sound_engine::NUM_INSTRUMENTS;
 use crate::sound_engine::NUM_INSTRUMENT_COLS;

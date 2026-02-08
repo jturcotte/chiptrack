@@ -3,7 +3,6 @@
 
 #[cfg(feature = "gba")]
 use crate::gba_platform;
-use crate::log;
 use crate::sequencer::OnEmpty;
 use crate::sequencer::Sequencer;
 use crate::sequencer::StepEvent;
