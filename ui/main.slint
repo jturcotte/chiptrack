@@ -199,6 +199,8 @@ export component MainWindow inherits Window {
                 for idx in waveforms.length:
                 Path {
                     property<string> waveform: waveforms[waveforms.length - 1 - idx];
+                    // Allows Skia GPU rendering
+                    anti-alias: false;
                     commands: waveform;
                     viewbox-width: parent.viewbox-width;
                     viewbox-height: parent.viewbox-height;

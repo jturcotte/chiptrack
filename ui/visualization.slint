@@ -51,6 +51,7 @@ component OctaveIndicator inherits Rectangle {
 component ScaleSeparators inherits Path {
     viewbox-width: self.width / 1px;
     viewbox-height: self.height / 1px;
+    anti-alias: false;
     stroke: #e8e8e8;
     stroke-width: 1px;
 
@@ -71,6 +72,7 @@ component ScaleSeparators inherits Path {
 component OctaveSeparator inherits Path {
     viewbox-width: self.width / 1px;
     viewbox-height: self.height / 1px;
+    anti-alias: false;
     stroke: #d8d8d8;
     stroke-width: 2px;
 
