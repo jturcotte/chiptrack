@@ -151,7 +151,11 @@ impl slint::platform::Platform for GbaPlatform {
             BASE_MILLIS_SINCE_START + LAST_TIMER3_READ as u32
         };
 
-        core::time::Duration::new(0, ms.wrapping_mul(1_000_000))
+        let total_ms = ms as u64;
+        let secs = total_ms / 1000;
+        let sub_ms = total_ms % 1000;
+        let nanos = (sub_ms * 1_000_000) as u32;
+        core::time::Duration::new(secs, nanos)
     }
 
     fn debug_log(&self, arguments: core::fmt::Arguments) {
@@ -211,8 +215,6 @@ impl slint::platform::Platform for GbaPlatform {
             // Run main_screen.draw() before key handling to avoid missing the vblank window due to the heaving
             // processing happening in key handlers.
             if process_vblank {
-                slint::platform::update_timers_and_animations();
-
                 TIMER0_CONTROL.write(TimerControl::new().with_enabled(false));
                 TIMER0_RELOAD.write(0);
                 TIMER0_CONTROL.write(TimerControl::new().with_scale(TimerScale::_1024).with_enabled(true));
