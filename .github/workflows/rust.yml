@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install deps
-      run: sudo apt-get install -y libasound2-dev libfreetype-dev libfontconfig-dev
+      run: sudo apt-get update && sudo apt-get install -y libasound2-dev libfreetype-dev libfontconfig-dev
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -40,7 +40,7 @@ jobs:
       with:
           components: rust-src
 
-    - run: sudo apt-get install -y gcc-arm-none-eabi wabt
+    - run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi wabt
     - run: cargo install gbafix
     - run: CMAKE_TOOLCHAIN_FILE=$PWD/gba-toolchain/cmake/gba.toolchain.cmake cargo +nightly build --no-default-features --features=gba --target=thumbv4t-none-eabi -Z build-std=core,alloc --release
     - run: arm-none-eabi-objcopy -v -O binary target/thumbv4t-none-eabi/release/chiptrack chiptrack-dev.gba && gbafix chiptrack-dev.gba
