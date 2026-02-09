@@ -3,7 +3,7 @@
 
 import {
     HorizontalBox,
-    VerticalBox, ScrollView
+    VerticalBox
 } from "std-widgets.slint";
 
 import {
@@ -64,7 +64,6 @@ export component MainWindow inherits Window {
     ];
 
     callback octave_increased(int);
-    callback show_log_window();
     pure callback animate_waveform(float, float, float) -> [string];
     in property<bool> desktop_web: false;
 
@@ -222,28 +221,8 @@ export component MainWindow inherits Window {
             show_settings = false;
             patterns.restore_panel_focus();
         }
-        show_log_window => { root.show_log_window(); }
         desktop_web: root.desktop_web;
         width: 100%;
         height: 100%;
     }
 }
-
-export component LogWindow inherits Window {
-    in-out property log_text <=> t.text;
-    default_font_family: "BigBlue TerminalPlus";
-    ScrollView {
-        viewport-width: t.preferred-width;
-        viewport-height: t.preferred-height;
-        // TODO: The scroll position only stay at the end until the user scrolls manually, to restore it I'd need
-        //       some user-input callback that it was scrolled to the end and a way to set the binding again.
-        viewport_y: self.height - self.viewport_height;
-
-        t := TextInput {
-            read_only: true;
-            wrap: TextWrap.no-wrap;
-            single-line: false;
-        }
-    }
-}
-

@@ -77,10 +77,6 @@ fn run_main() {
 
     #[cfg(feature = "desktop_web")]
     window.set_desktop_web(true);
-    #[cfg(feature = "desktop_native")]
-    let log_window = ui::LogWindow::new().unwrap();
-    #[cfg(feature = "desktop_native")]
-    ui::LOG_WINDOW.lock().unwrap().replace(log_window.as_weak());
 
     // This is where UI callbacks gets a native handler attached.
     ui::set_window_handlers(&window, sound_renderer.clone());

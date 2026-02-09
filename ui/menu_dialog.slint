@@ -46,7 +46,6 @@ component OverlayDialog inherits Rectangle {
 
 export component MenuDialog inherits OverlayDialog {
     in property<bool> desktop_web;
-    callback show_log_window();
     ScrollView{
         GridBox {
             spacing: 24px;
@@ -166,20 +165,6 @@ export component MenuDialog inherits OverlayDialog {
                         GlobalSettings.settings.sync_enabled = self.current_value != "Off";
                         GlobalSettings.settings_changed(GlobalSettings.settings);
                     }
-                }
-            }
-            Row {
-                VerticalLayout {
-                    colspan: 2;
-                    if !desktop_web:
-                    Button {
-                        text: "Show Log Window";
-                        clicked => {
-                            show_log_window();
-                        }
-                    }
-                    if desktop_web:
-                    Rectangle { }
                 }
             }
             // Fill any available space left inside the ScrollView
