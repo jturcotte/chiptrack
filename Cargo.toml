@@ -44,7 +44,7 @@ desktop = [
 ]
 desktop_native = [
     "desktop",
-    "slint/renderer-winit-skia",
+    "slint/renderer-winit-femtovg",
     "wamr-sys/std",
     "native-dialog",
 ]
